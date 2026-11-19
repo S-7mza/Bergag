@@ -1,5 +1,7 @@
 import logging
 import asyncio
+import json
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy import select, func, desc
@@ -8,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from src.database.session import async_session_factory
 from src.models.raw import RawIngestionLog
 from src.models.tender import Tender, Buyer, LineItem
+from src.models.batch import IngestionBatch
 from src.scheduler.jobs import run_active_crawl_cycle
 from src.scraper.client import PortalHttpClient
 from src.scraper.listing_spider import ListingSpider
@@ -42,6 +45,10 @@ class IngestionBatchRecord:
         self.batch_id = batch_id
         self.trigger_type = trigger_type
         self.status = status
+        if started_at and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        if completed_at and completed_at.tzinfo is None:
+            completed_at = completed_at.replace(tzinfo=timezone.utc)
         self.started_at = started_at
         self.completed_at = completed_at
         self.duration_seconds = duration_seconds
@@ -100,6 +107,85 @@ class IngestionBatchRecord:
             "recent_ingested_bdcs": self.recent_ingested_bdcs[:8]
         }
 
+    def to_storage_dict(self) -> Dict[str, Any]:
+        return {
+            "batch_id": self.batch_id,
+            "trigger_type": self.trigger_type,
+            "status": self.status,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "duration_seconds": self.duration_seconds,
+            "pages_requested": self.pages_requested,
+            "pages_completed": self.pages_completed,
+            "cards_scraped": self.cards_scraped,
+            "tenders_ingested": self.tenders_ingested,
+            "line_items_extracted": self.line_items_extracted,
+            "alerts_dispatched": self.alerts_dispatched,
+            "quality_score": self.quality_score,
+            "errors_count": self.errors_count,
+            "error_details": self.error_details,
+            "created_by": self.created_by,
+            "first_bdc_id": self.first_bdc_id,
+            "last_bdc_id": self.last_bdc_id,
+            "current_step": self.current_step,
+            "current_phase": self.current_phase,
+            "progress_pct": self.progress_pct,
+        }
+
+    @classmethod
+    def from_storage_dict(cls, data: Dict[str, Any]) -> "IngestionBatchRecord":
+        started_at = datetime.fromisoformat(data["started_at"]) if data.get("started_at") else datetime.now()
+        completed_at = datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
+        return cls(
+            batch_id=data["batch_id"],
+            trigger_type=data.get("trigger_type", "scheduled"),
+            status=data.get("status", "completed"),
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_seconds=data.get("duration_seconds", 0.0),
+            pages_requested=data.get("pages_requested", 2),
+            pages_completed=data.get("pages_completed", 0),
+            cards_scraped=data.get("cards_scraped", 0),
+            tenders_ingested=data.get("tenders_ingested", 0),
+            line_items_extracted=data.get("line_items_extracted", 0),
+            alerts_dispatched=data.get("alerts_dispatched", 0),
+            quality_score=data.get("quality_score", 95.0),
+            errors_count=data.get("errors_count", 0),
+            error_details=data.get("error_details"),
+            created_by=data.get("created_by", "Système (Daemon)"),
+            first_bdc_id=data.get("first_bdc_id"),
+            last_bdc_id=data.get("last_bdc_id"),
+            current_step=data.get("current_step", "Lot archivé"),
+            current_phase=data.get("current_phase", "completed"),
+            progress_pct=data.get("progress_pct", 100)
+        )
+
+    @classmethod
+    def from_db_model(cls, m: Any) -> "IngestionBatchRecord":
+        return cls(
+            batch_id=m.batch_id,
+            trigger_type=m.trigger_type,
+            status=m.status,
+            started_at=m.started_at,
+            completed_at=m.completed_at,
+            duration_seconds=m.duration_seconds,
+            pages_requested=m.pages_requested,
+            pages_completed=m.pages_completed,
+            cards_scraped=m.cards_scraped,
+            tenders_ingested=m.tenders_ingested,
+            line_items_extracted=m.line_items_extracted,
+            alerts_dispatched=m.alerts_dispatched,
+            quality_score=m.quality_score,
+            errors_count=m.errors_count,
+            error_details=m.error_details,
+            created_by=m.created_by,
+            first_bdc_id=m.first_bdc_id,
+            last_bdc_id=m.last_bdc_id,
+            current_step=m.current_step,
+            current_phase=m.current_phase,
+            progress_pct=m.progress_pct
+        )
+
 class IngestionBatchManager:
     """
     Central Manager for Ingestion Batches, Freshness SLA, and Quality Diagnostics.
@@ -112,30 +198,61 @@ class IngestionBatchManager:
             cls._instance._init_state()
         return cls._instance
 
+    STORAGE_FILE = Path("data/batches_ledger.json")
+
     def _init_state(self):
         self.batches: List[IngestionBatchRecord] = []
         self.active_batch: Optional[IngestionBatchRecord] = None
         self._last_gap_probe: Optional[Dict[str, Any]] = None
         self._last_gap_probe_time: Optional[datetime] = None
+        self._load_from_storage()
+
+    def _load_from_storage(self):
+        """Loads batches from data/batches_ledger.json if available, otherwise initializes seed ledger"""
+        if self.STORAGE_FILE.exists():
+            try:
+                with open(self.STORAGE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and len(data) > 0:
+                        self.batches = [IngestionBatchRecord.from_storage_dict(item) for item in data]
+                        logger.info(f"[BatchManager] Loaded {len(self.batches)} batches from {self.STORAGE_FILE}")
+                        return
+            except Exception as e:
+                logger.warning(f"[BatchManager] Failed to read {self.STORAGE_FILE}: {e}")
+        
+        # If no file or empty, seed initial batches with fixed timestamps and save
         self._seed_recent_batches()
+        self._save_to_storage()
+
+    def _save_to_storage(self):
+        """Persists current batch ledger to data/batches_ledger.json"""
+        try:
+            self.STORAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = [b.to_storage_dict() for b in self.batches]
+            with open(self.STORAGE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"[BatchManager] Failed to persist batches to {self.STORAGE_FILE}: {e}")
 
     def _seed_recent_batches(self):
-        """Seeds realistic historical batches based on the hourly schedule"""
-        now = datetime.now()
+        """Seeds realistic historical batches based on a fixed baseline schedule to prevent drifting on refresh"""
+        base_time = datetime(2026, 11, 19, 22, 36, 3, tzinfo=timezone.utc)
         base_id = 105990
-        # Seed batches for the last 5 hours
-        for i in range(5, 0, -1):
-            batch_time = now - timedelta(hours=i)
-            pages = 2
-            cards = pages * 50
-            tenders = pages * 48
-            items = 280 + (i * 12)
-            quality = 96.5 + (i * 0.5)
-            last_id = base_id - (i * tenders) + tenders
-            first_id = last_id - tenders + 1
+        self.batches = []
+
+        # Seed the 5 completed batches
+        for i in range(1, 6):
+            batch_time = base_time - timedelta(hours=i - 1)
+            pages = 1
+            cards = 50
+            tenders = 48
+            items = 352 - (i * 12)
+            quality = 96.5 + ((6 - i) * 0.5)
+            last_id = base_id - ((i - 1) * 48)
+            first_id = last_id - 47
             self.batches.append(
                 IngestionBatchRecord(
-                    batch_id=f"BATCH-{batch_time.strftime('%Y%m%d')}-{100 - i}",
+                    batch_id=f"BATCH-20261119-{100 - i}",
                     trigger_type="scheduled",
                     status="completed",
                     started_at=batch_time,
@@ -158,11 +275,11 @@ class IngestionBatchManager:
                 )
             )
 
-        # Seed 1 missed batch 6 hours ago to demonstrate missed-batch tracking & recovery
-        missed_time = now - timedelta(hours=6)
+        # Seed 1 missed batch 6 hours ago
+        missed_time = base_time - timedelta(hours=5)
         self.batches.insert(0, 
             IngestionBatchRecord(
-                batch_id=f"BATCH-{missed_time.strftime('%Y%m%d')}-094",
+                batch_id="BATCH-20261119-094",
                 trigger_type="scheduled",
                 status="missed",
                 started_at=missed_time,
@@ -185,6 +302,113 @@ class IngestionBatchManager:
                 progress_pct=0
             )
         )
+
+    async def _sync_batches_with_db(self):
+        """
+        Synchronizes batches with the PostgreSQL ingestion_batches table.
+        1. Reads recent batches from PostgreSQL.
+        2. Merges with in-memory batches.
+        3. If PostgreSQL table is empty, seeds it from current batches.
+        """
+        try:
+            async with async_session_factory() as session:
+                stmt = select(IngestionBatch).order_by(desc(IngestionBatch.started_at)).limit(50)
+                res = await session.execute(stmt)
+                db_batches = res.scalars().all()
+                if db_batches:
+                    db_batch_map = {b.batch_id: IngestionBatchRecord.from_db_model(b) for b in db_batches}
+                    for b in self.batches:
+                        if b.batch_id not in db_batch_map and b.status == "in_progress":
+                            db_batch_map[b.batch_id] = b
+                    self.batches = sorted(list(db_batch_map.values()), key=lambda x: x.started_at)
+                    self._save_to_storage()
+                elif self.batches:
+                    for b in self.batches:
+                        st_at = b.started_at if b.started_at.tzinfo else b.started_at.replace(tzinfo=timezone.utc)
+                        cp_at = b.completed_at.replace(tzinfo=timezone.utc) if b.completed_at and not b.completed_at.tzinfo else b.completed_at
+                        db_item = IngestionBatch(
+                            batch_id=b.batch_id,
+                            trigger_type=b.trigger_type,
+                            status=b.status,
+                            started_at=st_at,
+                            completed_at=cp_at,
+                            duration_seconds=b.duration_seconds,
+                            pages_requested=b.pages_requested,
+                            pages_completed=b.pages_completed,
+                            cards_scraped=b.cards_scraped,
+                            tenders_ingested=b.tenders_ingested,
+                            line_items_extracted=b.line_items_extracted,
+                            alerts_dispatched=b.alerts_dispatched,
+                            quality_score=b.quality_score,
+                            errors_count=b.errors_count,
+                            error_details=b.error_details,
+                            created_by=b.created_by,
+                            first_bdc_id=b.first_bdc_id,
+                            last_bdc_id=b.last_bdc_id,
+                            current_step=b.current_step,
+                            current_phase=b.current_phase,
+                            progress_pct=b.progress_pct
+                        )
+                        session.add(db_item)
+                    await session.commit()
+                    logger.info(f"[BatchManager] Synced {len(self.batches)} batches into PostgreSQL ingestion_batches table.")
+        except Exception as e:
+            logger.debug(f"[BatchManager] DB batch sync unavailable: {e}")
+
+    async def _save_batch_to_db(self, record: IngestionBatchRecord):
+        """Upserts a single batch record into PostgreSQL."""
+        try:
+            async with async_session_factory() as session:
+                stmt = select(IngestionBatch).where(IngestionBatch.batch_id == record.batch_id)
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                st_at = record.started_at if record.started_at.tzinfo else record.started_at.replace(tzinfo=timezone.utc)
+                cp_at = record.completed_at.replace(tzinfo=timezone.utc) if record.completed_at and not record.completed_at.tzinfo else record.completed_at
+                if existing:
+                    existing.status = record.status
+                    existing.completed_at = cp_at
+                    existing.duration_seconds = record.duration_seconds
+                    existing.pages_completed = record.pages_completed
+                    existing.cards_scraped = record.cards_scraped
+                    existing.tenders_ingested = record.tenders_ingested
+                    existing.line_items_extracted = record.line_items_extracted
+                    existing.alerts_dispatched = record.alerts_dispatched
+                    existing.quality_score = record.quality_score
+                    existing.errors_count = record.errors_count
+                    existing.error_details = record.error_details
+                    existing.first_bdc_id = record.first_bdc_id
+                    existing.last_bdc_id = record.last_bdc_id
+                    existing.current_step = record.current_step
+                    existing.current_phase = record.current_phase
+                    existing.progress_pct = record.progress_pct
+                else:
+                    db_item = IngestionBatch(
+                        batch_id=record.batch_id,
+                        trigger_type=record.trigger_type,
+                        status=record.status,
+                        started_at=st_at,
+                        completed_at=cp_at,
+                        duration_seconds=record.duration_seconds,
+                        pages_requested=record.pages_requested,
+                        pages_completed=record.pages_completed,
+                        cards_scraped=record.cards_scraped,
+                        tenders_ingested=record.tenders_ingested,
+                        line_items_extracted=record.line_items_extracted,
+                        alerts_dispatched=record.alerts_dispatched,
+                        quality_score=record.quality_score,
+                        errors_count=record.errors_count,
+                        error_details=record.error_details,
+                        created_by=record.created_by,
+                        first_bdc_id=record.first_bdc_id,
+                        last_bdc_id=record.last_bdc_id,
+                        current_step=record.current_step,
+                        current_phase=record.current_phase,
+                        progress_pct=record.progress_pct
+                    )
+                    session.add(db_item)
+                await session.commit()
+        except Exception as e:
+            logger.debug(f"[BatchManager] Could not save batch {record.batch_id} to DB: {e}")
 
     async def probe_portal_gap(self, force_live_scan: bool = False) -> Dict[str, Any]:
         """
@@ -708,7 +932,10 @@ class IngestionBatchManager:
             completed_batches = [b for b in self.batches if b.status == "completed"]
             if completed_batches:
                 last_b = completed_batches[-1]
-                minutes_since_sync = max(0, int((datetime.now() - last_b.started_at).total_seconds() / 60))
+                b_time = last_b.started_at
+                if b_time.tzinfo is None:
+                    b_time = b_time.replace(tzinfo=timezone.utc)
+                minutes_since_sync = max(0, int((now - b_time).total_seconds() / 60))
             else:
                 minutes_since_sync = 12
 
@@ -772,7 +999,8 @@ class IngestionBatchManager:
 
         overall_quality = round(sum(c["score"] for c in quality_categories) / len(quality_categories), 1)
 
-        # 3. Batches Summary
+        # 3. Batches Summary (Synchronize with persistent DB table)
+        await self._sync_batches_with_db()
         batches_list = [b.to_dict() for b in reversed(self.batches)]
         completed_count = sum(1 for b in self.batches if b.status == "completed")
         in_progress_count = sum(1 for b in self.batches if b.status == "in_progress")
@@ -902,6 +1130,11 @@ class IngestionBatchManager:
         )
         self.batches.append(record)
         self.active_batch = record
+        self._save_to_storage()
+        try:
+            await self._save_batch_to_db(record)
+        except Exception:
+            pass
 
         start_time = datetime.now()
 
@@ -978,6 +1211,11 @@ class IngestionBatchManager:
             record.current_step = f"Échec du lot : {e}"
         finally:
             self.active_batch = None
+            self._save_to_storage()
+            try:
+                await self._save_batch_to_db(record)
+            except Exception:
+                pass
 
         return record
 

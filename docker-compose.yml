@@ -39,9 +39,11 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-hamza}:${POSTGRES_PASSWORD:-rootpassword}@db:5432/${POSTGRES_DB:-marchespublics}
+    volumes:
+      - .:/app
     ports:
       - "8000:8000"
-    command: sh -c "alembic upgrade head && uvicorn src.api.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload"
 
   # 3. Autonomous Ingestion & Alert Worker Daemon
   ingestion-worker:
@@ -60,6 +62,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-hamza}:${POSTGRES_PASSWORD:-rootpassword}@db:5432/${POSTGRES_DB:-marchespublics}
     volumes:
+      - .:/app
       - app_data:/app/data
       - app_logs:/app/logs
     command: ["python", "-m", "src.scheduler.jobs", "--daemon", "--interval", "3600"]
