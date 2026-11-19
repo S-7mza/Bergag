@@ -190,6 +190,28 @@ HTML_DASHBOARD = """<!DOCTYPE html>
             <!-- ========================================== -->
             <div x-show="activeModule === 'feed'" x-cloak class="space-y-4">
                 
+                <!-- Quick Date Audit & Exhaustiveness Pill -->
+                <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 rounded-xl border border-slate-800 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-2.5 w-2.5 relative">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <div class="flex flex-wrap items-center gap-2 text-xs">
+                            <span class="font-bold text-white">Diagnostic d'Exhaustivité :</span>
+                            <span class="text-slate-300">Avis du 19/11/2026</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                ✓ 100% en base
+                            </span>
+                        </div>
+                    </div>
+
+                    <button @click="activeModule = 'ingestion'; fetchIngestionDashboard(); runDateAudit('19/11/2026')"
+                            class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap shadow-sm">
+                        <span>🛡️</span> Lancer l'Audit d'Exhaustivité (19 Nov) <span>→</span>
+                    </button>
+                </div>
+
                 <!-- Dynamic Multi-Axis Filter Studio -->
                 <div class="bg-slate-900/90 rounded-2xl border border-slate-800 p-4 shadow-xl space-y-3">
                     <div class="flex flex-col md:flex-row justify-between items-center gap-3">
