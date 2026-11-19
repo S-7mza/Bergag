@@ -1,0 +1,89 @@
+version: "1.0"
+tenant_id: "hamza-solutions"
+profile_name: "Software, Programming & Data Solutions"
+contact_email: "hamza@example.com"
+
+macro_filters:
+  categories:
+    - "Services"
+    - "Fournitures"
+  prestation_types:
+    - "Achat de matériel technique, de logiciels et de matériel informatique"
+    - "Entretien et maintenance de logiciels et de progiciels"
+    - "Études, conseil et formation"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+    max_travel_distance_km: 300
+  financial_bands:
+    min_amount_mad: 10000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "custom-software"
+    label: "Custom Software & Web Development"
+    weight: 1.0
+    synonyms_fr:
+      - "développement logiciel"
+      - "application web"
+      - "portail web"
+      - "développement sur mesure"
+      - "numérisation des processus"
+      - "plateforme informatique"
+    synonyms_ar:
+      - "تطوير البرمجيات"
+      - "تطوير التطبيقات"
+      - "رقمنة"
+    technical_keywords:
+      - "Python"
+      - "React"
+      - "Node.js"
+      - "PostgreSQL"
+      - "API"
+      - "Docker"
+      - "cloud"
+
+  - id: "data-solutions"
+    label: "Data Engineering, BI & Automation"
+    weight: 0.95
+    synonyms_fr:
+      - "business intelligence"
+      - "traitement de données"
+      - "analyse de données"
+      - "automatisation"
+      - "tableau de bord"
+      - "reporting automatisé"
+      - "migration de données"
+    synonyms_ar:
+      - "معالجة البيانات"
+      - "ذكاء الأعمال"
+      - "أتمتة"
+    technical_keywords:
+      - "ETL"
+      - "PowerBI"
+      - "SQL"
+      - "Dashboard"
+      - "pipeline de données"
+
+negative_constraints:
+  keywords:
+    - "matériel bureautique"
+    - "cartouches d'encre"
+    - "toner"
+    - "photocopieur"
+    - "fournitures scolaires"
+    - "génie civil"
+    - "câblage électrique"
+    - "gardiennage"
+    - "nettoyage des locaux"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.40
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.15
+

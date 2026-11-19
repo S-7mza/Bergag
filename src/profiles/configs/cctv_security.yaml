@@ -1,0 +1,123 @@
+version: "1.0"
+tenant_id: "cctv-security-morocco"
+profile_name: "CCTV & Physical Security Systems"
+contact_email: "contact@security-example.ma"
+
+macro_filters:
+  categories:
+    - "Fournitures"
+    - "Travaux"
+  prestation_types:
+    - "Travaux d'installation de matériels divers"
+    - "Systèmes vidéo surveillance (ONDA)"
+    - "Achat de matériel technique, de logiciels et de matériel informatique"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Marrakech-Safi"
+    max_travel_distance_km: 400
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "ip-cameras"
+    label: "IP & Analog Surveillance Cameras"
+    weight: 1.0
+    synonyms_fr:
+      - "caméra de surveillance"
+      - "camera de surveillance"
+      - "caméra"
+      - "camera"
+      - "caméra IP"
+      - "caméra dôme"
+      - "caméra tube"
+      - "vidéosurveillance"
+      - "HIKVISION"
+      - "DAHUA"
+    synonyms_ar:
+      - "كاميرات المراقبة"
+      - "نظام المراقبة بالكاميرات"
+    technical_keywords:
+      - "5MP"
+      - "4K"
+      - "PoE"
+      - "IR"
+      - "infrarouge"
+      - "IP67"
+
+  - id: "recording-nvr"
+    label: "Network Video Recorders (NVR / DVR)"
+    weight: 0.95
+    synonyms_fr:
+      - "enregistreur numérique"
+      - "NVR"
+      - "DVR"
+      - "D.V.R"
+      - "serveur de stockage vidéo"
+    synonyms_ar:
+      - "جهاز تسجيل الفيديو"
+    technical_keywords:
+      - "16 canaux"
+      - "16 cameras"
+      - "32 canaux"
+      - "4K"
+      - "SATA"
+
+  - id: "storage-cabling"
+    label: "Surveillance Hard Drives & Network Cabling"
+    weight: 0.90
+    synonyms_fr:
+      - "disque dur"
+      - "disque dur interne"
+      - "disque dur surveillance"
+      - "câble coaxial"
+      - "cable coaxial"
+      - "câble réseau"
+      - "armoire de brassage"
+      - "coffret"
+      - "accessoire"
+      - "goulotte"
+    synonyms_ar:
+      - "قرص صلب"
+      - "كابل الشبكة"
+    technical_keywords:
+      - "WD Purple"
+      - "SkyHawk"
+      - "CAT6"
+      - "KX6"
+
+  - id: "monitors-screens"
+    label: "Monitoring Screens & Displays"
+    weight: 0.80
+    synonyms_fr:
+      - "écran"
+      - "ecran"
+      - "moniteur"
+      - "ecran lead" # Handles commune typo 'ecran lead' for 'ecran led'
+      - "ecran led"
+    synonyms_ar:
+      - "شاشة العرض"
+    technical_keywords:
+      - "32 pouces"
+      - "43 pouces"
+      - "HDMI"
+
+negative_constraints:
+  keywords:
+    - "gardiennage"
+    - "surveillance humaine"
+    - "extincteurs"
+    - "clôture métallique"
+    - "patrouille"
+    - "uniformes"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10
