@@ -31,6 +31,9 @@ async def test_email_decision_card_rendering_and_dispatch(cctv_tender_data):
     assert "06/2026" in html
     assert "Commune rurale de RDADNA O. MALEK" in html
     assert "https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/409807" in html
+    assert "#tender=409807" in html
+    assert "Fiche 60s Interactive" in html
+    assert "Consulter l'Avis Portail TGR" in html
     assert "RECOMMENDED GO" in html
     assert "HIKVISION" in html
 
@@ -38,7 +41,9 @@ async def test_email_decision_card_rendering_and_dispatch(cctv_tender_data):
     text = render_decision_card_text(cctv_tender_data, result, profile)
     assert "DECISION CARD" in text
     assert "409807" in text
+    assert "#tender=409807" in text
     assert "RECOMMENDED GO" in text
+    assert "AVIS OFFICIEL PORTAIL TGR" in text
 
     # 3. Test Async Dispatcher
     dispatcher = EmailDispatcher()

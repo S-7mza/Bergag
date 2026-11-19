@@ -350,8 +350,9 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                             </thead>
                             <tbody class="divide-y divide-slate-800/70">
                                 <template x-for="(item, idx) in items" :key="item.portal_id">
-                                    <tr class="hover:bg-slate-800/40 transition-colors"
-                                        :class="{'bg-slate-800/25 border-l-2 border-emerald-500': selectedIndex === idx}">
+                                    <tr class="hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                                        :class="{'bg-slate-800/25 border-l-2 border-emerald-500': selectedIndex === idx}"
+                                        @click="openModal(item.portal_id)">
                                         <td class="py-3.5 px-4 whitespace-nowrap">
                                             <span :class="{
                                                 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.match_score >= 80,
@@ -363,11 +364,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                             </span>
                                         </td>
                                         <td class="py-3.5 px-4 whitespace-nowrap font-mono text-slate-400">
-                                            <div class="font-bold text-white text-xs" x-text="'#' + item.portal_id"></div>
+                                            <div class="font-bold text-white text-xs group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></div>
                                             <div class="text-[11px] text-slate-400 truncate max-w-[120px]" x-text="item.reference"></div>
                                         </td>
                                         <td class="py-3.5 px-4">
-                                            <div class="font-medium text-slate-100 line-clamp-2 max-w-lg text-xs leading-relaxed" x-text="item.title"></div>
+                                            <div class="font-medium text-slate-100 group-hover:text-white line-clamp-2 max-w-lg text-xs leading-relaxed" x-text="item.title"></div>
                                             <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
                                                 <span class="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono" x-text="item.line_item_count + ' articles au devis'"></span>
                                                 <span x-text="'&bull; ' + item.main_category"></span>
@@ -386,12 +387,16 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                             </div>
                                             <div class="text-[10px] text-slate-500 font-mono mt-0.5" x-text="item.deadline_at"></div>
                                         </td>
-                                        <td class="py-3.5 px-4 whitespace-nowrap text-right space-x-1.5">
-                                            <button @click="openModal(item.portal_id)" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-colors shadow-sm">
-                                                Fiche 60s
+                                        <td class="py-3.5 px-4 whitespace-nowrap text-right space-x-1.5" @click.stop>
+                                            <button @click="openModal(item.portal_id)" 
+                                                    title="Ouvrir la Fiche 60s interactive : chiffrage, couverture catalogue & arbitrage"
+                                                    class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 inline-flex items-center gap-1.5">
+                                                <span>⚡</span> <span>Fiche 60s</span>
                                             </button>
-                                            <a :href="item.portal_url" target="_blank" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-lg text-xs transition-colors">
-                                                Portail ↗
+                                            <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
+                                               title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
+                                               class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-lg text-xs transition-colors border border-slate-700/60 inline-flex items-center gap-1">
+                                                <span>🏛️</span> <span>Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
                                             </a>
                                         </td>
                                     </tr>
@@ -410,7 +415,8 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 <!-- CARDS VIEW (AUTO FOR MOBILE) -->
                 <div x-show="!loading && viewMode === 'cards'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <template x-for="item in items" :key="item.portal_id">
-                        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl hover:border-slate-700 transition-all flex flex-col justify-between">
+                        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl hover:border-slate-700 transition-all flex flex-col justify-between cursor-pointer group"
+                             @click="openModal(item.portal_id)">
                             <div>
                                 <div class="flex justify-between items-start gap-2 mb-3">
                                     <span :class="{
@@ -421,10 +427,10 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                         <span x-text="item.match_score >= 80 ? '🎯' : (item.match_score >= 50 ? '⚠️' : '❌')"></span>
                                         <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
                                     </span>
-                                    <span class="font-mono text-[11px] text-slate-500" x-text="'#' + item.portal_id"></span>
+                                    <span class="font-mono text-[11px] text-slate-500 group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></span>
                                 </div>
 
-                                <h3 class="font-bold text-slate-100 text-sm leading-snug line-clamp-2 mb-2" :title="item.title" x-text="item.title"></h3>
+                                <h3 class="font-bold text-slate-100 group-hover:text-white text-sm leading-snug line-clamp-2 mb-2" :title="item.title" x-text="item.title"></h3>
                                 <p class="text-xs text-slate-400 mb-3 truncate" x-text="item.buyer_name"></p>
 
                                 <div class="space-y-1.5 text-xs text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800/80 mb-4 font-mono">
@@ -443,12 +449,16 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                 </div>
                             </div>
 
-                            <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80">
-                                <button @click="openModal(item.portal_id)" class="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition-colors shadow">
-                                    Fiche 60s
+                            <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80" @click.stop>
+                                <button @click="openModal(item.portal_id)" 
+                                        title="Ouvrir la Fiche 60s interactive : chiffrage, couverture catalogue & arbitrage"
+                                        class="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-1.5">
+                                    <span>⚡</span> <span>Fiche 60s</span>
                                 </button>
-                                <a :href="item.portal_url" target="_blank" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl transition-colors">
-                                    Portail ↗
+                                <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
+                                   title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
+                                   class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl transition-colors border border-slate-700/60 flex items-center gap-1">
+                                    <span>🏛️</span> <span>Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
                                 </a>
                             </div>
                         </div>
@@ -472,7 +482,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl">
                         <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Concentration Budgétaire T4</div>
                         <div class="text-2xl font-black text-emerald-400" x-text="(seasonality?.q4_concentration_pct || 0) + '%'"></div>
-                        <div class="text-xs text-slate-400 mt-2" x-text="seasonality?.seasonality_insight || 'Accélération budgétaire confirmée d\\'octobre à décembre.'"></div>
+                        <div class="text-xs text-slate-400 mt-2" x-text="seasonality?.seasonality_insight || 'Accélération budgétaire confirmée d’octobre à décembre.'"></div>
                     </div>
 
                     <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl">
@@ -793,13 +803,13 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                             <div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                                        Accomplissement du Jour (<span x-text="ingestionData.gap_analysis?.today_completion?.date || 'Aujourd\'hui'"></span>)
+                                        Accomplissement du Jour (<span x-text="ingestionData.gap_analysis?.today_completion?.date || 'Aujourd’hui'"></span>)
                                     </span>
                                     <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border"
                                           :class="ingestionData.gap_analysis?.today_completion?.badge || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'"
                                           x-text="(ingestionData.gap_analysis?.today_completion?.completion_pct || 100) + '%'"></span>
                                 </div>
-                                <p class="text-xs text-slate-300 mt-0.5" x-text="ingestionData.gap_analysis?.today_completion?.status_message || '100% d\'accomplissement — L\'intégralité des BDC enregistrés aujourd\'hui est en base locale.'"></p>
+                                <p class="text-xs text-slate-300 mt-0.5" x-text="ingestionData.gap_analysis?.today_completion?.status_message || '100% d’accomplissement — L’intégralité des BDC enregistrés aujourd’hui est en base locale.'"></p>
                             </div>
                         </div>
 
@@ -881,7 +891,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                     </div>
                                     <div class="flex items-center justify-between">
                                         <span class="text-emerald-400 font-semibold">Date d'Enregistrement :</span>
-                                        <span class="font-mono font-bold text-emerald-400" x-text="ingestionData.gap_analysis?.portal_latest?.registration_date || 'Aujourd\'hui'"></span>
+                                        <span class="font-mono font-bold text-emerald-400" x-text="ingestionData.gap_analysis?.portal_latest?.registration_date || 'Aujourd’hui'"></span>
                                     </div>
                                     <div class="flex items-center justify-between">
                                         <span class="text-slate-500">Clôture Soumission :</span>
@@ -989,7 +999,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                     class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
                                 <span x-show="!auditingDate">🛡️</span>
                                 <span x-show="auditingDate" class="animate-spin">⚙️</span>
-                                <span x-text="auditingDate ? 'Audit...' : 'Lancer l\'Audit'"></span>
+                                <span x-text="auditingDate ? 'Audit...' : 'Lancer l’Audit'"></span>
                             </button>
                         </div>
                     </div>
@@ -1044,7 +1054,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                             <span class="text-2xl" x-text="(dateAudit?.missing_count || 0) > 0 ? '⚠️' : '🛡️'"></span>
                             <div>
                                 <h4 class="text-xs font-bold text-white" x-text="dateAudit?.verdict || 'AUDIT RÉUSSI — 100% EXHAUSTIF'"></h4>
-                                <p class="text-xs text-slate-300 mt-0.5 leading-relaxed" x-text="dateAudit?.message || 'Certification d\'exhaustivité confirmée : Tous les avis du jour sont en base.'"></p>
+                                <p class="text-xs text-slate-300 mt-0.5 leading-relaxed" x-text="dateAudit?.message || 'Certification d’exhaustivité confirmée : Tous les avis du jour sont en base.'"></p>
                             </div>
                         </div>
 
@@ -1535,19 +1545,29 @@ HTML_DASHBOARD = """<!DOCTYPE html>
 
         <!-- 60-Second Decision Card Modal with Real Pricing & Bordereau Export -->
         <div x-show="modalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div @click.away="modalOpen = false" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div @click.away="closeModal()" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                 
                 <!-- Modal Header -->
-                <div class="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-start">
+                <div class="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-start gap-4">
                     <div>
-                        <div class="flex items-center gap-2 mb-2">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
                             <span class="text-xs uppercase tracking-wider text-emerald-400 font-mono font-bold" x-text="'BDC #' + activeTender?.portal_id + ' &bull; Réf: ' + activeTender?.reference"></span>
                             <span class="text-xs text-slate-500">&bull;</span>
                             <span class="text-xs text-slate-400" x-text="activeTender?.main_category"></span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                                <span>⚡</span> Fiche 60s Interne (Usage Chiffrage & Triage)
+                            </span>
                         </div>
                         <h3 class="text-base font-bold text-white leading-snug max-w-2xl" x-text="activeTender?.title"></h3>
                     </div>
-                    <button @click="modalOpen = false" class="text-slate-400 hover:text-white text-2xl font-light leading-none p-1">&times;</button>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button @click="copyFicheLink()" 
+                                title="Copier le lien direct vers cette Fiche 60s" 
+                                class="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium border border-slate-700 transition-colors inline-flex items-center gap-1.5">
+                            <span>🔗</span> <span class="hidden sm:inline">Partager</span>
+                        </button>
+                        <button @click="closeModal()" class="text-slate-400 hover:text-white text-2xl font-light leading-none p-1">&times;</button>
+                    </div>
                 </div>
 
                 <!-- Modal Body -->
@@ -1668,9 +1688,13 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                         </button>
                     </div>
 
-                    <a :href="activeTender?.portal_url" target="_blank" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5 ml-auto">
-                        Portail Officiel TGR &rarr;
-                    </a>
+                    <div class="flex items-center gap-2 ml-auto">
+                        <a :href="activeTender?.portal_url" target="_blank" rel="noopener noreferrer" 
+                           title="Accéder au portail officiel marchespublics.gov.ma pour déposer votre offre ou consulter les pièces signées"
+                           class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
+                            <span>🏛️</span> <span>Dépôt sur Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
+                        </a>
+                    </div>
                 </div>
 
             </div>
@@ -1874,6 +1898,10 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                         this.nowTimestamp = Date.now();
                     }, 1000);
 
+                    // Support direct deep-linking to Fiche 60s (e.g. #tender=410170 from alerts)
+                    this.checkUrlHash();
+                    window.addEventListener('hashchange', () => this.checkUrlHash());
+
                     this.fetchFeed();
                     if (this.currentUser.role === 'admin') {
                         this.fetchIngestionDashboard().then(() => {
@@ -1983,7 +2011,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     } else if (e.key === 'x' || e.key === 'X') {
                         if (this.modalOpen) this.recordAction('rejected');
                     } else if (e.key === 'Escape') {
-                        this.modalOpen = false;
+                        this.closeModal();
                         this.authModalOpen = false;
                     }
                 },
@@ -2109,7 +2137,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                 legend: { display: false },
                                 tooltip: {
                                     callbacks: {
-                                        afterLabel: (ctx) => ctx.dataIndex >= 9 ? '🔥 Période T4 d\\'accélération budgétaire' : ''
+                                        afterLabel: (ctx) => ctx.dataIndex >= 9 ? "🔥 Période T4 d'accélération budgétaire" : ""
                                     }
                                 }
                             },
@@ -2195,9 +2223,12 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     }
                 },
 
-                async openModal(portalId) {
+                async openModal(portalId, updateHash = true) {
                     try {
                         const res = await fetch(`/api/tenders/${portalId}`);
+                        if (!res.ok) {
+                            throw new Error(`Consultation #${portalId} non trouvée`);
+                        }
                         this.activeTender = await res.json();
                         
                         // Fetch real pricing intelligence from backend
@@ -2208,8 +2239,59 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                         }
 
                         this.modalOpen = true;
+                        if (updateHash) {
+                            try {
+                                history.replaceState(null, document.title, window.location.pathname + window.location.search + '#tender=' + portalId);
+                            } catch (e) {
+                                window.location.hash = 'tender=' + portalId;
+                            }
+                        }
                     } catch (e) {
-                        this.showToast('Erreur lors du chargement : ' + e, 'error');
+                        this.showToast('Erreur lors du chargement : ' + (e.message || e), 'error');
+                    }
+                },
+
+                closeModal() {
+                    this.modalOpen = false;
+                    // Cleanly clear tender hash from URL without jumping
+                    if (window.location.hash && window.location.hash.includes('tender=')) {
+                        try {
+                            history.replaceState(null, document.title, window.location.pathname + window.location.search);
+                        } catch (e) {
+                            window.location.hash = '';
+                        }
+                    }
+                },
+
+                checkUrlHash() {
+                    const hash = window.location.hash;
+                    if (!hash) return;
+                    const match = hash.match(/tender=([0-9]+)/) || hash.match(/#([0-9]+)/);
+                    if (match && match[1]) {
+                        const portalId = parseInt(match[1], 10);
+                        if (portalId && (!this.activeTender || this.activeTender.portal_id !== portalId || !this.modalOpen)) {
+                            this.openModal(portalId, false);
+                        }
+                    }
+                },
+
+                copyFicheLink() {
+                    if (!this.activeTender) return;
+                    const shareUrl = window.location.origin + window.location.pathname + '#tender=' + this.activeTender.portal_id;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(shareUrl).then(() => {
+                            this.showToast(`Lien direct Fiche 60s copié (#${this.activeTender.portal_id}) !`, 'success');
+                        }).catch(() => {
+                            this.showToast('Lien direct : ' + shareUrl, 'info');
+                        });
+                    } else {
+                        const input = document.createElement('input');
+                        input.value = shareUrl;
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(input);
+                        this.showToast(`Lien direct Fiche 60s copié (#${this.activeTender.portal_id}) !`, 'success');
                     }
                 },
 
@@ -2236,7 +2318,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                         });
                         const actionLabel = actionName === 'shortlisted' ? 'Retenu ⭐' : (actionName === 'in_preparation' ? 'En chiffrage 📝' : 'Ignoré ❌');
                         this.showToast(`Statut mis à jour : ${actionLabel} (#${this.activeTender.portal_id})`, 'success');
-                        this.modalOpen = false;
+                        this.closeModal();
                     } catch (e) {
                         this.showToast('Erreur: ' + e, 'error');
                     }
@@ -2390,7 +2472,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                 this.showToast(`⚠️ Écart détecté : ${this.dateAudit.missing_count} avis manquants pour le ${d}`, 'warning');
                             }
                         } else {
-                            this.showToast('Erreur lors de l\'audit de date', 'error');
+                            this.showToast("Erreur lors de l'audit de date", 'error');
                         }
                     } catch (e) {
                         this.showToast('Erreur de connexion : ' + e, 'error');

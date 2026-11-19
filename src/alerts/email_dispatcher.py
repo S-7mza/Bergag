@@ -23,6 +23,8 @@ def render_decision_card_html(
     deadline = tender_data.get("deadline_at", "N/A")
     location = tender_data.get("execution_location", "Maroc")
     portal_url = f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{portal_id}"
+    app_base_url = (settings.app_url or "http://localhost:8000").rstrip("/")
+    fiche_url = f"{app_base_url}/#tender={portal_id}"
 
     # Badge styling
     if result.overall_score >= 80.0:
@@ -133,11 +135,22 @@ def render_decision_card_html(
                 </div>
             </div>
 
-            <!-- CTA Action Button -->
-            <div style="margin-top: 32px; text-align: center;">
-                <a href="{portal_url}" style="background-color: #2563EB; color: #FFFFFF; text-decoration: none; font-size: 15px; font-weight: 600; padding: 12px 24px; border-radius: 6px; display: inline-block;">
-                    📄 Consulter l'Avis Officiel sur le Portail &rarr;
-                </a>
+            <!-- Dual CTA Action Buttons (Internal Fiche 60s vs External Official TGR) -->
+            <div style="margin-top: 32px; padding: 20px; background-color: #F8FAFC; border-radius: 8px; border: 1px solid #E2E8F0; text-align: center;">
+                <div style="display: inline-block; vertical-align: middle; margin: 4px 6px;">
+                    <a href="{fiche_url}" style="background-color: #059669; color: #FFFFFF; text-decoration: none; font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 6px; display: inline-block; box-shadow: 0 2px 4px rgba(5, 150, 105, 0.25);">
+                        ⚡ Ouvrir la Fiche 60s Interactive &rarr;
+                    </a>
+                </div>
+                <div style="display: inline-block; vertical-align: middle; margin: 4px 6px;">
+                    <a href="{portal_url}" target="_blank" rel="noopener noreferrer" style="background-color: #1E293B; color: #E2E8F0; border: 1px solid #475569; text-decoration: none; font-size: 13px; font-weight: 600; padding: 11px 18px; border-radius: 6px; display: inline-block;">
+                        🏛️ Consulter l'Avis Portail TGR &#8599;
+                    </a>
+                </div>
+                <div style="font-size: 11px; color: #64748B; margin-top: 12px; line-height: 1.5; text-align: center;">
+                    <strong>Fiche 60s :</strong> Calculateur de marge interne, conformité catalogue & export du bordereau Excel.<br>
+                    <strong>Portail TGR :</strong> Consultation de l'avis officiel & dépôt réglementaire de l'offre.
+                </div>
             </div>
 
             <p style="font-size: 12px; color: #9CA3AF; text-align: center; margin-top: 24px;">
@@ -162,6 +175,8 @@ def render_decision_card_text(
     title = tender_data.get("title", "")
     deadline = tender_data.get("deadline_at", "N/A")
     portal_url = f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{portal_id}"
+    app_base_url = (settings.app_url or "http://localhost:8000").rstrip("/")
+    fiche_url = f"{app_base_url}/#tender={portal_id}"
     verdict_label = "RECOMMENDED GO" if result.decision_recommendation == "GO" else result.decision_recommendation
 
     return f"""===================================================================
@@ -181,8 +196,9 @@ SYNTHÈSE:
 POINTS DE VIGILANCE:
 {chr(10).join('- ' + f for f in result.red_flags) if result.red_flags else 'Aucune contrainte bloquante détectée.'}
 
-LIEN DIRECT PORTAIL:
-{portal_url}
+ACTIONS RECOMMANDÉES:
+⚡ FICHE 60s INTERACTIVE (Chiffrage & Décision) : {fiche_url}
+🏛️ AVIS OFFICIEL PORTAIL TGR (Dépôt réglementaire) : {portal_url}
 ===================================================================
 """
 

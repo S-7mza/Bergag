@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     postgres_user: str = Field(default="hamza", alias="POSTGRES_USER")
     postgres_password: str = Field(default="rootpassword", alias="POSTGRES_PASSWORD")
 
+    # Application Base URL (for deep-linking Fiche 60s from alerts)
+    app_url: str = Field(default="http://localhost:8000", alias="APP_URL")
+
     # Scraper
     scraper_rate_limit_seconds: float = Field(default=1.0, alias="SCRAPER_RATE_LIMIT_SECONDS")
     scraper_page_size: int = Field(default=50, alias="SCRAPER_PAGE_SIZE")

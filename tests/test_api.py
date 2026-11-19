@@ -17,6 +17,9 @@ def test_serve_dashboard_html(client):
     assert "Chart.js" in response.text
     assert "formatCountdown" in response.text
     assert "export-bordereau" in response.text
+    assert "checkUrlHash" in response.text
+    assert "copyFicheLink" in response.text
+    assert "Portail TGR" in response.text
 
 def test_get_available_profiles(client):
     response = client.get("/api/profiles")
