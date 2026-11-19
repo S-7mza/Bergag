@@ -78,16 +78,34 @@ async def run_dry_run_validation(max_pages: int = 1, export_path: str = "data/dr
     logger.info(f"=== DRY-RUN COMPLETE: Captured and evaluated {len(collected)} sample tenders. Saved to {export_path} ===")
     return collected
 
-async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
+async def run_active_crawl_cycle(
+    max_pages: int = 5, 
+    send_emails: bool = True,
+    progress_callback = None
+):
     """
     Executes an autonomous active BDC ingestion and alert cycle:
-    1. Crawls active listings at pageSize=50.
-    2. Fetches detailed line items and stores immutable raw HTML snapshots.
-    3. Runs 4-stage cascade scoring against all loaded company profiles.
-    4. Dispatches responsive HTML Decision Cards via Gmail SMTP for GO offers.
+    1. Emits execution plan event.
+    2. Crawls active listings at pageSize=50.
+    3. Fetches detailed line items and stores immutable raw HTML snapshots.
+    4. Runs 4-stage cascade scoring against all loaded company profiles.
+    5. Dispatches responsive HTML Decision Cards via Gmail SMTP for GO offers.
+    6. Emits BDC-by-BDC live ingestion events.
     """
     start_time = datetime.now()
     logger.info(f"Starting active BDC crawl and intelligence cycle (up to {max_pages} pages)...")
+
+    if progress_callback:
+        try:
+            await progress_callback("plan_initialized", {
+                "phase": "plan",
+                "max_pages": max_pages,
+                "estimated_tenders": max_pages * 50,
+                "target_url": "https://www.marchespublics.gov.ma/bdc/entreprise/consultation/",
+                "step_description": f"Phase 1 : Plan d'exécution validé. Scan ciblé de {max_pages} pages (~{max_pages * 50} BDC sur TGR)"
+            })
+        except Exception as e:
+            logger.warning(f"Progress callback error: {e}")
 
     client = PortalHttpClient()
     scoring_engine = ScoringCascadeEngine()
@@ -97,6 +115,8 @@ async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
 
     processed_count = 0
     alerts_sent = 0
+    first_portal_id = None
+    last_portal_id = None
 
     try:
         async with async_session_factory() as session:
@@ -104,6 +124,17 @@ async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
 
             for page in range(1, max_pages + 1):
                 try:
+                    if progress_callback:
+                        try:
+                            await progress_callback("page_discovery", {
+                                "phase": "discovery",
+                                "page": page,
+                                "max_pages": max_pages,
+                                "step_description": f"Phase 2 : Scan de la page {page}/{max_pages} sur le portail des marchés publics..."
+                            })
+                        except Exception:
+                            pass
+
                     raw_listing, cards = await service.listing_spider.fetch_page(page=page, page_size=50)
                     session.add(raw_listing)
                     await session.commit()
@@ -112,10 +143,25 @@ async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
                         logger.info(f"Page {page} returned 0 cards. Reached end of active listing.")
                         break
 
+                    if progress_callback:
+                        try:
+                            await progress_callback("cards_found", {
+                                "phase": "discovery",
+                                "page": page,
+                                "cards_count": len(cards),
+                                "step_description": f"Phase 2 : {len(cards)} avis BDC détectés sur la page {page}. Début de l'ingestion unitaire..."
+                            })
+                        except Exception:
+                            pass
+
                     for card in cards:
                         portal_id = card.get("portal_id")
                         if not portal_id:
                             continue
+
+                        if first_portal_id is None:
+                            first_portal_id = portal_id
+                        last_portal_id = portal_id
 
                         # Fetch detail and accordion line items
                         try:
@@ -125,8 +171,13 @@ async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
                             processed_count += 1
 
                             # Evaluate against each profile
+                            top_score = 0.0
+                            top_verdict = "NO-GO"
                             for profile in profiles:
                                 cascade_res = await scoring_engine.evaluate_tender(detail_data, profile)
+                                if cascade_res.overall_score > top_score:
+                                    top_score = cascade_res.overall_score
+                                    top_verdict = cascade_res.decision_recommendation
                                 
                                 # If recommended GO (Score >= 80%), dispatch email alert
                                 if send_emails and (cascade_res.decision_recommendation == "GO" or cascade_res.overall_score >= 80.0):
@@ -137,6 +188,26 @@ async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
                                     sent = await email_dispatcher.send_decision_card(detail_data, cascade_res, profile)
                                     if sent:
                                         alerts_sent += 1
+
+                            if progress_callback:
+                                try:
+                                    await progress_callback("bdc_ingested", {
+                                        "phase": "bdc_item",
+                                        "portal_id": portal_id,
+                                        "first_bdc_id": first_portal_id,
+                                        "last_bdc_id": last_portal_id,
+                                        "processed_count": processed_count,
+                                        "estimated_total": max_pages * 50,
+                                        "reference": detail_data.get("reference", ""),
+                                        "title": detail_data.get("title", "")[:45],
+                                        "buyer": detail_data.get("buyer_name", "Acheteur Public"),
+                                        "line_items_count": len(detail_data.get("line_items", [])),
+                                        "score": round(top_score, 1),
+                                        "verdict": top_verdict,
+                                        "step_description": f"Phase 3 : Ingestion BDC #{portal_id} : « {detail_data.get('title', '')[:35]} » ({len(detail_data.get('line_items', []))} articles) [{top_verdict}]"
+                                    })
+                                except Exception:
+                                    pass
 
                         except Exception as e:
                             logger.error(f"Failed to process tender #{portal_id}: {e}")
@@ -154,6 +225,20 @@ async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
         f"Crawl cycle finished in {duration:.1f}s. "
         f"Processed {processed_count} tenders, dispatched {alerts_sent} email alerts."
     )
+
+    if progress_callback:
+        try:
+            await progress_callback("cycle_completed", {
+                "phase": "completed",
+                "processed_count": processed_count,
+                "first_bdc_id": first_portal_id,
+                "last_bdc_id": last_portal_id,
+                "duration": duration,
+                "alerts_sent": alerts_sent,
+                "step_description": f"Phase 4 : Lot terminé avec succès. {processed_count} BDC ingérés (#{first_portal_id or '—'} → #{last_portal_id or '—'}) en {duration:.1f}s"
+            })
+        except Exception:
+            pass
 
 async def wait_for_database_ready(max_retries: int = 30, retry_delay: float = 3.0):
     """

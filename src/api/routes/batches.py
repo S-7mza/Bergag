@@ -112,3 +112,4 @@ async def retry_missed_or_failed_batch(
         "status": "retry_started",
         "message": f"Relance du lot {batch_id} enclenchée par {user.full_name}."
     }
+
