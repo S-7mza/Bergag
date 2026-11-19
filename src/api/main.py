@@ -1122,7 +1122,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     if (window.seasonalityChartInstance) window.seasonalityChartInstance.destroy();
 
                     const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
-                    const dataValues = [12, 14, 18, 15, 16, 20, 19, 14, 22, 48, 65, 84]; # Representative procurement spend volume
+                    const dataValues = [12, 14, 18, 15, 16, 20, 19, 14, 22, 48, 65, 84]; // Representative procurement spend volume
 
                     window.seasonalityChartInstance = new Chart(ctx, {
                         type: 'bar',
