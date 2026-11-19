@@ -193,9 +193,9 @@ class EmailDispatcher:
     def __init__(self):
         self.host = settings.smtp_host
         self.port = settings.smtp_port
-        self.user = settings.smtp_user
-        self.password = settings.smtp_password
-        self.recipient = settings.alert_recipient_email or self.user
+        self.user = settings.smtp_user.strip() if settings.smtp_user else ""
+        self.password = settings.smtp_password.replace(" ", "").strip() if settings.smtp_password else ""
+        self.recipient = (settings.alert_recipient_email or self.user).strip()
 
     def _send_sync(self, subject: str, text_body: str, html_body: str) -> bool:
         if not self.user or not self.password:
