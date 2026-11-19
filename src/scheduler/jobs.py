@@ -1,8 +1,13 @@
 import asyncio
 import logging
+import argparse
+import json
+from pathlib import Path
 from datetime import datetime
 from src.database.session import async_session_factory
 from src.scraper.client import PortalHttpClient
+from src.scraper.listing_spider import ListingSpider
+from src.scraper.detail_spider import DetailSpider
 from src.scraper.ingestion_service import IngestionService
 from src.profiles.loader import load_all_profiles
 from src.engine.scoring_cascade import ScoringCascadeEngine
@@ -12,9 +17,68 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
-logger = logging.getLogger("Scheduler")
+logger = logging.getLogger("CrawlerDaemon")
 
-async def run_active_crawl_cycle(max_pages: int = 5):
+async def run_dry_run_validation(max_pages: int = 1, export_path: str = "data/dry_run_validation.json"):
+    """
+    Crawls active notices locally and validates parsing & scoring WITHOUT writing to DB.
+    Allows inspection and validation of data quality before pushing to server database.
+    """
+    logger.info(f"=== DRY-RUN MODE: Crawling up to {max_pages} pages for local inspection ===")
+    client = PortalHttpClient()
+    listing_spider = ListingSpider(client)
+    detail_spider = DetailSpider(client)
+    scoring_engine = ScoringCascadeEngine()
+    profiles = load_all_profiles()
+
+    collected = []
+    try:
+        for page in range(1, max_pages + 1):
+            logger.info(f"[DryRun] Fetching listing page {page}...")
+            _, cards = await listing_spider.fetch_page(page=page, page_size=50)
+            logger.info(f"[DryRun] Found {len(cards)} cards on page {page}.")
+
+            for card in cards[:10]: # inspect first 10 per page
+                portal_id = card.get("portal_id")
+                if not portal_id:
+                    continue
+                
+                _, detail_data = await detail_spider.fetch_detail(portal_id)
+                scores = {}
+                for profile in profiles:
+                    res = await scoring_engine.evaluate_tender(detail_data, profile)
+                    scores[profile.profile_name] = {
+                        "score": round(res.overall_score, 1),
+                        "verdict": res.decision_recommendation,
+                        "line_items_matched": f"{len([m for m in res.line_item_matches if m.get('is_matched')])}/{len(res.line_item_matches)}"
+                    }
+
+                preview = {
+                    "portal_id": portal_id,
+                    "reference": detail_data.get("reference"),
+                    "title": detail_data.get("title"),
+                    "buyer": detail_data.get("buyer_name"),
+                    "deadline": detail_data.get("deadline_at"),
+                    "line_item_count": len(detail_data.get("line_items", [])),
+                    "first_line_item": detail_data.get("line_items", [])[0] if detail_data.get("line_items") else None,
+                    "profile_scores": scores
+                }
+                collected.append(preview)
+                print(f"-> #{portal_id} [{preview['reference']}] {preview['title'][:55]}... | {preview['line_item_count']} items | Scores: {scores}")
+
+    finally:
+        await client.close()
+
+    # Save to local inspection file
+    out_file = Path(export_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_file, "w", encoding="utf-8") as f:
+        json.dump(collected, f, indent=2, ensure_ascii=False)
+
+    logger.info(f"=== DRY-RUN COMPLETE: Captured and evaluated {len(collected)} sample tenders. Saved to {export_path} ===")
+    return collected
+
+async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
     """
     Executes an autonomous active BDC ingestion and alert cycle:
     1. Crawls active listings at pageSize=50.
@@ -27,7 +91,7 @@ async def run_active_crawl_cycle(max_pages: int = 5):
 
     client = PortalHttpClient()
     scoring_engine = ScoringCascadeEngine()
-    email_dispatcher = EmailDispatcher()
+    email_dispatcher = EmailDispatcher() if send_emails else None
     profiles = load_all_profiles()
     logger.info(f"Loaded {len(profiles)} company profiles: {[p.profile_name for p in profiles]}")
 
@@ -65,7 +129,7 @@ async def run_active_crawl_cycle(max_pages: int = 5):
                                 cascade_res = await scoring_engine.evaluate_tender(detail_data, profile)
                                 
                                 # If recommended GO (Score >= 80%), dispatch email alert
-                                if cascade_res.decision_recommendation == "GO" or cascade_res.overall_score >= 80.0:
+                                if send_emails and (cascade_res.decision_recommendation == "GO" or cascade_res.overall_score >= 80.0):
                                     logger.info(
                                         f"High-fit tender detected! #{portal_id} '{detail_data.get('title')[:40]}' "
                                         f"scored {cascade_res.overall_score:.0f}% for '{profile.profile_name}'. Sending email..."
@@ -92,4 +156,14 @@ async def run_active_crawl_cycle(max_pages: int = 5):
     )
 
 if __name__ == "__main__":
-    asyncio.run(run_active_crawl_cycle(max_pages=1))
+    parser = argparse.ArgumentParser(description="Antigravity Procurement Crawler & Ingestion Daemon")
+    parser.add_argument("--pages", type=int, default=5, help="Number of listing pages to crawl (50 per page)")
+    parser.add_argument("--dry-run", action="store_true", help="Crawl and score locally without writing to DB or sending email")
+    parser.add_argument("--no-email", action="store_true", help="Save to DB but suppress Gmail alerts")
+
+    args = parser.parse_args()
+
+    if args.dry_run:
+        asyncio.run(run_dry_run_validation(max_pages=args.pages))
+    else:
+        asyncio.run(run_active_crawl_cycle(max_pages=args.pages, send_emails=not args.no_email))
