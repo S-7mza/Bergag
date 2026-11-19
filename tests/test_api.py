@@ -105,6 +105,26 @@ def test_admin_get_gap_analysis(client):
     assert "db_latest" in data
     assert "portal_latest" in data
 
+def test_admin_audit_date_endpoint(client):
+    res = client.get("/api/admin/ingestion/audit-date?date=19/11/2026")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["target_date"] == "19/11/2026"
+    assert "portal_total_published" in data
+    assert "db_total_ingested" in data
+    assert "concordance_pct" in data
+    assert "verdict" in data
+    assert "reconciled_items" in data
+
+def test_admin_reconcile_missing_items(client):
+    res = client.post("/api/admin/ingestion/audit-date/reconcile", json={
+        "date": "19/11/2026",
+        "portal_ids": []
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "noop"
+
 def test_admin_ingestion_remediation(client):
     with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl:
         mock_crawl.return_value = None
@@ -120,4 +140,32 @@ def test_admin_batch_trigger(client):
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "batch_started"
+
+
+@pytest.mark.asyncio
+async def test_batch_manager_cards_accumulation():
+    from src.engine.batch_manager import IngestionBatchManager
+    bm = IngestionBatchManager()
+    
+    async def fake_crawl(max_pages, send_emails, progress_callback):
+        for p in range(1, max_pages + 1):
+            await progress_callback("cards_found", {
+                "phase": "discovery",
+                "page": p,
+                "cards_count": 50
+            })
+            for i in range(48):
+                await progress_callback("bdc_ingested", {
+                    "phase": "bdc_item",
+                    "processed_count": (p - 1) * 48 + i + 1,
+                    "portal_id": 100000 + (p - 1) * 48 + i,
+                    "line_items_count": 7
+                })
+    
+    with patch("src.engine.batch_manager.run_active_crawl_cycle", side_effect=fake_crawl):
+        record = await bm.execute_batch(pages=3, trigger_type="test")
+        assert record.cards_scraped == 150
+        assert record.tenders_ingested == 144
+        assert record.line_items_extracted == 144 * 7
+
 

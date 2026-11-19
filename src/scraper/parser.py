@@ -20,6 +20,21 @@ def parse_date(date_str: str | None) -> str | None:
         return f"{year}-{month}-{day}T{hour}:{minute}:00+01:00"
     return None
 
+def parse_total_results(html: str) -> int:
+    """Parses total matching results count from .content__resultat (e.g. 'Nombre de résultats : 1611')"""
+    soup = BeautifulSoup(html, 'html.parser')
+    res_div = soup.select_one('.content__resultat')
+    if res_div:
+        text = clean_text(res_div.get_text())
+        match = re.search(r'(\d+[\s\d]*)', text)
+        if match:
+            clean_num = match.group(1).replace(' ', '')
+            try:
+                return int(clean_num)
+            except ValueError:
+                pass
+    return 0
+
 def parse_listing_page(html: str) -> list[dict[str, Any]]:
     """Parses active consultation cards from /bdc/entreprise/consultation/"""
     soup = BeautifulSoup(html, 'html.parser')

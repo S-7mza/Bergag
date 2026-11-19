@@ -1,6 +1,7 @@
 import logging
-from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 from src.api.auth import User, require_role
 from src.engine.batch_manager import batch_manager
@@ -17,6 +18,10 @@ class RemediateRequest(BaseModel):
     pages: int = Field(default=3, ge=1, le=10, description="Nombre de pages de rattrapage")
     reason: Optional[str] = Field(default="Rattrapage diagnostique des lots manqués", description="Motif de l'opération")
 
+class DateAuditReconcileRequest(BaseModel):
+    date: str = Field(default="19/11/2026", description="Date ciblée (DD/MM/YYYY)")
+    portal_ids: List[int] = Field(default_factory=list, description="Liste des identifiants BDC manquants à importer")
+
 @router.get("/dashboard")
 async def get_ingestion_dashboard(user: User = Depends(require_role(["admin", "analyst"]))):
     """
@@ -26,8 +31,35 @@ async def get_ingestion_dashboard(user: User = Depends(require_role(["admin", "a
     3. Batches Ledger (Completed, In Progress, Missed, Pending)
     4. Diagnostic Gap Analysis with recommended one-click action
     5. Real-time Gap Probe between DB and live portal
+    6. Date Exhaustiveness Audit for mathematical reconciliation
     """
     return await batch_manager.get_dashboard_state()
+
+@router.get("/audit-date")
+async def audit_date_exhaustiveness_endpoint(
+    date: Optional[str] = Query(None, description="Date au format DD/MM/YYYY"),
+    user: User = Depends(require_role(["admin", "analyst"]))
+):
+    """
+    Performs a mathematical set reconciliation for a specific publication date:
+    Compares the exact count and IDs of BDCs on the portal with the PostgreSQL database.
+    """
+    target = date or datetime.now().strftime("%d/%m/%Y")
+    return await batch_manager.audit_date_exhaustiveness(target_date_str=target, fetch_live_portal=True)
+
+@router.post("/audit-date/reconcile")
+async def reconcile_missing_date_items(
+    req: DateAuditReconcileRequest,
+    user: User = Depends(require_role(["admin"]))
+):
+    """
+    Directly pulls and ingests the specific missing BDC IDs for the audited date.
+    """
+    return await batch_manager.remediate_missing_portal_ids(
+        portal_ids=req.portal_ids,
+        target_date_str=req.date,
+        user_name=user.full_name
+    )
 
 @router.post("/probe-portal-gap")
 async def probe_portal_gap(user: User = Depends(require_role(["admin", "analyst"]))):
