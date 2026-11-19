@@ -5,6 +5,7 @@ from src.api.routes.feed import router as feed_router
 from src.api.routes.analytics import router as analytics_router
 from src.api.routes.auth import router as auth_router
 from src.api.routes.crawler import router as crawler_router
+from src.api.routes.batches import router as batches_router
 
 app = FastAPI(
     title="Antigravity Procurement Intelligence",
@@ -24,6 +25,7 @@ app.include_router(auth_router)
 app.include_router(crawler_router)
 app.include_router(feed_router)
 app.include_router(analytics_router)
+app.include_router(batches_router)
 
 HTML_DASHBOARD = """<!DOCTYPE html>
 <html lang="fr" class="h-full bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950">
@@ -165,6 +167,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
 
                     <button x-show="hasPermission('users:manage')" @click="activeModule = 'team'; fetchTeamUsers()" :class="activeModule === 'team' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>👥</span> Équipe & RBAC
+                    </button>
+
+                    <button x-show="currentUser.role === 'admin' || hasPermission('batches:manage')" @click="activeModule = 'ingestion'; fetchIngestionDashboard()" :class="activeModule === 'ingestion' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>⚡</span> Lots & Ingestion
+                        <span class="px-1.5 py-0.2 bg-amber-500/20 text-amber-400 text-[10px] rounded-full font-bold border border-amber-500/30">Admin</span>
                     </button>
                 </nav>
 
@@ -640,6 +647,329 @@ HTML_DASHBOARD = """<!DOCTYPE html>
             </div>
 
             <!-- ========================================== -->
+            <!-- MODULE 4B: ADMIN INGESTION & BATCH CONTROL -->
+            <!-- ========================================== -->
+            <div x-show="activeModule === 'ingestion'" x-cloak class="space-y-6">
+                <!-- 1. Freshness & "Is Data Up To Date?" Hero Panel -->
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl relative overflow-hidden">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    Administration Flux & Données
+                                </span>
+                                <span class="text-xs text-slate-500">&bull;</span>
+                                <span class="text-xs text-slate-400 font-mono">SLA Fraîcheur : 60 min</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <h2 class="text-xl font-bold text-white tracking-tight">Statut des Données Reçues & Fraîcheur</h2>
+                                <span class="px-3 py-1 rounded-full text-xs font-bold font-mono border flex items-center gap-1.5"
+                                      :class="ingestionData.freshness.status_badge">
+                                    <span class="w-2 h-2 rounded-full" :class="ingestionData.freshness.is_up_to_date ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'"></span>
+                                    <span x-text="ingestionData.freshness.status_label"></span>
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">
+                                Vos données sont synchronisées avec le portail officiel des marchés publics du Maroc (TGR).
+                                Dernière collecte : <strong class="text-slate-200" x-text="ingestionData.freshness.last_sync_formatted"></strong> 
+                                (<span class="text-emerald-400 font-bold" x-text="'il y a ' + ingestionData.freshness.minutes_since_sync + ' min'"></span>).
+                            </p>
+                        </div>
+
+                        <!-- Right Controls -->
+                        <div class="flex items-center gap-3">
+                            <button @click="fetchIngestionDashboard(); showToast('Télémétrie actualisée', 'info')" 
+                                    class="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 font-semibold transition-colors flex items-center gap-2">
+                                <span>🔄</span> Actualiser
+                            </button>
+                            <button @click="triggerCustomBatch(2)" 
+                                    class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center gap-2">
+                                <span>📥</span> Forcer Lot (100 avis)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Telemetry Meters Strip -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Données à Jour ?</span>
+                            <span class="font-black text-sm md:text-base mt-1 flex items-center gap-2"
+                                  :class="ingestionData.freshness.is_up_to_date ? 'text-emerald-400' : 'text-amber-400'">
+                                <span x-text="ingestionData.freshness.is_up_to_date ? 'OUI • Fraîcheur Optimale' : 'RETARD DÉTECTÉ'"></span>
+                            </span>
+                            <span class="text-[10px] text-slate-500 block mt-0.5">SLA de synchronisation &le; 60 min</span>
+                        </div>
+
+                        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Prochain Cycle Automatique</span>
+                            <span class="font-bold text-sm md:text-base text-slate-200 mt-1 block font-mono"
+                                  x-text="'Dans ' + ingestionData.freshness.next_sync_in_minutes + ' minutes'"></span>
+                            <span class="text-[10px] text-slate-500 block mt-0.5">Fréquence : toutes les heures</span>
+                        </div>
+
+                        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Avis Portés / Portail Estimé</span>
+                            <span class="font-bold text-sm md:text-base text-indigo-400 mt-1 block font-mono"
+                                  x-text="ingestionData.freshness.db_ingested_total + ' / ~' + ingestionData.freshness.active_portal_estimated + ' BDC'"></span>
+                            <span class="text-[10px] text-slate-500 block mt-0.5">Couverture active locale</span>
+                        </div>
+
+                        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800/80">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Tunnel Portail (WAF)</span>
+                            <span class="font-bold text-xs text-emerald-400 mt-1 block font-mono truncate"
+                                  x-text="ingestionData.freshness.portal_health"></span>
+                            <span class="text-[10px] text-slate-500 block mt-0.5">F5 Big-IP Bypass Opérationnel</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Diagnostic & "Que ramener maintenant ?" Hero Card -->
+                <div class="bg-gradient-to-br from-slate-900 via-indigo-950/30 to-slate-900 rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative overflow-hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                            <h3 class="text-base font-bold text-white tracking-tight">Diagnostic d'Intégrité des Lots & Détection des Écarts</h3>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                              x-text="ingestionData.diagnostic.issues_count + ' écarts identifiés'"></span>
+                    </div>
+
+                    <p class="text-xs text-slate-300 mb-4 leading-relaxed">
+                        Le moteur de diagnostic compare en temps réel la structure de votre base locale avec les flux du portail. 
+                        Voici les actions requises pour garantir une couverture exhaustive :
+                    </p>
+
+                    <!-- Detected Gaps List -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                        <template x-for="(issue, idx) in ingestionData.diagnostic.issues" :key="idx">
+                            <div class="bg-slate-950/80 border border-slate-800/80 p-3.5 rounded-xl flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center justify-between gap-2 mb-1.5">
+                                        <span class="text-xs font-bold text-slate-100" x-text="issue.title"></span>
+                                        <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded font-mono"
+                                              :class="{
+                                                  'bg-rose-500/20 text-rose-400 border border-rose-500/30': issue.severity === 'high',
+                                                  'bg-amber-500/20 text-amber-400 border border-amber-500/30': issue.severity === 'medium',
+                                                  'bg-blue-500/20 text-blue-400 border border-blue-500/30': issue.severity === 'low'
+                                              }"
+                                              x-text="issue.severity"></span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 leading-snug" x-text="issue.detail"></p>
+                                </div>
+                                <div class="mt-3 pt-2 border-t border-slate-900 text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                                    <span>👉</span> <span x-text="issue.suggested_fix"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Action Box: What to bring now? -->
+                    <div class="bg-slate-950 p-4 md:p-5 rounded-xl border border-indigo-500/40 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold uppercase tracking-wider text-amber-400 font-mono">⚡ Action Recommandée Immédiate</span>
+                            </div>
+                            <h4 class="text-sm md:text-base font-bold text-white" x-text="ingestionData.diagnostic.recommended_action.title"></h4>
+                            <p class="text-xs text-slate-400 max-w-2xl" x-text="ingestionData.diagnostic.recommended_action.rationale"></p>
+                        </div>
+
+                        <!-- One-Click Remediation Button & Depth Selector -->
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                            <select x-model="selectedBatchDepth" 
+                                    class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2.5 focus:border-emerald-500 focus:outline-none">
+                                <option :value="1">Profondeur : 1 Page (50 avis)</option>
+                                <option :value="2">Profondeur : 2 Pages (100 avis)</option>
+                                <option :value="3" selected>Profondeur : 3 Pages (150 avis - Idéal)</option>
+                                <option :value="5">Profondeur : 5 Pages (250 avis)</option>
+                            </select>
+
+                            <button @click="runRemediation(selectedBatchDepth)" 
+                                    :disabled="remediating"
+                                    class="px-6 py-3 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs md:text-sm rounded-xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all transform active:scale-95 disabled:opacity-50">
+                                <span x-show="!remediating">⚡</span>
+                                <span x-show="remediating" class="animate-spin">⚙️</span>
+                                <span x-text="remediating ? 'Ingestion et rattrapage en cours...' : 'Exécuter le Rattrapage Immédiat'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Quality of Data Score per Category Matrix -->
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h3 class="text-base font-bold text-white mb-1">Qualité des Données Reçues par Catégorie</h3>
+                            <p class="text-xs text-slate-400">Évaluation multi-critères : complétude des bordereaux, géocodage, délais et pièces jointes</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-right">
+                                <span class="text-[10px] text-slate-400 block uppercase font-mono">Score Qualité Global</span>
+                                <span class="text-sm font-black text-emerald-400 font-mono" x-text="ingestionData.quality.overall_score + ' / 100 • Grade ' + ingestionData.quality.quality_grade"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Category Cards Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <template x-for="cat in ingestionData.quality.categories" :key="cat.category">
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="font-bold text-white text-sm" x-text="cat.label"></div>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono border"
+                                              :class="cat.badge"
+                                              x-text="cat.status"></span>
+                                    </div>
+
+                                    <!-- Score Display & Progress Bar -->
+                                    <div class="mb-4">
+                                        <div class="flex items-baseline justify-between mb-1">
+                                            <span class="text-xs text-slate-400">Score de Qualité</span>
+                                            <span class="text-lg font-black text-emerald-400 font-mono" x-text="cat.score + '%'"></span>
+                                        </div>
+                                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                            <div class="bg-gradient-to-r from-emerald-500 to-teal-400 h-2 rounded-full transition-all duration-1000"
+                                                 :style="'width: ' + cat.score + '%'"></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Breakdown Metrics -->
+                                    <div class="space-y-2.5 text-xs">
+                                        <div class="flex items-center justify-between text-slate-300">
+                                            <span class="text-slate-400 flex items-center gap-1.5">
+                                                <span>📋</span> Lignes Bordereau (BOM)
+                                            </span>
+                                            <span class="font-mono font-bold text-slate-200" x-text="cat.bom_completeness_pct + '%'"></span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-slate-300">
+                                            <span class="text-slate-400 flex items-center gap-1.5">
+                                                <span>🏢</span> Normalisation Acheteurs
+                                            </span>
+                                            <span class="font-mono font-bold text-slate-200" x-text="cat.buyer_normalized_pct + '%'"></span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-slate-300">
+                                            <span class="text-slate-400 flex items-center gap-1.5">
+                                                <span>⏰</span> Délais & Clôtures Valides
+                                            </span>
+                                            <span class="font-mono font-bold text-emerald-400" x-text="cat.deadline_valid_pct + '%'"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 pt-3 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                                    <span>Volume analysé :</span>
+                                    <span class="text-slate-300 font-bold" x-text="cat.tenders_count + ' consultations'"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 4. Batches Ledger & History -->
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h3 class="text-base font-bold text-white mb-1">Registre des Lots d'Ingestion (Batch Ledger)</h3>
+                            <p class="text-xs text-slate-400">Historique complet des sessions de collecte avec volume reçu et taux de succès</p>
+                        </div>
+
+                        <!-- Status Filter Buttons -->
+                        <div class="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                            <button @click="batchFilter = 'all'" 
+                                    :class="batchFilter === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-lg transition-colors">
+                                Tous (<span x-text="ingestionData.batches_summary.total"></span>)
+                            </button>
+                            <button @click="batchFilter = 'completed'" 
+                                    :class="batchFilter === 'completed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-lg transition-colors">
+                                Succès (<span x-text="ingestionData.batches_summary.completed"></span>)
+                            </button>
+                            <button @click="batchFilter = 'in_progress'" 
+                                    :class="batchFilter === 'in_progress' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-lg transition-colors">
+                                En cours (<span x-text="ingestionData.batches_summary.in_progress"></span>)
+                            </button>
+                            <button @click="batchFilter = 'missed'" 
+                                    :class="batchFilter === 'missed' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-lg transition-colors">
+                                Manqués (<span x-text="ingestionData.batches_summary.missed"></span>)
+                            </button>
+                            <button @click="batchFilter = 'failed'" 
+                                    :class="batchFilter === 'failed' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-lg transition-colors">
+                                Erreurs (<span x-text="ingestionData.batches_summary.failed"></span>)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Batches Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
+                                    <th class="py-3 px-4">Lot ID</th>
+                                    <th class="py-3 px-4">Déclencheur</th>
+                                    <th class="py-3 px-4">Horodatage & Durée</th>
+                                    <th class="py-3 px-4">Volume Reçu</th>
+                                    <th class="py-3 px-4">Qualité</th>
+                                    <th class="py-3 px-4">Statut</th>
+                                    <th class="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/60 font-mono">
+                                <template x-for="b in filteredBatches" :key="b.batch_id">
+                                    <tr class="hover:bg-slate-800/30 transition-colors">
+                                        <td class="py-3 px-4 font-bold text-slate-200" x-text="b.batch_id"></td>
+                                        <td class="py-3 px-4 font-sans">
+                                            <span class="text-xs text-slate-300 font-semibold" x-text="b.trigger_label"></span>
+                                            <div class="text-[10px] text-slate-500" x-text="b.created_by"></div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="text-slate-300" x-text="b.started_at"></div>
+                                            <div class="text-[10px] text-slate-500" x-text="b.duration_seconds > 0 ? (b.duration_seconds + ' s') : '—'"></div>
+                                        </td>
+                                        <td class="py-3 px-4 font-sans">
+                                            <div class="text-slate-200 font-semibold">
+                                                <span class="text-emerald-400 font-mono font-bold" x-text="b.tenders_ingested"></span> consultations
+                                            </div>
+                                            <div class="text-[10px] text-slate-500">
+                                                <span x-text="b.cards_scraped"></span> cartes &bull; <span x-text="b.line_items_extracted"></span> articles
+                                            </div>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <span class="font-bold"
+                                                  :class="b.quality_score >= 95 ? 'text-emerald-400' : (b.quality_score > 0 ? 'text-amber-400' : 'text-slate-600')"
+                                                  x-text="b.quality_score > 0 ? (b.quality_score + '%') : '—'"></span>
+                                        </td>
+                                        <td class="py-3 px-4 font-sans">
+                                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono border"
+                                                  :class="{
+                                                      'bg-emerald-500/20 text-emerald-400 border-emerald-500/30': b.status === 'completed',
+                                                      'bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse': b.status === 'in_progress',
+                                                      'bg-amber-500/20 text-amber-400 border-amber-500/30': b.status === 'missed',
+                                                      'bg-rose-500/20 text-rose-400 border-rose-500/30': b.status === 'failed',
+                                                      'bg-slate-800 text-slate-400 border-slate-700': b.status === 'pending'
+                                                  }"
+                                                  x-text="b.status === 'completed' ? 'Terminé' : (b.status === 'in_progress' ? 'En cours' : (b.status === 'missed' ? 'Manqué' : b.status))"></span>
+                                        </td>
+                                        <td class="py-3 px-4 text-right font-sans">
+                                            <button x-show="b.status === 'missed' || b.status === 'failed'"
+                                                    @click="retryBatch(b.batch_id)"
+                                                    class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors">
+                                                Relancer
+                                            </button>
+                                            <span x-show="b.status === 'completed'" class="text-xs text-slate-600">✓ Archivé</span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
             <!-- MODULE 5: TEAM & RBAC MANAGEMENT           -->
             <!-- ========================================== -->
             <div x-show="activeModule === 'team'" x-cloak class="space-y-6">
@@ -904,6 +1234,51 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 calculatedGrossMargin: 0,
                 crawlPagesInput: 1,
                 nowTimestamp: Date.now(),
+                selectedBatchDepth: 3,
+                batchFilter: 'all',
+                remediating: false,
+                ingestionData: {
+                    freshness: {
+                        is_up_to_date: true,
+                        minutes_since_sync: 8,
+                        status_label: "À Jour (Synchronisé)",
+                        status_badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                        next_sync_in_minutes: 52,
+                        last_sync_formatted: "Aujourd'hui à 18:45",
+                        portal_health: "Optimal (HTTP 200 - F5 WAF Actif)",
+                        active_portal_estimated: 150,
+                        db_ingested_total: 89
+                    },
+                    quality: {
+                        overall_score: 96.8,
+                        quality_grade: "A+ (Haute Fidélité)",
+                        categories: [
+                            { category: "Fournitures", label: "Fournitures Générales & Matériel", score: 98.4, tenders_count: 42, bom_completeness_pct: 99.1, buyer_normalized_pct: 98.5, deadline_valid_pct: 100.0, status: "Excellent", badge: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+                            { category: "Travaux", label: "Travaux d'Aménagement & Installation", score: 94.8, tenders_count: 28, bom_completeness_pct: 92.4, buyer_normalized_pct: 96.0, deadline_valid_pct: 98.0, status: "Optimal", badge: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+                            { category: "Services", label: "Services & Prestations d'Études", score: 96.2, tenders_count: 19, bom_completeness_pct: 95.8, buyer_normalized_pct: 97.2, deadline_valid_pct: 99.0, status: "Optimal", badge: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" }
+                        ],
+                        total_articles_parsed: 642,
+                        ocr_accuracy_pct: 97.8
+                    },
+                    batches_summary: { total: 6, completed: 5, in_progress: 0, failed: 0, pending: 0, missed: 1 },
+                    batches: [],
+                    diagnostic: {
+                        health_status: "Besoin d'action",
+                        issues_count: 2,
+                        issues: [
+                            { type: "missed_batch", severity: "medium", title: "1 lot manqué détecté lors du créneau nocturne", detail: "Un saut de créneau a été identifié suite à un timeout portail.", suggested_fix: "Exécuter une collecte de rattrapage sur les pages 1 à 3." },
+                            { type: "opportunity_gap", severity: "low", title: "3 avis urgents (< 48h) requièrent un calcul de marge instantané", detail: "Des consultations prêtes au chiffrage attendent l'analyse commerciale.", suggested_fix: "Ouvrir le simulateur de prix et exporter le devis CSV." }
+                        ],
+                        recommended_action: {
+                            title: "Rattraper le retard & Collecte Ciblée Immédiate",
+                            action_id: "targeted_remediation",
+                            pages_to_crawl: 3,
+                            estimated_duration_seconds: 18,
+                            rationale: "Ce rattrapage synchronisera les 150 derniers avis publiés, comblera le lot manqué et garantira une fraîcheur à 100% de la base.",
+                            can_execute_now: true
+                        }
+                    }
+                },
 
                 currentUser: {
                     id: 'usr-admin-01',
@@ -920,7 +1295,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
 
                 crawlerTelemetry: {
                     status: 'idle',
-                    last_run_at: 'Aujourd\\'hui 17:32',
+                    last_run_at: "Aujourd'hui 17:32",
                     last_duration_seconds: 20.4,
                     waf_status: 'Healthy (HTTP 200 - F5 Passed)'
                 },
@@ -938,6 +1313,9 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     }, 1000);
 
                     this.fetchFeed();
+                    if (this.currentUser.role === 'admin') {
+                        this.fetchIngestionDashboard();
+                    }
                 },
 
                 showToast(message, type = 'success') {
@@ -967,6 +1345,9 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     if (key === 'category') this.selectedCategory = 'all';
                     if (key === 'urgency') this.selectedUrgency = 'all';
                     this.fetchFeed();
+                    if (this.currentUser.role === 'admin') {
+                        this.fetchIngestionDashboard();
+                    }
                 },
 
                 hasPermission(permission) {
@@ -1058,6 +1439,9 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                             this.activeModule = 'feed';
                         }
                         this.fetchFeed();
+                    if (this.currentUser.role === 'admin') {
+                        this.fetchIngestionDashboard();
+                    }
                     } catch (e) {
                         console.error('Error switching role:', e);
                     }
@@ -1090,6 +1474,9 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     this.selectedUrgency = 'all';
                     this.sortBy = 'score_desc';
                     this.fetchFeed();
+                    if (this.currentUser.role === 'admin') {
+                        this.fetchIngestionDashboard();
+                    }
                     this.showToast('Filtres réinitialisés', 'info');
                 },
 
@@ -1275,6 +1662,87 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     } catch (e) {
                         this.showToast('Erreur: ' + e, 'error');
                     }
+                },
+
+                async fetchIngestionDashboard() {
+                    try {
+                        const res = await fetch('/api/admin/ingestion/dashboard');
+                        if (res.ok) {
+                            this.ingestionData = await res.json();
+                        }
+                    } catch (e) {
+                        console.error('Error fetching ingestion dashboard:', e);
+                    }
+                },
+
+                async runRemediation(pages = null) {
+                    const pagesToRun = pages || this.selectedBatchDepth || 3;
+                    this.remediating = true;
+                    try {
+                        const res = await fetch('/api/admin/ingestion/remediate', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ pages: parseInt(pagesToRun), reason: 'Rattrapage diagnostique direct' })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message || '⚡ Rattrapage des lots lancé !', 'success');
+                            this.fetchIngestionDashboard();
+                            setTimeout(() => {
+                                this.fetchIngestionDashboard();
+                                this.fetchFeed();
+                            }, 4000);
+                        } else {
+                            this.showToast(data.detail || 'Erreur lors du rattrapage', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    } finally {
+                        setTimeout(() => { this.remediating = false; }, 2000);
+                    }
+                },
+
+                async triggerCustomBatch(pages) {
+                    this.showToast(`Lancement du lot (${pages} pages)...`, 'info');
+                    try {
+                        const res = await fetch('/api/admin/ingestion/batches/trigger', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ pages: parseInt(pages), send_emails: false })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message, 'success');
+                            this.fetchIngestionDashboard();
+                        } else {
+                            this.showToast(data.detail, 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async retryBatch(batchId) {
+                    try {
+                        const res = await fetch(`/api/admin/ingestion/batches/${batchId}/retry`, {
+                            method: 'POST'
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message, 'success');
+                            this.fetchIngestionDashboard();
+                        } else {
+                            this.showToast(data.detail, 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                get filteredBatches() {
+                    if (!this.ingestionData || !this.ingestionData.batches) return [];
+                    if (this.batchFilter === 'all') return this.ingestionData.batches;
+                    return this.ingestionData.batches.filter(b => b.status === this.batchFilter);
                 }
             }
         }

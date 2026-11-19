@@ -65,3 +65,34 @@ def test_crawler_status_rbac(client):
     data = res.json()
     assert "status" in data
     assert "waf_status" in data
+
+def test_admin_ingestion_dashboard(client):
+    res = client.get("/api/admin/ingestion/dashboard")
+    assert res.status_code == 200
+    data = res.json()
+    assert "freshness" in data
+    assert "is_up_to_date" in data["freshness"]
+    assert "quality" in data
+    assert data["quality"]["overall_score"] >= 90.0
+    assert len(data["quality"]["categories"]) == 3
+    assert "batches" in data
+    assert len(data["batches"]) > 0
+    assert "diagnostic" in data
+    assert "recommended_action" in data["diagnostic"]
+
+def test_admin_ingestion_remediation(client):
+    with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl:
+        mock_crawl.return_value = None
+        res = client.post("/api/admin/ingestion/remediate", json={"pages": 2})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "remediation_started"
+
+def test_admin_batch_trigger(client):
+    with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl:
+        mock_crawl.return_value = None
+        res = client.post("/api/admin/ingestion/batches/trigger", json={"pages": 1})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "batch_started"
+

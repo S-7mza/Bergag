@@ -37,7 +37,8 @@ SYSTEM_USERS: Dict[str, Dict[str, Any]] = {
         "permissions": [
             "feed:view", "feed:export", "tender:action", "tender:pricing_calculator",
             "radar:view_all", "radar:article91_alarms", "profiles:manage",
-            "crawler:trigger", "crawler:telemetry", "users:manage"
+            "crawler:trigger", "crawler:telemetry", "users:manage",
+            "batches:manage", "quality:view", "diagnostic:run"
         ]
     },
     "analyst@bergag.ma": {
