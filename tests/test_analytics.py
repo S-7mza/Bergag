@@ -193,3 +193,4 @@ def test_api_analytics_endpoints(client):
         assert res_seas.status_code == 200
         seas_data = res_seas.json()
         assert seas_data["q4_concentration_pct"] == 45.5
+

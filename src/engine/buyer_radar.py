@@ -115,3 +115,4 @@ class BuyerRadar:
                 "confirming that Moroccan administrations accelerate purchasing before fiscal year-end."
             )
         }
+

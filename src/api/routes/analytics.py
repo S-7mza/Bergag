@@ -59,3 +59,4 @@ async def get_seasonality_radar(
     """
     radar = BuyerRadar(session)
     return await radar.get_seasonality_radar()
+

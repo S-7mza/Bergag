@@ -92,3 +92,4 @@ class CompetitorRadar:
                 for a in awards[:10]
             ]
         }
+
