@@ -3,7 +3,7 @@ from logging.config import fileConfig
 import os
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
 
 # this is the Alembic Config object, which provides
@@ -11,7 +11,6 @@ from alembic import context
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
@@ -26,7 +25,7 @@ target_metadata = None
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = database_url
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -43,11 +42,9 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context."""
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    """Creates async engine directly from database_url and runs migrations."""
+    connectable = create_async_engine(
+        database_url,
         poolclass=pool.NullPool,
     )
 
@@ -64,4 +61,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

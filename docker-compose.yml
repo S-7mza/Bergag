@@ -62,7 +62,7 @@ services:
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs
-    command: ["python", "-m", "src.scheduler.jobs"]
+    command: ["python", "-m", "src.scheduler.jobs", "--daemon", "--interval", "3600"]
 
 volumes:
   pgdata:

@@ -155,7 +155,7 @@ def upgrade() -> None:
         sa.Column('commercial_score', sa.Numeric(precision=5, scale=2), nullable=False),
         sa.Column('decision_recommendation', sa.String(length=16), nullable=False),
         sa.Column('line_item_matches', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column('red_flags', postgresql.JSONB(astext_type=sa.Text()), server_default='[]'::postgresql.JSONB, nullable=False),
+        sa.Column('red_flags', postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'[]'::jsonb"), nullable=False),
         sa.Column('llm_reasoning', sa.Text(), nullable=True),
         sa.Column('evaluated_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
         sa.UniqueConstraint('profile_id', 'tender_id', name='uq_profile_tender_match')

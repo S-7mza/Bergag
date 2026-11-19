@@ -155,15 +155,60 @@ async def run_active_crawl_cycle(max_pages: int = 5, send_emails: bool = True):
         f"Processed {processed_count} tenders, dispatched {alerts_sent} email alerts."
     )
 
+async def wait_for_database_ready(max_retries: int = 30, retry_delay: float = 3.0):
+    """
+    Waits for the database to be reachable and migrations applied before starting the crawl.
+    """
+    logger.info("Checking database readiness and migrations...")
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with async_session_factory() as session:
+                from sqlalchemy import text
+                result = await session.execute(text("SELECT to_regclass('public.tenders');"))
+                table_exists = result.scalar()
+                if table_exists:
+                    logger.info("Database connection healthy and schema tables detected.")
+                    return True
+                logger.info(f"Database reachable but migrations still pending (attempt {attempt}/{max_retries}). Waiting {retry_delay}s...")
+        except Exception as e:
+            logger.info(f"Database not ready yet ({e}) (attempt {attempt}/{max_retries}). Waiting {retry_delay}s...")
+        await asyncio.sleep(retry_delay)
+    
+    logger.warning("Database readiness wait timed out. Proceeding anyway...")
+    return False
+
+async def run_daemon_loop(pages: int = 5, interval_seconds: int = 3600, send_emails: bool = True):
+    """
+    Runs the autonomous ingestion and alert pipeline continuously as a background daemon.
+    """
+    logger.info(f"Starting Bergag Crawler Daemon loop (interval: {interval_seconds}s, pages: {pages})...")
+    await wait_for_database_ready()
+
+    cycle_count = 0
+    while True:
+        cycle_count += 1
+        logger.info(f"--- Starting Autonomous Crawl Cycle #{cycle_count} ---")
+        try:
+            await run_active_crawl_cycle(max_pages=pages, send_emails=send_emails)
+        except Exception as e:
+            logger.error(f"Error during crawl cycle #{cycle_count}: {e}", exc_info=True)
+
+        logger.info(f"Cycle #{cycle_count} completed. Next scheduled cycle in {interval_seconds}s ({interval_seconds // 60}m)...")
+        await asyncio.sleep(interval_seconds)
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Antigravity Procurement Crawler & Ingestion Daemon")
+    parser = argparse.ArgumentParser(description="Bergag Procurement Crawler & Ingestion Daemon")
     parser.add_argument("--pages", type=int, default=5, help="Number of listing pages to crawl (50 per page)")
     parser.add_argument("--dry-run", action="store_true", help="Crawl and score locally without writing to DB or sending email")
     parser.add_argument("--no-email", action="store_true", help="Save to DB but suppress Gmail alerts")
+    parser.add_argument("--daemon", action="store_true", help="Run continuously in background daemon loop")
+    parser.add_argument("--interval", type=int, default=3600, help="Interval between crawl cycles in seconds (default: 3600)")
 
     args = parser.parse_args()
 
     if args.dry_run:
         asyncio.run(run_dry_run_validation(max_pages=args.pages))
+    elif args.daemon:
+        asyncio.run(run_daemon_loop(pages=args.pages, interval_seconds=args.interval, send_emails=not args.no_email))
     else:
         asyncio.run(run_active_crawl_cycle(max_pages=args.pages, send_emails=not args.no_email))
