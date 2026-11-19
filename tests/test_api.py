@@ -1,7 +1,7 @@
 import uuid
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from src.api.main import app
 
 @pytest.fixture
@@ -14,6 +14,9 @@ def test_serve_dashboard_html(client):
     assert "Bergag" in response.text
     assert "Portail Marocain des Marchés Publics" in response.text
     assert "dashboardApp()" in response.text
+    assert "Chart.js" in response.text
+    assert "formatCountdown" in response.text
+    assert "export-bordereau" in response.text
 
 def test_get_available_profiles(client):
     response = client.get("/api/profiles")

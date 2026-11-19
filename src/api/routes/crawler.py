@@ -61,3 +61,4 @@ async def trigger_manual_crawl(
         "status": "started",
         "message": f"Collecte déclenchée pour {req.pages} pages par l'administrateur {user.full_name}."
     }
+
