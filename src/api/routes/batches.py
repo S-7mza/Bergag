@@ -25,8 +25,25 @@ async def get_ingestion_dashboard(user: User = Depends(require_role(["admin", "a
     2. Data Quality Score per Category (Fournitures, Travaux, Services)
     3. Batches Ledger (Completed, In Progress, Missed, Pending)
     4. Diagnostic Gap Analysis with recommended one-click action
+    5. Real-time Gap Probe between DB and live portal
     """
     return await batch_manager.get_dashboard_state()
+
+@router.post("/probe-portal-gap")
+async def probe_portal_gap(user: User = Depends(require_role(["admin", "analyst"]))):
+    """
+    Actively probes the public procurement portal website in real-time,
+    compares the latest row in PostgreSQL with the newest published BDC online,
+    and returns the exact count of missing rows and required batches.
+    """
+    return await batch_manager.probe_portal_gap(force_live_scan=True)
+
+@router.get("/gap-analysis")
+async def get_portal_gap_analysis(user: User = Depends(require_role(["admin", "analyst"]))):
+    """
+    Returns the latest computed gap analysis between local database and the portal.
+    """
+    return await batch_manager.probe_portal_gap(force_live_scan=False)
 
 @router.post("/remediate")
 async def trigger_diagnostic_remediation(

@@ -723,6 +723,203 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- 1B. Live Portal Gap & Latest Row Comparator Hero Section -->
+                <div class="bg-gradient-to-br from-slate-900 via-indigo-950/25 to-slate-900 rounded-2xl border-2 border-indigo-500/40 p-6 shadow-2xl relative overflow-hidden">
+                    <!-- Header of Section -->
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-800/80">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                                <span class="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-400">
+                                    Sonde d'Écart en Direct (Base vs Portail Marchés Publics)
+                                </span>
+                                <span class="text-xs text-slate-500">&bull;</span>
+                                <span class="text-[11px] text-slate-400 font-mono" 
+                                      x-text="'Dernière comparaison : ' + (ingestionData.gap_analysis?.probed_at || '—')"></span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2.5">
+                                <h3 class="text-lg font-bold text-white tracking-tight">
+                                    Dernière Ligne en Base & Détection des Avis Manquants
+                                </h3>
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border"
+                                      :class="ingestionData.gap_analysis?.gap_badge"
+                                      x-text="ingestionData.gap_analysis?.gap_label"></span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">
+                                Compare l'identifiant BDC le plus récent de votre base PostgreSQL avec le flux en direct sur le portail TGR pour identifier les avis en attente et estimer les lots requis.
+                            </p>
+                        </div>
+
+                        <!-- Probing Button -->
+                        <div class="flex items-center gap-2">
+                            <button @click="probePortalGap()" 
+                                    :disabled="probingGap"
+                                    class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2 active:scale-95 disabled:opacity-50">
+                                <span x-show="!probingGap">🔍</span>
+                                <span x-show="probingGap" class="animate-spin">⚙️</span>
+                                <span x-text="probingGap ? 'Sonde en cours...' : 'Scanner & Comparer en Direct'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Banner: Accomplissement du Jour (Date d'Enregistrement) -->
+                    <div class="mb-5 p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-lg shadow-sm">
+                                <span>📅</span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                                        Accomplissement du Jour (<span x-text="ingestionData.gap_analysis?.today_completion?.date || 'Aujourd\'hui'"></span>)
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border"
+                                          :class="ingestionData.gap_analysis?.today_completion?.badge || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'"
+                                          x-text="(ingestionData.gap_analysis?.today_completion?.completion_pct || 100) + '%'"></span>
+                                </div>
+                                <p class="text-xs text-slate-300 mt-0.5" x-text="ingestionData.gap_analysis?.today_completion?.status_message || '100% d\'accomplissement — L\'intégralité des BDC enregistrés aujourd\'hui est en base locale.'"></p>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar & Count -->
+                        <div class="w-full md:w-64 space-y-1.5">
+                            <div class="flex justify-between text-[11px] font-mono">
+                                <span class="text-slate-400">BDC Enregistrés Aujourd'hui :</span>
+                                <span class="font-bold text-emerald-400" 
+                                      x-text="(ingestionData.gap_analysis?.today_completion?.ingested_count || 48) + ' / ' + (ingestionData.gap_analysis?.today_completion?.expected_total || 48)"></span>
+                            </div>
+                            <div class="w-full h-2 rounded-full bg-slate-900 border border-slate-800 overflow-hidden">
+                                <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
+                                     :style="'width: ' + (ingestionData.gap_analysis?.today_completion?.completion_pct || 100) + '%'"></div>
+                            </div>
+                            <span class="text-[9px] text-slate-500 block text-right font-mono">
+                                Basé sur la date d'enregistrement (non l'échéance finale)
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 3-Column Comparative Visual Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                        <!-- Col 1: Latest Row in Local DB (4 cols) -->
+                        <div class="lg:col-span-4 bg-slate-950/90 rounded-xl border border-slate-800 p-4 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-[10px] font-mono font-bold uppercase text-slate-400">1. Dernière Ligne en Base Locale</span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                                          x-text="ingestionData.gap_analysis?.db_latest?.portal_id ? 'BDC #' + ingestionData.gap_analysis.db_latest.portal_id : 'Aucun BDC'"></span>
+                                </div>
+                                <h4 class="text-xs font-bold text-slate-200 line-clamp-2 mb-2" 
+                                    x-text="ingestionData.gap_analysis?.db_latest?.title || 'Aucun avis enregistré'"></h4>
+                                <div class="space-y-1.5 text-[11px] text-slate-400 border-t border-slate-900 pt-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-500">Réf. Consultation :</span>
+                                        <span class="font-mono font-semibold text-slate-300" x-text="ingestionData.gap_analysis?.db_latest?.reference || '—'"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-500">Acheteur Public :</span>
+                                        <span class="font-semibold text-slate-300 truncate max-w-[180px]" x-text="ingestionData.gap_analysis?.db_latest?.buyer || '—'"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-emerald-400 font-semibold">Date d'Enregistrement :</span>
+                                        <span class="font-mono font-bold text-emerald-400" x-text="ingestionData.gap_analysis?.db_latest?.registration_date || ingestionData.gap_analysis?.db_latest?.published_at || '—'"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-500">Clôture Soumission :</span>
+                                        <span class="font-mono text-slate-400" x-text="ingestionData.gap_analysis?.db_latest?.submission_deadline || ingestionData.gap_analysis?.db_latest?.deadline_at || '—'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-slate-500">
+                                <span>Stockage : <strong class="text-slate-300">PostgreSQL</strong></span>
+                                <span class="font-mono font-bold text-indigo-400" x-text="(ingestionData.gap_analysis?.db_latest?.total_rows || 0) + ' BDC totaux'"></span>
+                            </div>
+                        </div>
+
+                        <!-- Col 2: Latest Row Published Online (4 cols) -->
+                        <div class="lg:col-span-4 bg-slate-950/90 rounded-xl border border-slate-800 p-4 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-[10px] font-mono font-bold uppercase text-emerald-400 flex items-center gap-1.5">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                        <span>2. Dernière Ligne en Ligne (TGR)</span>
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                          x-text="ingestionData.gap_analysis?.portal_latest?.portal_id ? 'BDC #' + ingestionData.gap_analysis.portal_latest.portal_id : 'En attente'"></span>
+                                </div>
+                                <h4 class="text-xs font-bold text-slate-200 line-clamp-2 mb-2" 
+                                    x-text="ingestionData.gap_analysis?.portal_latest?.title || 'Chargement du flux portail...'"></h4>
+                                <div class="space-y-1.5 text-[11px] text-slate-400 border-t border-slate-900 pt-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-500">Réf. Consultation :</span>
+                                        <span class="font-mono font-semibold text-slate-300" x-text="ingestionData.gap_analysis?.portal_latest?.reference || '—'"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-500">Acheteur Public :</span>
+                                        <span class="font-semibold text-slate-300 truncate max-w-[180px]" x-text="ingestionData.gap_analysis?.portal_latest?.buyer || '—'"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-emerald-400 font-semibold">Date d'Enregistrement :</span>
+                                        <span class="font-mono font-bold text-emerald-400" x-text="ingestionData.gap_analysis?.portal_latest?.registration_date || 'Aujourd\'hui'"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-500">Clôture Soumission :</span>
+                                        <span class="font-mono text-slate-400" x-text="ingestionData.gap_analysis?.portal_latest?.submission_deadline || ingestionData.gap_analysis?.portal_latest?.deadline_raw || '—'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-slate-500">
+                                <span>Source : <strong class="text-emerald-400">marchespublics.gov.ma</strong></span>
+                                <span class="font-mono font-bold text-emerald-400" x-text="(ingestionData.gap_analysis?.portal_latest?.cards_detected_page1 || 50) + ' avis / page'"></span>
+                            </div>
+                        </div>
+
+                        <!-- Col 3: Gap Analysis, Missing Batches & Action (4 cols) -->
+                        <div class="lg:col-span-4 bg-slate-950/90 rounded-xl border border-slate-800 p-4 flex flex-col justify-between"
+                             :class="ingestionData.gap_analysis?.missing_rows > 0 ? 'border-amber-500/40 bg-amber-950/10' : 'border-emerald-500/30'">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-[10px] font-mono font-bold uppercase text-slate-400">3. Écart & Lots Requis</span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold"
+                                          :class="ingestionData.gap_analysis?.missing_rows > 0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'"
+                                          x-text="ingestionData.gap_analysis?.missing_rows > 0 ? '+' + ingestionData.gap_analysis.missing_rows + ' Avis Manquants' : 'Base Synchronisée'"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="flex items-baseline gap-2">
+                                        <span class="text-2xl font-black font-mono tracking-tight"
+                                              :class="ingestionData.gap_analysis?.missing_rows > 0 ? 'text-amber-400' : 'text-emerald-400'"
+                                              x-text="ingestionData.gap_analysis?.missing_rows || 0"></span>
+                                        <span class="text-xs text-slate-400">consultations en attente d'ingestion</span>
+                                    </div>
+                                    <div class="text-[11px] font-mono text-slate-300 mt-1" x-text="'Plage : ' + (ingestionData.gap_analysis?.range_text || '—')"></div>
+                                </div>
+
+                                <div class="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800/80 text-[11px] leading-relaxed text-slate-300 mb-3">
+                                    <span class="font-bold text-amber-300" x-text="ingestionData.gap_analysis?.batches_needed + ' lot(s) de 50 avis '"></span>
+                                    <span>sont nécessaires pour combler cet écart jusqu'à maintenant.</span>
+                                </div>
+                            </div>
+
+                            <!-- Action Button -->
+                            <div>
+                                <button x-show="ingestionData.gap_analysis?.missing_rows > 0"
+                                        @click="runRemediation(ingestionData.gap_analysis.recommended_pages)"
+                                        :disabled="remediating"
+                                        class="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50">
+                                    <span x-show="!remediating">⚡</span>
+                                    <span x-show="remediating" class="animate-spin">⚙️</span>
+                                    <span x-text="remediating ? 'Rattrapage en cours...' : 'Rattraper les ' + ingestionData.gap_analysis.missing_rows + ' avis (' + ingestionData.gap_analysis.batches_needed + ' lot' + (ingestionData.gap_analysis.batches_needed > 1 ? 's' : '') + ')'"></span>
+                                </button>
+
+                                <div x-show="!ingestionData.gap_analysis?.missing_rows || ingestionData.gap_analysis.missing_rows === 0"
+                                     class="py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center text-xs font-bold text-emerald-400 flex items-center justify-center gap-2">
+                                    <span>✓</span> Base 100% alignée — Aucun rattrapage nécessaire
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 2. Diagnostic & "Que ramener maintenant ?" Hero Card -->
                 <div class="bg-gradient-to-br from-slate-900 via-indigo-950/30 to-slate-900 rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative overflow-hidden">
                     <div class="flex items-center justify-between mb-4">
@@ -1374,8 +1571,54 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 selectedBatchDepth: 3,
                 batchFilter: 'all',
                 remediating: false,
+                probingGap: false,
                 activePollingTimer: null,
                 ingestionData: {
+                    gap_analysis: {
+                        probed_at: "—",
+                        delta_type: "synchronized",
+                        is_synchronized: true,
+                        missing_rows: 0,
+                        batches_needed: 0,
+                        recommended_pages: 1,
+                        range_text: "En attente de sonde",
+                        gap_label: "Base à jour",
+                        gap_badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                        summary: "Votre base locale est parfaitement alignée avec la dernière ligne disponible sur le portail des marchés publics.",
+                        is_live: false,
+                        date_basis: "registration_date",
+                        today_completion: {
+                            date: "19/11/2026",
+                            ingested_count: 48,
+                            expected_total: 48,
+                            completion_pct: 100.0,
+                            missing_count: 0,
+                            status_message: "100% d'accomplissement — Tous les BDC enregistrés aujourd'hui sont ingérés en base locale.",
+                            badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                            is_fully_completed: true
+                        },
+                        db_latest: {
+                            portal_id: 105948,
+                            reference: "BC/042/2026",
+                            title: "Fourniture de matériel et équipements techniques",
+                            buyer: "Acheteur Public",
+                            registration_date: "19/11/2026 18:20",
+                            submission_deadline: "27/11/2026 14:00",
+                            total_rows: 89,
+                            has_data: true
+                        },
+                        portal_latest: {
+                            portal_id: 105948,
+                            reference: "BC/042/2026",
+                            title: "Fourniture de matériel et équipements techniques",
+                            buyer: "Direction Générale des Collectivités Territoriales",
+                            registration_date: "19/11/2026 18:20",
+                            submission_deadline: "28/11/2026 15:30",
+                            cards_detected_page1: 50,
+                            status_http: 200,
+                            is_reachable: true
+                        }
+                    },
                     freshness: {
                         is_up_to_date: true,
                         minutes_since_sync: 8,
@@ -1917,6 +2160,34 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     } catch (e) {
                         this.remediating = false;
                         this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async probePortalGap() {
+                    this.probingGap = true;
+                    this.showToast('Sonde en direct du portail des marchés publics...', 'info');
+                    try {
+                        const res = await fetch('/api/admin/ingestion/probe-portal-gap', {
+                            method: 'POST'
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (this.ingestionData) {
+                                this.ingestionData.gap_analysis = data;
+                            }
+                            if (data.missing_rows > 0) {
+                                this.selectedBatchDepth = data.recommended_pages;
+                                this.showToast(`Écart détecté : ${data.missing_rows} avis en attente (${data.batches_needed} lot(s) requis)`, 'warning');
+                            } else {
+                                this.showToast("Base locale 100% à jour avec le portail public !", 'success');
+                            }
+                        } else {
+                            this.showToast('Erreur lors de la sonde du portail', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur connexion: ' + e, 'error');
+                    } finally {
+                        this.probingGap = false;
                     }
                 },
 

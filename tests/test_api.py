@@ -79,6 +79,31 @@ def test_admin_ingestion_dashboard(client):
     assert len(data["batches"]) > 0
     assert "diagnostic" in data
     assert "recommended_action" in data["diagnostic"]
+    assert "gap_analysis" in data
+    gap = data["gap_analysis"]
+    assert "today_completion" in gap
+    assert "db_latest" in gap
+    assert "portal_latest" in gap
+    assert gap["date_basis"] == "registration_date"
+    assert "registration_date" in gap["db_latest"]
+
+def test_admin_probe_portal_gap(client):
+    res = client.post("/api/admin/ingestion/probe-portal-gap")
+    assert res.status_code == 200
+    data = res.json()
+    assert "missing_rows" in data
+    assert "batches_needed" in data
+    assert "today_completion" in data
+    assert "completion_pct" in data["today_completion"]
+    assert data["date_basis"] == "registration_date"
+
+def test_admin_get_gap_analysis(client):
+    res = client.get("/api/admin/ingestion/gap-analysis")
+    assert res.status_code == 200
+    data = res.json()
+    assert "range_text" in data
+    assert "db_latest" in data
+    assert "portal_latest" in data
 
 def test_admin_ingestion_remediation(client):
     with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl:
