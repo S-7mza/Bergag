@@ -1835,9 +1835,9 @@
                 showReconciledList: false,
                 showCustomPeriodPicker: false,
                 auditPeriodMode: 'day',
-                auditTargetDate: new Date().toLocaleDateString('fr-FR'),
-                auditEndDate: new Date().toLocaleDateString('fr-FR'),
-                auditSelectedMonth: `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+                auditTargetDate: ('0' + new Date().getDate()).slice(-2) + '/' + ('0' + (new Date().getMonth() + 1)).slice(-2) + '/' + new Date().getFullYear(),
+                auditEndDate: ('0' + new Date().getDate()).slice(-2) + '/' + ('0' + (new Date().getMonth() + 1)).slice(-2) + '/' + new Date().getFullYear(),
+                auditSelectedMonth: ('0' + (new Date().getMonth() + 1)).slice(-2) + '/' + new Date().getFullYear(),
                 auditCalendarDrawerOpen: false,
                 dateAudit: null,
                 activePollingTimer: null,
@@ -2537,7 +2537,7 @@
                     const dd = String(d.getDate()).padStart(2, '0');
                     const mm = String(d.getMonth() + 1).padStart(2, '0');
                     const yyyy = d.getFullYear();
-                    return ${dd}//;
+                    return dd + '/' + mm + '/' + yyyy;
                 },
                 getTodayStr() {
                     return this.formatDateDDMMYYYY(new Date());
@@ -2561,7 +2561,9 @@
                         if (!this.auditTargetDate) this.auditTargetDate = this.getLast7DaysStr();
                         if (!this.auditEndDate) this.auditEndDate = this.getTodayStr();
                     } else if (mode === 'month') {
-                        if (!this.auditSelectedMonth) this.auditSelectedMonth = ${String(new Date().getMonth() + 1).padStart(2, '0')}/;
+                        const m = String(new Date().getMonth() + 1).padStart(2, '0');
+                        const y = new Date().getFullYear();
+                        if (!this.auditSelectedMonth) this.auditSelectedMonth = m + '/' + y;
                     }
                 },
 
