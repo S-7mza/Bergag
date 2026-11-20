@@ -5,7 +5,12 @@ import base64
 import json
 import logging
 import uuid
-import bcrypt
+try:
+    import bcrypt
+    HAS_BCRYPT = True
+except ImportError:
+    bcrypt = None
+    HAS_BCRYPT = False
 from typing import List, Dict, Any, Optional
 from fastapi import Header, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr
@@ -89,8 +94,12 @@ def _init_seed_users() -> Dict[str, Dict[str, Any]]:
 SYSTEM_USERS: Dict[str, Dict[str, Any]] = _init_seed_users()
 
 def hash_password(password: str) -> str:
-    """Generates a secure salted bcrypt hash"""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    """Generates a secure salted bcrypt hash (with salted fallback if bcrypt module missing)"""
+    if HAS_BCRYPT and bcrypt is not None:
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    salt = uuid.uuid4().hex[:16]
+    h = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    return f"sha256_salted:{salt}:{h}"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
@@ -102,11 +111,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
     # Check for bcrypt hash ($2a$, $2b$, $2y$)
     if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
-        try:
-            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-        except Exception as e:
-            logger.warning(f"Bcrypt verification failed: {e}")
-            return False
+        if HAS_BCRYPT and bcrypt is not None:
+            try:
+                return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+            except Exception as e:
+                logger.warning(f"Bcrypt verification failed: {e}")
+                return False
+        return False
+
+    # Check for salted sha256 fallback
+    if hashed_password.startswith("sha256_salted:"):
+        parts = hashed_password.split(":")
+        if len(parts) == 3:
+            salt, exp_h = parts[1], parts[2]
+            calc_h = hashlib.sha256((salt + plain_password).encode("utf-8")).hexdigest()
+            return hmac.compare_digest(calc_h, exp_h)
 
     # Legacy SHA-256 fallback (POC backwards compatibility)
     try:
