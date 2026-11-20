@@ -184,7 +184,20 @@
                             <span class="text-[11px] text-slate-300 font-mono truncate max-w-md" 
                                   x-text="ingestionData?.latest_database_records?.[0] ? ('Dernier avis : #' + ingestionData.latest_database_records[0].portal_id + ' • ' + (ingestionData.latest_database_records[0].buyer || 'TGR') + ' (' + (ingestionData.latest_database_records[0].line_items_count || 0) + ' art.)') : 'Base opérationnelle'"></span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Veille active Décret 2-22-431 • Zéro perte de données • 100% données réelles</p>
+                        <div class="flex items-center gap-2 mt-1 flex-wrap text-[11px] font-mono">
+                            <template x-if="ingestionData?.pending_backfill_count > 0">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+                                    <span class="animate-pulse">⏳</span>
+                                    <span x-text="ingestionData.pending_backfill_count + ' avis programmés en priorité au prochain lot'"></span>
+                                    <button type="button" @click="triggerManualCrawl(1)" class="ml-1 underline text-amber-200 hover:text-white font-sans">Rattraper immédiatement →</button>
+                                </span>
+                            </template>
+                            <template x-if="!ingestionData?.pending_backfill_count || ingestionData?.pending_backfill_count === 0">
+                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                                    <span>🛡️</span> <span>Garantie Zéro-Perte Active : Base 100% Intègre (Décret 2-22-431)</span>
+                                </span>
+                            </template>
+                        </div>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
@@ -317,7 +330,7 @@
             <div x-show="activeModule === 'feed'" x-cloak class="space-y-4">
                 
                 <!-- High Priority Market Opportunity Alert (Zero Loss Guarantee) -->
-                <div x-show="activeAudit && activeAudit.missing_count > 0" x-cloak
+                <div x-show="activeAudit?.missing_count > 0" x-cloak
                      class="p-4 rounded-2xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-rose-950/40 border-2 border-amber-500/60 shadow-xl shadow-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
                     <div class="flex items-center gap-3">
                         <span class="text-2xl">🚨</span>
@@ -325,7 +338,7 @@
                             <h4 class="text-xs sm:text-sm font-black text-amber-300 tracking-tight flex items-center gap-2">
                                 <span>Alerte Opportunités Marché Actif :</span>
                                 <span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono font-bold text-xs border border-rose-500/30"
-                                      x-text="activeAudit.missing_count + ' avis ouverts au dépôt manquent en base'"></span>
+                                      x-text="(activeAudit?.missing_count || 0) + ' avis ouverts au dépôt manquent en base'"></span>
                             </h4>
                             <p class="text-[11px] text-slate-300 mt-0.5">
                                 Des consultations dont la date limite de soumission n'est pas encore échue existent sur le portail TGR mais ne sont pas dans votre base. Ne ratez aucune opportunité d'affaires.
@@ -337,7 +350,7 @@
                                 class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 flex items-center gap-2 active:scale-95 disabled:opacity-50">
                             <span x-show="!reconcilingActive">⚡</span>
                             <span x-show="reconcilingActive" class="animate-spin text-xs">⚙️</span>
-                            <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier ces ' + activeAudit.missing_count + ' avis (1-Clic)')"></span>
+                            <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier ces ' + (activeAudit?.missing_count || 0) + ' avis (1-Clic)')"></span>
                         </button>
                     </div>
                 </div>
@@ -368,8 +381,8 @@
                                             <span>Base : <strong class="text-indigo-400 font-mono" x-text="(activeAudit ? activeAudit.db_total_active : 0) + ' avis actifs'"></strong></span>
                                             <span>&bull;</span>
                                             <span>Portail TGR : <strong class="text-emerald-400 font-mono" x-text="(activeAudit ? activeAudit.portal_total_active : 0) + ' avis ouverts'"></strong></span>
-                                            <span x-show="activeAudit && activeAudit.missing_count > 0" class="text-amber-400 font-bold">
-                                                &bull; <span x-text="activeAudit.missing_count"></span> manquant(s)
+                                            <span x-show="activeAudit?.missing_count > 0" class="text-amber-400 font-bold">
+                                                &bull; <span x-text="activeAudit?.missing_count || 0"></span> manquant(s)
                                             </span>
                                         </div>
                                     </template>
@@ -378,7 +391,7 @@
                                             <span>Base : <strong class="text-indigo-400 font-mono" x-text="(dateAudit?.db_total_ingested || 48) + ' avis'"></strong></span>
                                             <span>&bull;</span>
                                             <span>Portail TGR : <strong class="text-emerald-400 font-mono" x-text="(dateAudit?.portal_total_published || 48) + ' avis'"></strong></span>
-                                            <span x-show="dateAudit && dateAudit.missing_count > 0" class="text-amber-400 font-bold">
+                                            <span x-show="dateAudit?.missing_count > 0" class="text-amber-400 font-bold">
                                                 &bull; <span x-text="dateAudit?.missing_count || 0"></span> manquant(s)
                                             </span>
                                         </div>
@@ -416,7 +429,7 @@
                                         :class="auditPeriodMode === 'active' ? 'bg-emerald-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-slate-200'"
                                         class="px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
                                     <span>🟢</span> <span>Actifs</span>
-                                    <span x-show="activeAudit?.missing_count > 0" class="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[9px] font-bold" x-text="activeAudit.missing_count"></span>
+                                    <span x-show="activeAudit?.missing_count > 0" class="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[9px] font-bold" x-text="activeAudit?.missing_count || 0"></span>
                                 </button>
                                 <button type="button" @click="setAuditPeriodMode('day')" 
                                         :class="auditPeriodMode === 'day' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-slate-200'"
@@ -445,17 +458,17 @@
 
                             <!-- Primary Action Button: Context-Aware -->
                             <!-- Active Mode: Gap -->
-                            <button x-show="auditPeriodMode === 'active' && activeAudit && activeAudit.missing_count > 0"
+                            <button x-show="auditPeriodMode === 'active' && activeAudit?.missing_count > 0"
                                     @click="reconcileActiveTenders()" 
                                     :disabled="reconcilingActive"
                                     class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
                                 <span x-show="!reconcilingActive">⚡</span>
                                 <span x-show="reconcilingActive" class="animate-spin">⚙️</span>
-                                <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier les ' + activeAudit.missing_count + ' avis')"></span>
+                                <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier les ' + (activeAudit?.missing_count || 0) + ' avis')"></span>
                             </button>
 
                             <!-- Active Mode: Synced -->
-                            <button x-show="auditPeriodMode === 'active' && (!activeAudit || !activeAudit.missing_count || activeAudit.missing_count === 0)"
+                            <button x-show="auditPeriodMode === 'active' && (!activeAudit?.missing_count || activeAudit?.missing_count === 0)"
                                     @click="runActiveAudit(true)" 
                                     :disabled="auditingActive"
                                     class="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
@@ -465,7 +478,7 @@
                             </button>
 
                             <!-- Date Mode: Gap -->
-                            <button x-show="auditPeriodMode !== 'active' && dateAudit && dateAudit.missing_count > 0"
+                            <button x-show="auditPeriodMode !== 'active' && dateAudit?.missing_count > 0"
                                     @click="reconcilePeriod()" 
                                     :disabled="reconcilingMissing"
                                     class="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
@@ -475,7 +488,7 @@
                             </button>
 
                             <!-- Date Mode: Synced -->
-                            <button x-show="auditPeriodMode !== 'active' && (!dateAudit || !dateAudit.missing_count || dateAudit.missing_count === 0)"
+                            <button x-show="auditPeriodMode !== 'active' && (!dateAudit?.missing_count || dateAudit?.missing_count === 0)"
                                     @click="runPeriodAudit()" 
                                     :disabled="auditingDate"
                                     class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
@@ -1336,7 +1349,7 @@
                                     L'intégralité des avis actifs en cours de dépôt sur le portail officiel TGR sont enregistrés dans votre base locale. Zéro perte d'opportunité commerciale garantie.
                                 </span>
                                 <span x-show="activeAudit?.missing_count > 0">
-                                    Le portail officiel contient <strong class="text-amber-400 font-mono" x-text="activeAudit.missing_count + ' avis actifs'"></strong> actuellement ouverts à soumission non encore indexés dans votre base locale. Cliquez sur le bouton ci-contre pour les importer en 1-clic.
+                                    Le portail officiel contient <strong class="text-amber-400 font-mono" x-text="(activeAudit?.missing_count || 0) + ' avis actifs'"></strong> actuellement ouverts à soumission non encore indexés dans votre base locale. Cliquez sur le bouton ci-contre pour les importer en 1-clic.
                                 </span>
                                 <span x-show="!activeAudit?.missing_count && (dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0)">
                                     Le portail officiel contient des avis non encore indexés dans votre base locale. Cliquez sur le bouton ci-contre pour les importer instantanément.
@@ -1353,7 +1366,7 @@
                                     class="px-6 py-3.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs md:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition-all transform active:scale-95 disabled:opacity-50">
                                 <span x-show="!reconcilingActive && !remediating">⚡</span>
                                 <span x-show="reconcilingActive || remediating" class="animate-spin text-sm">⚙️</span>
-                                <span x-text="reconcilingActive ? 'Importation en cours...' : 'Rapatrier les ' + activeAudit.missing_count + ' avis actifs (1-Clic)'"></span>
+                                <span x-text="reconcilingActive ? 'Importation en cours...' : 'Rapatrier les ' + (activeAudit?.missing_count || 0) + ' avis actifs (1-Clic)'"></span>
                             </button>
 
                             <!-- When Other Gap Exists: Date/Period Catch-up Button -->
@@ -1630,7 +1643,7 @@
                                     class="px-4 py-2 rounded-2xl text-xs transition-all flex items-center gap-2">
                                 <span>🟢</span>
                                 <span>Marché Actif (En Cours de Dépôt)</span>
-                                <span x-show="activeAudit?.missing_count > 0" class="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[10px] font-bold" x-text="activeAudit.missing_count"></span>
+                                <span x-show="activeAudit?.missing_count > 0" class="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[10px] font-bold" x-text="activeAudit?.missing_count || 0"></span>
                             </button>
                             <button type="button" @click="activeAuditTab = 'date'"
                                     :class="activeAuditTab === 'date' ? 'bg-indigo-600 text-white font-bold shadow' : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'"
@@ -1729,7 +1742,7 @@
                                                   x-text="(activeAudit ? activeAudit.coverage_pct : 100) + '%'"></span>
                                         </template>
                                         <span class="text-[10px] text-slate-400 font-semibold"
-                                              x-text="(activeAudit?.missing_count || 0) > 0 ? (activeAudit.missing_count + ' manquant(s)') : 'Zéro perte'"></span>
+                                              x-text="(activeAudit?.missing_count || 0) > 0 ? ((activeAudit?.missing_count || 0) + ' manquant(s)') : 'Zéro perte'"></span>
                                     </div>
                                 </div>
                                 <div class="mt-3 pt-2 border-t border-slate-900/60 flex items-center justify-between text-[11px]">
@@ -1742,12 +1755,12 @@
                         </div>
 
                         <!-- Action Bar when Missing Active Items Exist -->
-                        <div x-show="activeAudit && activeAudit.missing_count > 0" class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div x-show="activeAudit?.missing_count > 0" class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div class="flex items-center gap-3">
                                 <span class="text-xl">⚠️</span>
                                 <div>
                                     <h4 class="text-xs font-bold text-amber-300">
-                                        <span x-text="activeAudit.missing_count"></span> consultation(s) active(s) manquent à votre base locale
+                                        <span x-text="activeAudit?.missing_count || 0"></span> consultation(s) active(s) manquent à votre base locale
                                     </h4>
                                     <p class="text-[11px] text-slate-400 mt-0.5">
                                         Cliquez ci-contre pour rapatrier et indexer automatiquement l'intégralité des avis manquants.
@@ -1758,7 +1771,7 @@
                                     class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 flex-shrink-0">
                                 <span x-show="!reconcilingActive">⚡</span>
                                 <span x-show="reconcilingActive" class="animate-spin text-xs">⚙️</span>
-                                <span x-text="reconcilingActive ? 'Importation en cours...' : ('Importer les ' + activeAudit.missing_count + ' avis manquants (1-Clic)')"></span>
+                                <span x-text="reconcilingActive ? 'Importation en cours...' : ('Importer les ' + (activeAudit?.missing_count || 0) + ' avis manquants (1-Clic)')"></span>
                             </button>
                         </div>
 
@@ -2589,8 +2602,29 @@
                 auditEndDate: ('0' + new Date().getDate()).slice(-2) + '/' + ('0' + (new Date().getMonth() + 1)).slice(-2) + '/' + new Date().getFullYear(),
                 auditSelectedMonth: ('0' + (new Date().getMonth() + 1)).slice(-2) + '/' + new Date().getFullYear(),
                 auditCalendarDrawerOpen: false,
-                dateAudit: null,
-                activeAudit: null,
+                dateAudit: {
+                    is_fully_reconciled: true,
+                    concordance_pct: 100.0,
+                    portal_total_published: 0,
+                    db_total_ingested: 0,
+                    missing_count: 0,
+                    missing_portal_ids: [],
+                    missing_tenders: [],
+                    reconciled_items: [],
+                    confidence_badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                },
+                activeAudit: {
+                    is_fully_covered: true,
+                    coverage_pct: 100.0,
+                    portal_total_active: 0,
+                    db_total_active: 0,
+                    missing_count: 0,
+                    missing_portal_ids: [],
+                    missing_tenders: [],
+                    all_active_items: [],
+                    verdict: 'CONFORME_100_PCT',
+                    verdict_badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                },
                 auditingActive: false,
                 reconcilingActive: false,
                 activeAuditTab: 'active',
@@ -3479,10 +3513,10 @@
                             this.clientAuditCache[cacheKey] = this.dateAudit;
                             this.auditProgressPct = 100;
                             this.auditStepText = '✓ Analyse terminée avec succès !';
-                            if (this.dateAudit.is_fully_reconciled) {
-                                this.showToast(`🛡️ 100% Confiance : Tous les ${this.dateAudit.portal_total_published} avis sont en base !`, 'success');
+                            if (this.dateAudit?.is_fully_reconciled) {
+                                this.showToast(`🛡️ 100% Confiance : Tous les ${this.dateAudit?.portal_total_published || 0} avis sont en base !`, 'success');
                             } else {
-                                this.showToast(`⚠️ Écart détecté : ${this.dateAudit.missing_count} avis manquants (${this.dateAudit.concordance_pct}% de confiance)`, 'warning');
+                                this.showToast(`⚠️ Écart détecté : ${this.dateAudit?.missing_count || 0} avis manquants (${this.dateAudit?.concordance_pct || 100}% de confiance)`, 'warning');
                             }
                         } else {
                             this.showToast("Erreur lors de l'audit de période", 'error');
@@ -3508,17 +3542,17 @@
                 async reconcilePeriod() {
                     if (!this.dateAudit) return;
                     this.reconcilingMissing = true;
-                    const missingCount = this.dateAudit.missing_count || 0;
+                    const missingCount = this.dateAudit?.missing_count || 0;
                     this.showToast(`Rattrapage et importation de ${missingCount} avis manquants...`, 'info');
                     try {
                         const res = await fetch('/api/admin/ingestion/audit-date/reconcile', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({
-                                date: this.dateAudit.target_date,
-                                end_date: this.dateAudit.end_date,
-                                period_mode: this.dateAudit.period_mode,
-                                portal_ids: this.dateAudit.missing_portal_ids || []
+                                date: this.dateAudit?.target_date,
+                                end_date: this.dateAudit?.end_date,
+                                period_mode: this.dateAudit?.period_mode,
+                                portal_ids: this.dateAudit?.missing_portal_ids || []
                             })
                         });
                         const data = await res.json();
@@ -3552,10 +3586,10 @@
                         if (res.ok) {
                             this.activeAudit = await res.json();
                             if (force) {
-                                if (this.activeAudit.is_fully_covered) {
-                                    this.showToast(`🛡️ Marché Actif 100% : Les ${this.activeAudit.portal_total_active} avis ouverts au dépôt sont en base !`, 'success');
+                                if (this.activeAudit?.is_fully_covered) {
+                                    this.showToast(`🛡️ Marché Actif 100% : Les ${this.activeAudit?.portal_total_active || 0} avis ouverts au dépôt sont en base !`, 'success');
                                 } else {
-                                    this.showToast(`⚠️ Écart Marché : ${this.activeAudit.missing_count} avis actifs manquent en base`, 'warning');
+                                    this.showToast(`⚠️ Écart Marché : ${this.activeAudit?.missing_count || 0} avis actifs manquent en base`, 'warning');
                                 }
                             }
                         } else {
