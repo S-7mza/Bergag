@@ -89,7 +89,16 @@ In Morocco, public procurement is governed by **Decree No. 2-22-431** (*Décret 
 
 ---
 
-## 4. Repository Structure
+## 4. Documentation & AI Agent Quickstart
+
+- **AI Agent Master Guide:** [`AGENTS.md`](./AGENTS.md) — Ultra-compact, high-signal guide (< 1,500 tokens) for AI coding assistants.
+- **Modular Documentation Hub:** [`docs/`](./docs/README.md) — Progressive disclosure topic guides for architecture, models, spiders, and domain rules.
+- **Antigravity Workspace Skills:** [`.agents/skills/`](./.agents/skills/) — Native skills for the ingestion pipeline and market radar analytics.
+- **Run Tests:** `pytest` (configured with `pytest.ini` for immediate execution).
+
+---
+
+## 5. Repository Structure
 
 ```
 mp/

@@ -1,5 +1,10 @@
 # Architectural Specification: Moroccan Public Procurement Intelligence System (BDC & Marchés Publics)
 
+> [!TIP]
+> **For AI Coding Agents & LLMs:**
+> Do **not** load or read this entire 71 KB document into your context window. It burns ~20,000 tokens per read.
+> Instead, refer to [`AGENTS.md`](./AGENTS.md) at root and the modular, progressive-disclosure guides in [`docs/`](./docs/README.md).
+
 **Project:** Autonomous Opportunity Discovery & B2B Intelligence Engine for Moroccan Public Procurement  
 **Target Platform:** Portail Marocain des Marchés Publics (`marchespublics.gov.ma` / TGR)  
 **Author:** Principal Architect & Domain Specialist  
