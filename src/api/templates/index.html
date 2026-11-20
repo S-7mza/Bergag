@@ -3895,6 +3895,31 @@
                             }
                         }
 
+                        // Auto-adaptation de résilience si le serveur distant n'a pas encore redémarré (404 sur route récente)
+                        if (res.status === 404) {
+                            console.warn(`[HistoricalBatch] Route /trigger-historical non trouvée (404). Bascule automatique vers le moteur de réconciliation d'audit existant...`);
+                            this.showToast(`Bascule automatique sur réconciliation d'audit (${label})...`, 'info');
+                            res = await fetch('/api/admin/ingestion/audit-date/reconcile', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    date: startDate,
+                                    end_date: endDate,
+                                    period_mode: periodMode,
+                                    portal_ids: []
+                                })
+                            });
+                            if (res.ok) {
+                                const fbData = await res.json();
+                                const fbMsg = fbData.message || `⚡ Réconciliation historique initiée pour ${label} (${fbData.imported_count || 0} BDC importés) !`;
+                                this.showToast(fbMsg + " — Conseil : redémarrez 'docker compose restart web' pour activer le lot asynchrone dédié.", "warning");
+                                this.remediating = false;
+                                await this.fetchIngestionDashboard();
+                                this.startActivePolling();
+                                return;
+                            }
+                        }
+
                         const data = await res.json();
                         if (res.ok) {
                             const successMsg = data.message || `⚡ Lot historique initié pour ${label} !`;
@@ -3903,7 +3928,10 @@
                             this.startActivePolling();
                         } else {
                             this.remediating = false;
-                            const errorMsg = this.formatErrorMessage(data.detail) || data.message || 'Erreur lors du déclenchement';
+                            let errorMsg = this.formatErrorMessage(data.detail) || data.message || 'Erreur lors du déclenchement';
+                            if (res.status === 404) {
+                                errorMsg = "⚠️ Route /trigger-historical non trouvée (404) : le serveur FastAPI distant nécessite un redémarrage ('docker compose restart web') pour charger les nouvelles routes.";
+                            }
                             this.showToast(errorMsg, 'error');
                         }
                     } catch (e) {
