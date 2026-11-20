@@ -1143,22 +1143,25 @@
                             </p>
                         </div>
 
-                        <!-- Clean Period Selector Pills -->
+                        <!-- Clean Period Selector Pills with Live Feedback & Direct Scanner -->
                         <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800/80 text-xs">
                             <button type="button" @click="setDayPreset('today')"
                                     :class="(auditPeriodMode === 'day' && auditTargetDate === getTodayStr()) ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
-                                    class="px-3 py-1.5 rounded-xl transition-all">
-                                Aujourd'hui
+                                    class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 active:scale-95">
+                                <span x-show="auditingDate && auditPeriodMode === 'day' && auditTargetDate === getTodayStr()" class="animate-spin text-xs">⚙️</span>
+                                <span>Aujourd'hui</span>
                             </button>
                             <button type="button" @click="setDayPreset('yesterday')"
                                     :class="(auditPeriodMode === 'day' && auditTargetDate === getYesterdayStr()) ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
-                                    class="px-3 py-1.5 rounded-xl transition-all">
-                                Hier
+                                    class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 active:scale-95">
+                                <span x-show="auditingDate && auditPeriodMode === 'day' && auditTargetDate === getYesterdayStr()" class="animate-spin text-xs">⚙️</span>
+                                <span>Hier</span>
                             </button>
                             <button type="button" @click="setRangePreset(7)"
                                     :class="(auditPeriodMode === 'range' && auditTargetDate === getLast7DaysStr()) ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
-                                    class="px-3 py-1.5 rounded-xl transition-all">
-                                7 Derniers Jours
+                                    class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 active:scale-95">
+                                <span x-show="auditingDate && auditPeriodMode === 'range' && auditTargetDate === getLast7DaysStr()" class="animate-spin text-xs">⚙️</span>
+                                <span>7 Derniers Jours</span>
                             </button>
                             <button type="button" @click="showCustomPeriodPicker = !showCustomPeriodPicker"
                                     :class="showCustomPeriodPicker ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'"
@@ -1166,6 +1169,38 @@
                                 <span>📅 Date</span>
                                 <span class="text-[10px]" x-text="showCustomPeriodPicker ? '▲' : '▼'"></span>
                             </button>
+                            <button type="button" @click="runPeriodAudit(true)" :disabled="auditingDate"
+                                    class="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-all flex items-center gap-1.5 ml-1"
+                                    title="Forcer un nouveau scan en direct du portail TGR (ignore le cache)">
+                                <span :class="auditingDate ? 'animate-spin text-emerald-400' : ''">🔄</span>
+                                <span class="hidden sm:inline">Scanner TGR</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Progressive Multi-Step Calculation Status Banner -->
+                    <div x-show="auditingDate" x-transition.opacity.duration.150ms class="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 backdrop-blur-md shadow-xl space-y-2">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                            <div class="flex items-center gap-2.5 text-indigo-200 font-semibold">
+                                <span class="animate-spin text-sm text-indigo-400">⚙️</span>
+                                <span x-text="auditStepText"></span>
+                            </div>
+                            <div class="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
+                                <span class="text-indigo-400 font-bold" x-text="auditProgressPct + '%'"></span>
+                                <span class="text-slate-500">|</span>
+                                <span>Période : <span class="text-white font-bold" x-text="getPeriodLabel()"></span></span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden p-0.5 border border-slate-800">
+                            <div class="bg-gradient-to-r from-indigo-500 via-emerald-400 to-indigo-500 h-1 rounded-full transition-all duration-300"
+                                 :style="'width: ' + auditProgressPct + '%'"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-0.5">
+                            <span :class="auditProgressPct >= 20 ? 'text-indigo-300 font-bold' : ''">1. Base PostgreSQL</span>
+                            <span>&rarr;</span>
+                            <span :class="auditProgressPct >= 60 ? 'text-indigo-300 font-bold' : ''">2. Portail TGR & WAF</span>
+                            <span>&rarr;</span>
+                            <span :class="auditProgressPct >= 85 ? 'text-indigo-300 font-bold' : ''">3. Rapprochement</span>
                         </div>
                     </div>
 
@@ -1195,14 +1230,22 @@
                         </button>
                     </div>
 
-                    <!-- 3-Column Comparative Metrics Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- 3-Column Comparative Metrics Cards with Live Calculating States -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4" :class="auditingDate ? 'opacity-70 transition-opacity' : ''">
                         <!-- Box 1: Official Portal -->
                         <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
                             <div>
-                                <span class="text-[10px] font-mono uppercase text-slate-500 font-bold block mb-1">1. Portail Officiel (TGR)</span>
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[10px] font-mono uppercase text-slate-500 font-bold">1. Portail Officiel (TGR)</span>
+                                    <span x-show="dateAudit?.is_cached" class="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono">⚡ Cache ({dateAudit?.cache_age_seconds}s)</span>
+                                </div>
                                 <div class="flex items-baseline gap-2">
-                                    <span class="text-2xl font-black font-mono text-emerald-400" x-text="(dateAudit?.portal_total_published || 48) + ' avis'"></span>
+                                    <template x-if="auditingDate">
+                                        <span class="text-2xl font-black font-mono text-emerald-400 animate-pulse">Calcul...</span>
+                                    </template>
+                                    <template x-if="!auditingDate">
+                                        <span class="text-2xl font-black font-mono text-emerald-400" x-text="(dateAudit ? dateAudit.portal_total_published : 0) + ' avis'"></span>
+                                    </template>
                                     <span class="text-[10px] text-slate-500">publiés</span>
                                 </div>
                             </div>
@@ -1221,7 +1264,12 @@
                             <div>
                                 <span class="text-[10px] font-mono uppercase text-slate-500 font-bold block mb-1">2. Base Locale (PostgreSQL)</span>
                                 <div class="flex items-baseline gap-2">
-                                    <span class="text-2xl font-black font-mono text-indigo-400" x-text="(dateAudit?.db_total_ingested || 48) + ' avis'"></span>
+                                    <template x-if="auditingDate">
+                                        <span class="text-2xl font-black font-mono text-indigo-400 animate-pulse">Comptage...</span>
+                                    </template>
+                                    <template x-if="!auditingDate">
+                                        <span class="text-2xl font-black font-mono text-indigo-400" x-text="(dateAudit ? dateAudit.db_total_ingested : 0) + ' avis'"></span>
+                                    </template>
                                     <span class="text-[10px] text-slate-500">enregistrés</span>
                                 </div>
                             </div>
@@ -1238,15 +1286,20 @@
                                 <span class="text-[10px] font-mono uppercase font-bold block mb-1"
                                       :class="(dateAudit?.missing_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'">3. Écart & Conformité</span>
                                 <div class="flex items-baseline gap-2">
-                                    <span class="text-2xl font-black font-mono"
-                                          :class="(dateAudit?.missing_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'"
-                                          x-text="(dateAudit?.missing_count || 0) > 0 ? ((dateAudit?.missing_count || 0) + ' manquant(s)') : '0 manquant'"></span>
+                                    <template x-if="auditingDate">
+                                        <span class="text-2xl font-black font-mono text-slate-400 animate-pulse">Rapprochement...</span>
+                                    </template>
+                                    <template x-if="!auditingDate">
+                                        <span class="text-2xl font-black font-mono"
+                                              :class="(dateAudit?.missing_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'"
+                                              x-text="(dateAudit?.missing_count || 0) > 0 ? ((dateAudit?.missing_count || 0) + ' manquant(s)') : '0 manquant'"></span>
+                                    </template>
                                 </div>
                             </div>
                             <div class="mt-3 pt-2 border-t border-slate-900/60 flex items-center justify-between text-[11px] font-bold"
                                  :class="(dateAudit?.missing_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'">
-                                <span x-text="(dateAudit?.missing_count || 0) > 0 ? 'Action requise' : '✓ 100% Exhaustif'"></span>
-                                <span class="font-mono" x-text="(dateAudit?.concordance_pct || 100) + '% de confiance'"></span>
+                                <span x-text="auditingDate ? 'Calcul en cours...' : ((dateAudit?.missing_count || 0) > 0 ? 'Action requise' : '✓ 100% Exhaustif')"></span>
+                                <span class="font-mono" x-text="auditingDate ? '...' : ((dateAudit?.concordance_pct || 100) + '% de confiance')"></span>
                             </div>
                         </div>
                     </div>
@@ -1840,6 +1893,10 @@
                 auditSelectedMonth: ('0' + (new Date().getMonth() + 1)).slice(-2) + '/' + new Date().getFullYear(),
                 auditCalendarDrawerOpen: false,
                 dateAudit: null,
+                auditStepText: 'Prêt',
+                auditProgressPct: 0,
+                auditStepTimer: null,
+                clientAuditCache: {},
                 activePollingTimer: null,
                 ingestionData: {
                     gap_analysis: {
@@ -2608,8 +2665,34 @@
                     return `Avis du ${this.auditTargetDate}`;
                 },
 
-                async runPeriodAudit() {
+                async runPeriodAudit(force = false) {
+                    const cacheKey = this.auditPeriodMode + ':' + (this.auditPeriodMode === 'month' ? this.auditSelectedMonth : this.auditTargetDate) + ':' + (this.auditEndDate || '');
+
+                    // Instant optimistic restore from local browser cache if available
+                    if (!force && this.clientAuditCache[cacheKey]) {
+                        this.dateAudit = this.clientAuditCache[cacheKey];
+                        return;
+                    }
+
                     this.auditingDate = true;
+                    this.auditProgressPct = 20;
+                    this.auditStepText = 'Étape 1/3 : Analyse locale PostgreSQL...';
+
+                    if (this.auditStepTimer) clearInterval(this.auditStepTimer);
+                    let step = 1;
+                    this.auditStepTimer = setInterval(() => {
+                        step++;
+                        if (step === 2) {
+                            this.auditProgressPct = 60;
+                            this.auditStepText = 'Étape 2/3 : Interrogation portail TGR & contournement WAF...';
+                        } else if (step === 3) {
+                            this.auditProgressPct = 85;
+                            this.auditStepText = 'Étape 3/3 : Rapprochement ensembliste & calcul du taux...';
+                        } else if (step > 3 && this.auditProgressPct < 96) {
+                            this.auditProgressPct += 2;
+                        }
+                    }, 450);
+
                     let url = `/api/admin/ingestion/audit-date?mode=${encodeURIComponent(this.auditPeriodMode)}`;
                     if (this.auditPeriodMode === 'month') {
                         url += `&date=${encodeURIComponent(this.auditSelectedMonth)}`;
@@ -2618,12 +2701,16 @@
                     } else {
                         url += `&date=${encodeURIComponent(this.auditTargetDate)}`;
                     }
+                    if (force) url += '&force=true';
 
-                    this.showToast(`Audit d’exhaustivité en cours pour ${this.getPeriodLabel()}...`, 'info');
+                    this.showToast(`Audit d’exhaustivité pour ${this.getPeriodLabel()}...`, 'info');
                     try {
                         const res = await fetch(url);
                         if (res.ok) {
                             this.dateAudit = await res.json();
+                            this.clientAuditCache[cacheKey] = this.dateAudit;
+                            this.auditProgressPct = 100;
+                            this.auditStepText = '✓ Analyse terminée avec succès !';
                             if (this.dateAudit.is_fully_reconciled) {
                                 this.showToast(`🛡️ 100% Confiance : Tous les ${this.dateAudit.portal_total_published} avis sont en base !`, 'success');
                             } else {
@@ -2635,7 +2722,10 @@
                     } catch (e) {
                         this.showToast('Erreur de connexion : ' + e, 'error');
                     } finally {
-                        this.auditingDate = false;
+                        if (this.auditStepTimer) clearInterval(this.auditStepTimer);
+                        setTimeout(() => {
+                            this.auditingDate = false;
+                        }, 250);
                     }
                 },
 

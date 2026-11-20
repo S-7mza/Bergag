@@ -206,6 +206,8 @@ class IngestionBatchManager:
         self.active_batch: Optional[IngestionBatchRecord] = None
         self._last_gap_probe: Optional[Dict[str, Any]] = None
         self._last_gap_probe_time: Optional[datetime] = None
+        self._audit_cache: Dict[str, Dict[str, Any]] = {}
+        self._audit_cache_times: Dict[str, datetime] = {}
         self._load_from_storage()
 
     def _load_from_storage(self):
@@ -656,7 +658,8 @@ class IngestionBatchManager:
         target_date_str: Optional[str] = None, 
         end_date_str: Optional[str] = None,
         period_mode: str = "day",
-        fetch_live_portal: bool = True
+        fetch_live_portal: bool = True,
+        force_refresh: bool = False
     ) -> Dict[str, Any]:
         """
         Performs an exhaustive mathematical set reconciliation for a specific publication date,
@@ -746,6 +749,21 @@ class IngestionBatchManager:
             else:
                 period_label = f"Avis du {start_date_str}"
 
+        # Fast In-Memory Cache Lookup (eliminates duplicate 10s scraping latency)
+        cache_key = f"{mode}:{start_date_str}:{end_date_str}:{fetch_live_portal}"
+        if not force_refresh and cache_key in self._audit_cache:
+            cache_time = self._audit_cache_times.get(cache_key)
+            if cache_time:
+                age_seconds = (now - cache_time).total_seconds()
+                is_past_period = end_dt < now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+                max_age = 900 if is_past_period else 60
+                if age_seconds < max_age:
+                    logger.info(f"[BatchManager] Fast audit cache hit for {cache_key} (age: {age_seconds:.1f}s)")
+                    cached_result = dict(self._audit_cache[cache_key])
+                    cached_result["is_cached"] = True
+                    cached_result["cache_age_seconds"] = round(age_seconds, 1)
+                    return cached_result
+
         # 1. Query PostgreSQL for this exact registration period
         db_tenders = []
         try:
@@ -782,19 +800,22 @@ class IngestionBatchManager:
                 portal_cards = cards
                 is_live = True
                 
-                # If total > 50, fetch subsequent pages if needed
+                # If total > 50, fetch subsequent pages in parallel
                 if portal_total > 50 and len(portal_cards) < portal_total:
-                    for p in [2, 3]:
-                        if len(portal_cards) >= portal_total:
-                            break
-                        try:
-                            _, p_cards, _ = await asyncio.wait_for(
-                                spider.fetch_by_date(date_str=start_date_str, end_date_str=end_date_str, page=p, page_size=50),
-                                timeout=4.0
-                            )
-                            portal_cards.extend(p_cards)
-                        except Exception:
-                            break
+                    sub_pages = [p for p in [2, 3] if (p - 1) * 50 < portal_total]
+                    if sub_pages:
+                        async def _fetch_sub(p_num):
+                            try:
+                                _, p_cards, _ = await asyncio.wait_for(
+                                    spider.fetch_by_date(date_str=start_date_str, end_date_str=end_date_str, page=p_num, page_size=50),
+                                    timeout=4.0
+                                )
+                                return p_cards
+                            except Exception:
+                                return []
+                        parallel_results = await asyncio.gather(*[_fetch_sub(p) for p in sub_pages])
+                        for res_cards in parallel_results:
+                            portal_cards.extend(res_cards)
                 await client.close()
             except Exception as e:
                 logger.warning(f"[BatchManager] Portal query for {period_label} failed or offline: {e}")
@@ -903,7 +924,7 @@ class IngestionBatchManager:
                 f"{missing_count} avis doivent être importés pour atteindre 100% d’exhaustivité."
             )
 
-        return {
+        res_dict = {
             "period_mode": mode,
             "target_date": start_date_str,
             "end_date": end_date_str,
@@ -927,6 +948,9 @@ class IngestionBatchManager:
             "is_live_probe": is_live,
             "source_portal_url": f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/?search_consultation_entreprise[dateMiseEnLigneStart]={start_date_str}&search_consultation_entreprise[dateMiseEnLigneEnd]={end_date_str}"
         }
+        self._audit_cache[cache_key] = res_dict
+        self._audit_cache_times[cache_key] = now
+        return res_dict
 
     async def remediate_missing_portal_ids(
         self, 
@@ -981,12 +1005,15 @@ class IngestionBatchManager:
         finally:
             await client.close()
 
-        # Update cache after remediation
+        # Clear and update cache after remediation
+        self._audit_cache.clear()
+        self._audit_cache_times.clear()
         await self.audit_date_exhaustiveness(
             target_date_str=target_date_str,
             end_date_str=end_date_str,
             period_mode=period_mode,
-            fetch_live_portal=False
+            fetch_live_portal=False,
+            force_refresh=True
         )
 
         return {

@@ -42,6 +42,7 @@ async def audit_date_exhaustiveness_endpoint(
     date: Optional[str] = Query(None, description="Date ou date de début (DD/MM/YYYY)"),
     end_date: Optional[str] = Query(None, description="Date de fin optionnelle (DD/MM/YYYY)"),
     mode: str = Query("day", description="Mode de sélection : 'day', 'range', 'month'"),
+    force: bool = Query(False, description="Forcer une nouvelle interrogation en direct du portail TGR"),
     user: User = Depends(require_role(["admin", "analyst"]))
 ):
     """
@@ -53,7 +54,8 @@ async def audit_date_exhaustiveness_endpoint(
         target_date_str=target,
         end_date_str=end_date,
         period_mode=mode,
-        fetch_live_portal=True
+        fetch_live_portal=True,
+        force_refresh=force
     )
 
 @router.post("/audit-date/reconcile")
