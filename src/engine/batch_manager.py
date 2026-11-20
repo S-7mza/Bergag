@@ -1271,10 +1271,12 @@ class IngestionBatchManager:
 
         portal_count = max(portal_total, len(portal_active_ids))
         db_count = len(db_active_ids)
-        missing_count = len(missing_ids)
+        total_unimported = max(0, portal_count - db_count)
+        immediate_missing_count = len(missing_ids)
+        pages_needed = max(1, (portal_count + 49) // 50)
 
-        is_fully_covered = (missing_count == 0 and portal_count > 0)
-        coverage_pct = 100.0 if is_fully_covered else (round((len(common_ids) / max(1, portal_count)) * 100, 1) if portal_count > 0 else 100.0)
+        is_fully_covered = (total_unimported == 0 and immediate_missing_count == 0 and portal_count > 0)
+        coverage_pct = 100.0 if is_fully_covered else (round((db_count / max(1, portal_count)) * 100, 1) if portal_count > 0 else 100.0)
 
         # Helper for countdown formatting
         def _format_countdown(deadline_val) -> str:
@@ -1333,12 +1335,12 @@ class IngestionBatchManager:
 
         if is_fully_covered:
             verdict = "CONFORME_100_PCT"
-            verdict_badge = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+            verdict_badge = "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
             message = f"🛡️ Marché Actif 100% : Les {portal_count} avis ouverts au dépôt sur le portail TGR sont tous dans votre base locale."
-        elif missing_count > 0:
+        elif total_unimported > 0 or immediate_missing_count > 0:
             verdict = "ECART_DETECTE"
-            verdict_badge = "bg-amber-500/20 text-amber-400 border-amber-500/30"
-            message = f"⚠️ Écart Marché Actif : {missing_count} consultation(s) en cours de dépôt sur le portail TGR manquent à votre base locale."
+            verdict_badge = "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+            message = f"⚠️ Écart Marché Actif : {total_unimported} consultation(s) ouverte(s) sur le portail TGR manquent en base locale (dont {immediate_missing_count} prioritaires sur les pages récentes)."
         else:
             verdict = "AUCUN_AVIS_ACTIF"
             verdict_badge = "bg-slate-500/20 text-slate-400 border-slate-500/30"
@@ -1356,14 +1358,16 @@ class IngestionBatchManager:
             "coverage_pct": coverage_pct,
             "portal_total_active": portal_count,
             "db_total_active": db_count,
-            "missing_count": missing_count,
+            "total_unimported_count": total_unimported,
+            "immediate_missing_count": immediate_missing_count,
+            "pages_needed_for_100_pct": pages_needed,
+            "missing_count": total_unimported if total_unimported > 0 else immediate_missing_count,
             "missing_portal_ids": sorted(list(missing_ids)),
             "missing_tenders": missing_tenders[:30],
             "all_active_items": all_active_items[:100],
             "is_live_probe": is_live,
             "source_portal_url": "https://www.marchespublics.gov.ma/bdc/entreprise/consultation/?search_consultation_entreprise[pageSize]=50&page=1"
         }
-
         self._audit_cache[cache_key] = result
         self._audit_cache_times[cache_key] = now
         return result
