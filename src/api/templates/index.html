@@ -122,11 +122,11 @@
                         <span>📊</span> Radar & Concurrence
                     </button>
 
-                    <button @click="activeModule = 'profiles'; adminSection = 'profiles'" :class="activeModule === 'profiles' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                    <button @click="activeModule = 'admin'; adminSection = 'profiles'" :class="(activeModule === 'admin' && adminSection === 'profiles') || activeModule === 'profiles' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>📁</span> Studio Profils YAML
                     </button>
 
-                    <button @click="activeModule = 'crawler'; adminSection = 'crawler'; fetchCrawlerStatus()" :class="activeModule === 'crawler' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                    <button @click="activeModule = 'admin'; adminSection = 'crawler'; fetchCrawlerStatus()" :class="(activeModule === 'admin' && adminSection === 'crawler') || activeModule === 'crawler' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>⚙️</span> Centre Crawler
                         <span class="relative flex h-2 w-2">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -134,11 +134,11 @@
                         </span>
                     </button>
 
-                    <button @click="activeModule = 'team'; adminSection = 'team'; fetchTeamUsers()" :class="activeModule === 'team' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                    <button @click="activeModule = 'admin'; adminSection = 'team'; fetchTeamUsers()" :class="(activeModule === 'admin' && adminSection === 'team') || activeModule === 'team' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>👥</span> Équipe & RBAC
                     </button>
 
-                    <button @click="activeModule = 'ingestion'; adminSection = 'ingestion'; fetchIngestionDashboard()" :class="activeModule === 'ingestion' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                    <button @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()" :class="(activeModule === 'admin' && adminSection === 'ingestion') || activeModule === 'ingestion' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>⚡</span> Lots & Ingestion
                         <span class="px-1.5 py-0.2 bg-amber-500/20 text-amber-400 text-[10px] rounded-full font-bold border border-amber-500/30">Admin</span>
                         <span x-show="ingestionData?.active_batch" class="relative flex h-2 w-2 ml-0.5">
@@ -167,8 +167,8 @@
         <!-- Main Workspace -->
         <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
 
-            <!-- IDLE INGESTION STATUS & QUICK TRIGGER BAR (Always visible when system is in idle surveillance) -->
-            <div x-show="!ingestionData?.active_batch && !remediating && !reconcilingMissing"
+            <!-- IDLE INGESTION STATUS & QUICK TRIGGER BAR (Visible on Feed or Ingestion module when idle) -->
+            <div x-show="(!ingestionData?.active_batch && !remediating && !reconcilingMissing) && (activeModule === 'feed' || ((activeModule === 'admin' || activeModule === 'ingestion') && adminSection === 'ingestion'))"
                  class="mb-6 rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl backdrop-blur-sm">
                 <div class="flex items-center gap-3 min-w-0">
                     <span class="flex h-3 w-3 relative flex-shrink-0">
@@ -205,7 +205,7 @@
                             class="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95">
                         <span>⚡</span> <span>Lancer Ingestion Directe</span>
                     </button>
-                    <button type="button" @click="activeModule = 'ingestion'; adminSection = 'ingestion'; runPeriodAudit()"
+                    <button type="button" @click="activeModule = 'admin'; adminSection = 'ingestion'; runPeriodAudit()"
                             class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center gap-1 shadow-sm">
                         <span>🛡️ Audit 19 Nov</span>
                     </button>
@@ -217,7 +217,7 @@
             </div>
 
             <!-- EXPANDABLE SEQUENTIAL HUD (Shows Confirmed DB records X when idle) -->
-            <div x-show="showIdlePipeline && !ingestionData?.active_batch" x-cloak 
+            <div x-show="showIdlePipeline && !ingestionData?.active_batch && (activeModule === 'feed' || ((activeModule === 'admin' || activeModule === 'ingestion') && adminSection === 'ingestion'))" x-cloak 
                  class="mb-6 space-y-3 p-4 sm:p-5 rounded-2xl bg-slate-950/90 border border-slate-800 animate-in fade-in duration-200 shadow-2xl">
                 <div class="flex items-center justify-between pb-3 border-b border-slate-800">
                     <div class="flex items-center gap-2">
@@ -265,7 +265,7 @@
                     <div class="flex items-center gap-2.5 flex-shrink-0">
                         <span class="px-3 py-1 rounded-xl text-xs font-mono font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
                               x-text="(ingestionData?.active_batch?.progress_pct || 15) + '%'"></span>
-                        <button type="button" @click="activeModule = 'ingestion'; adminSection = 'ingestion'; fetchIngestionDashboard()"
+                        <button type="button" @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()"
                                 class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm">
                             <span>Inspecter la File</span> <span>→</span>
                         </button>
@@ -646,7 +646,7 @@
                                 </a>
                             </span>
 
-                            <button @click="activeModule = 'ingestion'; fetchIngestionDashboard()"
+                            <button @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()"
                                     class="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
                                 <span>Inspecter le détail unitaire dans Lots & Ingestion</span>
                                 <span>→</span>
@@ -1208,20 +1208,20 @@
             <!-- ========================================== -->
             <!-- MODULE 5: ADMIN CONTROL CENTER             -->
             <!-- ========================================== -->
-            <div x-show="activeModule === 'admin'" x-cloak class="space-y-6">
+            <div x-show="activeModule === 'admin' || ['ingestion', 'crawler', 'team', 'profiles'].includes(activeModule)" x-cloak class="space-y-6">
                 <!-- Admin Sub-Navigation Pills -->
                 <div class="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex items-center justify-between gap-2 overflow-x-auto shadow-lg">
                     <div class="flex items-center gap-1.5 text-xs font-semibold">
-                        <button @click="adminSection = 'ingestion'; fetchIngestionDashboard()" :class="adminSection === 'ingestion' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                        <button @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()" :class="adminSection === 'ingestion' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
                             <span>⚡</span> Lots & Ingestion
                         </button>
-                        <button @click="adminSection = 'team'; fetchTeamUsers()" :class="adminSection === 'team' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                        <button @click="activeModule = 'admin'; adminSection = 'team'; fetchTeamUsers()" :class="adminSection === 'team' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
                             <span>👥</span> Équipe & RBAC
                         </button>
-                        <button @click="adminSection = 'crawler'; fetchCrawlerStatus()" :class="adminSection === 'crawler' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                        <button @click="activeModule = 'admin'; adminSection = 'crawler'; fetchCrawlerStatus()" :class="adminSection === 'crawler' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
                             <span>🛰️</span> Crawler TGR
                         </button>
-                        <button @click="adminSection = 'profiles'" :class="adminSection === 'profiles' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                        <button @click="activeModule = 'admin'; adminSection = 'profiles'" :class="adminSection === 'profiles' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
                             <span>📁</span> Profils Métier YAML
                         </button>
                     </div>
@@ -1229,7 +1229,7 @@
                 </div>
 
                 <!-- Admin Sub-Section 4: Profiles -->
-                <div x-show="adminSection === 'profiles' || activeModule === 'profiles'" class="space-y-6">
+                <div x-show="adminSection === 'profiles'" x-cloak class="space-y-6">
                 <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
                     <h2 class="text-base font-bold text-white mb-1">Studio des Profils Métier Déclaratifs (YAML)</h2>
                     <p class="text-xs text-slate-400 mb-6">Moteur de règles d'élimination et taxonomies de correspondance</p>
@@ -1265,7 +1265,7 @@
             <!-- ========================================== -->
             <!-- MODULE 4: CRAWLER OPERATIONS CENTER        -->
             <!-- ========================================== -->
-            <div x-show="adminSection === 'crawler' || activeModule === 'crawler'" x-cloak class="space-y-6">
+            <div x-show="adminSection === 'crawler'" x-cloak class="space-y-6">
                 <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                         <div>
@@ -1314,7 +1314,7 @@
             <!-- ========================================== -->
             <!-- MODULE 4B: ADMIN INGESTION & BATCH CONTROL -->
             <!-- ========================================== -->
-            <div x-show="adminSection === 'ingestion' || activeModule === 'ingestion'" x-cloak class="space-y-6">
+            <div x-show="adminSection === 'ingestion'" x-cloak class="space-y-6">
 
                 <!-- 1. MASTER HEALTH HERO CARD (One Clear Source of Truth) -->
                 <div class="rounded-3xl border p-6 lg:p-7 shadow-2xl relative overflow-hidden transition-all duration-300"
@@ -2235,7 +2235,7 @@
             <!-- ========================================== -->
             <!-- MODULE 5: TEAM & RBAC MANAGEMENT           -->
             <!-- ========================================== -->
-            <div x-show="adminSection === 'team' || activeModule === 'team'" x-cloak class="space-y-6">
+            <div x-show="adminSection === 'team'" x-cloak class="space-y-6">
                 <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                         <div>
@@ -2879,10 +2879,10 @@
 
                         this.showToast(`Bascule vers le rôle : ${data.user.title}`, 'info');
 
-                        if (this.activeModule === 'crawler' && !this.hasPermission('crawler:telemetry')) {
+                        if ((this.activeModule === 'crawler' || (this.activeModule === 'admin' && this.adminSection === 'crawler')) && !this.hasPermission('crawler:telemetry')) {
                             this.activeModule = 'feed';
                         }
-                        if (this.activeModule === 'team' && !this.hasPermission('users:manage')) {
+                        if ((this.activeModule === 'team' || (this.activeModule === 'admin' && this.adminSection === 'team')) && !this.hasPermission('users:manage')) {
                             this.activeModule = 'feed';
                         }
                         this.fetchFeed();

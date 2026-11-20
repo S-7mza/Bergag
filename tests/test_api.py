@@ -255,7 +255,9 @@ def test_admin_reconcile_missing_items(client):
     assert data["status"] == "noop"
 
 def test_admin_ingestion_remediation(client):
-    with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl:
+    from src.engine.batch_manager import batch_manager
+    with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl, \
+         patch.object(batch_manager, "pending_backfill_queue", []):
         mock_crawl.return_value = None
         res = client.post("/api/admin/ingestion/remediate", json={"pages": 2})
         assert res.status_code == 200
@@ -263,7 +265,9 @@ def test_admin_ingestion_remediation(client):
         assert data["status"] == "remediation_started"
 
 def test_admin_batch_trigger(client):
-    with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl:
+    from src.engine.batch_manager import batch_manager
+    with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl, \
+         patch.object(batch_manager, "pending_backfill_queue", []):
         mock_crawl.return_value = None
         res = client.post("/api/admin/ingestion/batches/trigger", json={"pages": 1})
         assert res.status_code == 200
@@ -275,6 +279,7 @@ def test_admin_batch_trigger(client):
 async def test_batch_manager_cards_accumulation():
     from src.engine.batch_manager import IngestionBatchManager
     bm = IngestionBatchManager()
+    bm.pending_backfill_queue = []
     
     async def fake_crawl(max_pages, send_emails, progress_callback, **kwargs):
         for p in range(1, max_pages + 1):
