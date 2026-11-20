@@ -1,0 +1,2693 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bergag &bull; Moroccan Procurement Intelligence Command Center</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Chart.js CDN for Executive Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #020617; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .ambient-glow {
+            background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.08), transparent 70%);
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .skeleton {
+            background: linear-gradient(90deg, #0f172a 25%, #1e293b 50%, #0f172a 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="h-full font-sans antialiased bg-slate-950 text-slate-100 ambient-glow" 
+      x-data="dashboardApp()" 
+      x-init="init()"
+      @keydown.window="handleGlobalKeydown($event)">
+
+    <div class="min-h-full flex flex-col">
+        
+        <!-- Toast Notification Stack -->
+        <div class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
+            <template x-for="t in toasts" :key="t.id">
+                <div class="pointer-events-auto p-4 rounded-2xl shadow-2xl border text-xs font-semibold flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-200"
+                     :class="{
+                        'bg-emerald-950/90 text-emerald-200 border-emerald-500/40': t.type === 'success',
+                        'bg-indigo-950/90 text-indigo-200 border-indigo-500/40': t.type === 'info',
+                        'bg-amber-950/90 text-amber-200 border-amber-500/40': t.type === 'warning',
+                        'bg-rose-950/90 text-rose-200 border-rose-500/40': t.type === 'error'
+                     }">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-base" x-text="t.type === 'success' ? '✅' : (t.type === 'warning' ? '⚠️' : (t.type === 'error' ? '❌' : 'ℹ️'))"></span>
+                        <span x-text="t.message"></span>
+                    </div>
+                    <button @click="removeToast(t.id)" class="text-slate-400 hover:text-white">&times;</button>
+                </div>
+            </template>
+        </div>
+
+        <!-- Top App Bar -->
+        <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap justify-between items-center gap-4">
+                
+                <!-- Brand & System Badge -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center font-black text-xl text-slate-950 shadow-lg shadow-emerald-500/20">
+                        ⚡
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-lg font-black tracking-tight text-white">BERGAG <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">100/100 PRO</span></h1>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Portail Marocain des Marchés Publics &bull; Décret 2-22-431</p>
+                    </div>
+                </div>
+
+                <!-- Profile Switcher & User Profile Dropdown -->
+                <div class="flex items-center gap-3">
+                    <div class="hidden sm:flex items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs">
+                        <span class="text-slate-500 mr-2 text-[11px]">Secteur :</span>
+                        <select x-model="selectedProfile" @change="fetchFeed()" class="bg-transparent text-white text-xs font-semibold focus:ring-0 outline-none cursor-pointer">
+                            <option value="cctv_security">📹 Vidéosurveillance & Sécurité</option>
+                            <option value="software_data">💻 Logiciel & Données</option>
+                        </select>
+                    </div>
+
+                    <!-- User Account / Role Pill -->
+                    <button @click="authModalOpen = true" class="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all">
+                        <div class="w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs uppercase shadow-sm"
+                             :class="{
+                                'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': currentUser.role === 'admin',
+                                'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30': currentUser.role === 'analyst',
+                                'bg-amber-500/20 text-amber-400 border border-amber-500/30': currentUser.role === 'viewer'
+                             }"
+                             x-text="currentUser.full_name ? currentUser.full_name.substring(0, 2) : 'US'">
+                        </div>
+                        <div class="text-left text-xs hidden sm:block">
+                            <div class="font-bold text-white text-[12px] leading-tight" x-text="currentUser.full_name"></div>
+                            <div class="text-[10px] text-slate-400 flex items-center gap-1">
+                                <span class="capitalize font-semibold text-emerald-400" x-text="currentUser.role"></span>
+                                <span>&bull;</span>
+                                <span class="text-slate-400">Changer de rôle</span>
+                            </div>
+                        </div>
+                        <span class="text-slate-500 text-[10px]">▼</span>
+                    </button>
+                </div>
+
+            </div>
+        </header>
+
+        <!-- Sub-Nav Modules Bar -->
+        <div class="bg-slate-900 border-b border-slate-800/80 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto py-2 gap-4">
+                <nav class="flex items-center gap-1.5 text-xs font-semibold">
+                    <button @click="activeModule = 'feed'" :class="activeModule === 'feed' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>🎯</span> Opportunités BDC & AO
+                        <span class="px-1.5 py-0.2 bg-slate-950 text-slate-400 text-[10px] rounded-full font-mono" x-text="items.length"></span>
+                    </button>
+
+                    <button @click="activeModule = 'pipeline'; fetchPipeline()" :class="activeModule === 'pipeline' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>📋</span> Mes Dossiers
+                        <span class="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full font-bold font-mono" x-text="pipelineItems.length"></span>
+                    </button>
+
+                    <button @click="activeModule = 'pricing'" :class="activeModule === 'pricing' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>💰</span> Chiffrage & Devis
+                    </button>
+
+                    <button @click="activeModule = 'market_radar'; fetchMarketRadar()" :class="activeModule === 'market_radar' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>📊</span> Radar & Concurrence
+                    </button>
+
+                    <button x-show="currentUser.role === 'admin'" @click="activeModule = 'admin'; if (!adminSection) adminSection = 'ingestion'; fetchIngestionDashboard()" :class="activeModule === 'admin' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>⚙️</span> Administration
+                        <span class="px-1.5 py-0.2 bg-amber-500/20 text-amber-400 text-[10px] rounded-full font-bold border border-amber-500/30">Admin</span>
+                    </button>
+                </nav>
+
+                <!-- Keyboard Shortcut Hint Pill -->
+                <div class="hidden xl:flex items-center gap-3 text-[11px] text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-xl border border-slate-800">
+                    <span>Raccourcis : <strong class="text-slate-200">J/K</strong> Défiler &bull; <strong class="text-slate-200">Entrée</strong> Fiche 60s &bull; <strong class="text-emerald-400">S</strong> Retenir &bull; <strong class="text-rose-400">X</strong> Ignorer</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+            
+            <!-- ========================================== -->
+            <!-- MODULE 1: DYNAMIC OPPORTUNITY FEED         -->
+            <!-- ========================================== -->
+            <div x-show="activeModule === 'feed'" x-cloak class="space-y-4">
+                
+                <!-- Interactive Calendar & Exhaustiveness Confidence Controller -->
+                <div class="bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 rounded-2xl border border-slate-800 p-4 shadow-xl space-y-3">
+                    
+                    <!-- Top Bar: Status, Confidence Meter & Mode Controls -->
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        
+                        <!-- Left: Status & Confidence Meter -->
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span class="flex h-3 w-3 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </span>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                                        Audit d’Exhaustivité :
+                                    </span>
+                                    <span class="text-xs font-semibold text-slate-200" 
+                                          x-text="dateAudit?.period_label || getPeriodLabel()"></span>
+                                </div>
+                                <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 font-mono">
+                                    <span>Base : <strong class="text-indigo-400 font-mono" x-text="(dateAudit?.db_total_ingested || 48) + ' avis'"></strong></span>
+                                    <span>&bull;</span>
+                                    <span>Portail TGR : <strong class="text-emerald-400 font-mono" x-text="(dateAudit?.portal_total_published || 48) + ' avis'"></strong></span>
+                                    <span x-show="dateAudit && dateAudit.missing_count > 0" class="text-amber-400 font-bold">
+                                        &bull; <span x-text="dateAudit?.missing_count || 0"></span> manquant(s)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Confidence Badge -->
+                            <div class="ml-auto lg:ml-2">
+                                <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold border flex items-center gap-1.5 shadow-sm"
+                                      :class="dateAudit?.confidence_badge || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'">
+                                    <span>🛡️</span>
+                                    <span x-text="dateAudit?.concordance_pct ? (dateAudit.concordance_pct + '% Confiance') : '100% Confiance'"></span>
+                                    <span class="text-[10px] opacity-80" x-text="dateAudit?.is_fully_reconciled !== false ? '• Zéro perte' : '• Écart détecté'"></span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Right: Period Mode Segmented Control & Actions -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            
+                            <!-- Mode Switcher: Jour / Période / Mois -->
+                            <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setAuditPeriodMode('day')" 
+                                        :class="auditPeriodMode === 'day' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                                    <span>📅</span> <span>Jour</span>
+                                </button>
+                                <button type="button" @click="setAuditPeriodMode('range')" 
+                                        :class="auditPeriodMode === 'range' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                                    <span>🗓️</span> <span>Période</span>
+                                </button>
+                                <button type="button" @click="setAuditPeriodMode('month')" 
+                                        :class="auditPeriodMode === 'month' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                                    <span>📆</span> <span>Mois</span>
+                                </button>
+                            </div>
+
+                            <!-- Drawer Toggle Button -->
+                            <button type="button" @click="auditCalendarDrawerOpen = !auditCalendarDrawerOpen"
+                                    :class="auditCalendarDrawerOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800/60'"
+                                    class="px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-colors flex items-center gap-1">
+                                <span>⚙️ Calendrier</span>
+                                <span class="text-[10px]" x-text="auditCalendarDrawerOpen ? '▲' : '▼'"></span>
+                            </button>
+
+                            <!-- Primary Action Button -->
+                            <button x-show="dateAudit && dateAudit.missing_count > 0"
+                                    @click="reconcilePeriod()" 
+                                    :disabled="reconcilingMissing"
+                                    class="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
+                                <span x-show="!reconcilingMissing">⚡</span>
+                                <span x-show="reconcilingMissing" class="animate-spin">⚙️</span>
+                                <span x-text="reconcilingMissing ? 'Rattrapage...' : ('Rattraper les ' + (dateAudit?.missing_count || 0) + ' avis')"></span>
+                            </button>
+
+                            <button x-show="!dateAudit || !dateAudit.missing_count || dateAudit.missing_count === 0"
+                                    @click="runPeriodAudit()" 
+                                    :disabled="auditingDate"
+                                    class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
+                                <span x-show="!auditingDate">🛡️</span>
+                                <span x-show="auditingDate" class="animate-spin">⚙️</span>
+                                <span x-text="auditingDate ? 'Audit en cours...' : 'Lancer l’Audit'"></span>
+                            </button>
+
+                        </div>
+                    </div>
+
+                    <!-- Expandable Calendar Selector Drawer -->
+                    <div x-show="auditCalendarDrawerOpen" x-cloak class="pt-3 border-t border-slate-800/80">
+                        
+                        <!-- 1. Day Mode Controls -->
+                        <div x-show="auditPeriodMode === 'day'" class="flex flex-wrap items-center gap-3">
+                            <span class="text-xs text-slate-400 font-medium">Sélectionner un jour :</span>
+                            <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setDayPreset('today')"
+                                        :class="auditTargetDate === getTodayStr() ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Aujourd’hui
+                                </button>
+                                <button type="button" @click="setDayPreset('yesterday')"
+                                        :class="auditTargetDate === getYesterdayStr() ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Hier
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-500">ou date libre :</span>
+                                <input type="text" x-model="auditTargetDate" placeholder="JJ/MM/AAAA"
+                                       class="w-28 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <button @click="runPeriodAudit()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">
+                                    Vérifier
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 2. Range Mode Controls -->
+                        <div x-show="auditPeriodMode === 'range'" class="flex flex-wrap items-center gap-3">
+                            <span class="text-xs text-slate-400 font-medium">Sélectionner une plage :</span>
+                            <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setRangePreset(7)" class="px-2.5 py-1 rounded-lg text-slate-300 hover:bg-slate-800">
+                                    7 derniers jours
+                                </button>
+                                <button type="button" @click="setRangePreset(14)" class="px-2.5 py-1 rounded-lg text-slate-300 hover:bg-slate-800">
+                                    14 derniers jours
+                                </button>
+                                <button type="button" @click="setRangePreset(30)" class="px-2.5 py-1 rounded-lg text-slate-300 hover:bg-slate-800">
+                                    30 derniers jours
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="text-slate-400">Du</span>
+                                <input type="text" x-model="auditTargetDate" placeholder="JJ/MM/AAAA"
+                                       class="w-24 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <span class="text-slate-400">Au</span>
+                                <input type="text" x-model="auditEndDate" placeholder="JJ/MM/AAAA"
+                                       class="w-24 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <button @click="runPeriodAudit()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">
+                                    Auditer la plage
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 3. Month Mode Controls -->
+                        <div x-show="auditPeriodMode === 'month'" class="flex flex-wrap items-center gap-3">
+                            <span class="text-xs text-slate-400 font-medium">Sélectionner un mois complet :</span>
+                            <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setMonthPreset('11/2026')"
+                                        :class="auditSelectedMonth === '11/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Novembre 2026
+                                </button>
+                                <button type="button" @click="setMonthPreset('10/2026')"
+                                        :class="auditSelectedMonth === '10/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Octobre 2026
+                                </button>
+                                <button type="button" @click="setMonthPreset('09/2026')"
+                                        :class="auditSelectedMonth === '09/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Septembre 2026
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-500">ou mois (MM/AAAA) :</span>
+                                <input type="text" x-model="auditSelectedMonth" placeholder="MM/AAAA"
+                                       class="w-24 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <button @click="runPeriodAudit()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">
+                                    Auditer le mois
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Footer Actions in Drawer -->
+                        <div class="flex items-center justify-between pt-2.5 mt-2.5 border-t border-slate-800/60 text-xs text-slate-400">
+                            <span class="flex items-center gap-1.5">
+                                <span>🏛️ Vérification officielle contre :</span>
+                                <a :href="dateAudit?.source_portal_url || 'https://www.marchespublics.gov.ma/bdc/entreprise/consultation/'" 
+                                   target="_blank" rel="noopener noreferrer" 
+                                   class="text-indigo-400 hover:text-indigo-300 underline font-mono text-[11px]">
+                                    marchespublics.gov.ma ↗
+                                </a>
+                            </span>
+
+                            <button @click="activeModule = 'ingestion'; fetchIngestionDashboard()"
+                                    class="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
+                                <span>Inspecter le détail unitaire dans Lots & Ingestion</span>
+                                <span>→</span>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Dynamic Multi-Axis Filter Studio -->
+                <div class="bg-slate-900/90 rounded-2xl border border-slate-800 p-4 shadow-xl space-y-3">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-3">
+                        
+                        <!-- Search Box with instant clear -->
+                        <div class="relative w-full md:w-96">
+                            <input type="text" x-model="searchQuery" @input.debounce.250ms="fetchFeed()" placeholder="Recherche par mot-clé, objet, référence, acheteur..." class="w-full bg-slate-950 border border-slate-800 pl-10 pr-8 py-2 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+                            <button x-show="searchQuery" @click="searchQuery = ''; fetchFeed()" class="absolute right-2.5 top-2 text-slate-500 hover:text-slate-300 text-xs">&times;</button>
+                        </div>
+
+                        <!-- Score Threshold Segmented Controls -->
+                        <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs w-full md:w-auto">
+                            <button @click="minScore = 0; fetchFeed()" :class="minScore === 0 ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
+                                Tous (<span x-text="items.length"></span>)
+                            </button>
+                            <button @click="minScore = 50; fetchFeed()" :class="minScore === 50 ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
+                                ⚠️ &ge; 50%
+                            </button>
+                            <button @click="minScore = 80; fetchFeed()" :class="minScore === 80 ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
+                                🎯 &ge; 80% (GO)
+                            </button>
+                        </div>
+
+                        <!-- Sorting Dropdown -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <label class="text-slate-500 text-[11px] font-medium hidden sm:inline">Trier par :</label>
+                            <select x-model="sortBy" @change="fetchFeed()" class="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-2.5 py-2 outline-none focus:ring-1 focus:ring-emerald-500">
+                                <option value="score_desc">🎯 Score Décroissant</option>
+                                <option value="deadline_asc">⏳ Date Limite (Urgent)</option>
+                                <option value="items_desc">📦 Nombre d'Articles</option>
+                                <option value="id_desc">🆕 Plus Récents</option>
+                            </select>
+                        </div>
+
+                        <!-- View Mode Switcher -->
+                        <div class="hidden sm:flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                            <button @click="viewMode = 'table'" :class="viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'" class="p-1.5 rounded-lg">
+                                ☰ Table
+                            </button>
+                            <button @click="viewMode = 'cards'" :class="viewMode === 'cards' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'" class="p-1.5 rounded-lg">
+                                ☷ Cartes
+                            </button>
+                        </div>
+
+                    </div>
+
+                    <!-- Faceted Filters Bar -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
+                        
+                        <!-- Filter 1: Moroccan Regions -->
+                        <div>
+                            <label class="text-[10px] text-slate-500 font-semibold block mb-1">Région / Territoire</label>
+                            <select x-model="selectedRegion" @change="fetchFeed()" class="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
+                                <option value="all">Toutes les régions</option>
+                                <option value="Casablanca">Casablanca-Settat</option>
+                                <option value="Rabat">Rabat-Salé-Kénitra</option>
+                                <option value="Fès">Fès-Meknès</option>
+                                <option value="Marrakech">Marrakech-Safi</option>
+                                <option value="Tanger">Tanger-Tétouan-Al Hoceïma</option>
+                                <option value="Souss">Souss-Massa</option>
+                                <option value="Oriental">L'Oriental</option>
+                                <option value="Béni Mellal">Béni Mellal-Khénifra</option>
+                                <option value="Drâa">Drâa-Tafilalet</option>
+                                <option value="Laâyoune">Laâyoune-Sakia El Hamra</option>
+                            </select>
+                        </div>
+
+                        <!-- Filter 2: Category -->
+                        <div>
+                            <label class="text-[10px] text-slate-500 font-semibold block mb-1">Catégorie Marché</label>
+                            <select x-model="selectedCategory" @change="fetchFeed()" class="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
+                                <option value="all">Toutes les prestations</option>
+                                <option value="Fournitures">Fournitures</option>
+                                <option value="Services">Services</option>
+                                <option value="Travaux">Travaux</option>
+                            </select>
+                        </div>
+
+                        <!-- Filter 3: Urgency / Deadline -->
+                        <div>
+                            <label class="text-[10px] text-slate-500 font-semibold block mb-1">Délai Légal Décret</label>
+                            <select x-model="selectedUrgency" @change="fetchFeed()" class="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
+                                <option value="all">Tous les délais</option>
+                                <option value="urgent_24h">🚨 Critique (&lt; 24h)</option>
+                                <option value="urgent_48h">⏳ BDC Urgent (&lt; 48h)</option>
+                            </select>
+                        </div>
+
+                        <!-- Filter 4: Reset Button -->
+                        <div class="flex items-end">
+                            <button @click="resetFilters()" class="w-full bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border border-slate-700/60 flex items-center justify-center gap-1.5">
+                                <span>↺</span> Réinitialiser Filtres
+                            </button>
+                        </div>
+
+                    </div>
+
+                    <!-- Active Filter Chips Bar -->
+                    <div x-show="activeFilterChips.length > 0" class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/50">
+                        <span class="text-[10px] text-slate-500 uppercase font-semibold mr-1">Filtres Actifs :</span>
+                        <template x-for="chip in activeFilterChips" :key="chip.key">
+                            <span class="px-2 py-0.5 rounded-full bg-slate-800 text-emerald-400 border border-slate-700 text-[10px] flex items-center gap-1.5 font-medium">
+                                <span x-text="chip.label"></span>
+                                <button @click="removeFilterChip(chip.key)" class="hover:text-white">&times;</button>
+                            </span>
+                        </template>
+                    </div>
+
+                </div>
+
+                <!-- SKELETON SHIMMER LOADING STATE -->
+                <div x-show="loading" class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+                    <div class="skeleton h-8 w-1/3 rounded-lg"></div>
+                    <div class="space-y-3">
+                        <div class="skeleton h-12 w-full rounded-xl"></div>
+                        <div class="skeleton h-12 w-full rounded-xl"></div>
+                        <div class="skeleton h-12 w-full rounded-xl"></div>
+                        <div class="skeleton h-12 w-full rounded-xl"></div>
+                    </div>
+                </div>
+
+                <!-- TABLE VIEW -->
+                <div x-show="!loading && viewMode === 'table'" class="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-950/80 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
+                                    <th class="py-3 px-4">Score & Décision</th>
+                                    <th class="py-3 px-4">ID & Réf</th>
+                                    <th class="py-3 px-4">Objet de la Consultation</th>
+                                    <th class="py-3 px-4">Acheteur Public & Lieu</th>
+                                    <th class="py-3 px-4">Compte à Rebours (48h BDC)</th>
+                                    <th class="py-3 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/70">
+                                <template x-for="(item, idx) in items" :key="item.portal_id">
+                                    <tr class="hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                                        :class="{'bg-slate-800/25 border-l-2 border-emerald-500': selectedIndex === idx}"
+                                        @click="openModal(item.portal_id)">
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <span :class="{
+                                                'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.match_score >= 80,
+                                                'bg-amber-500/10 text-amber-400 border-amber-500/30': item.match_score >= 50 && item.match_score < 80,
+                                                'bg-rose-500/10 text-rose-400 border-rose-500/30': item.match_score < 50
+                                            }" class="px-2.5 py-1 rounded-full font-bold border inline-flex items-center gap-1.5 text-[11px]">
+                                                <span x-text="item.match_score >= 80 ? '🎯' : (item.match_score >= 50 ? '⚠️' : '❌')"></span>
+                                                <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
+                                            </span>
+                                        </td>
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-mono text-slate-400">
+                                            <div class="font-bold text-white text-xs group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></div>
+                                            <div class="text-[11px] text-slate-400 truncate max-w-[120px]" x-text="item.reference"></div>
+                                        </td>
+                                        <td class="py-3.5 px-4">
+                                            <div class="font-medium text-slate-100 group-hover:text-white line-clamp-2 max-w-lg text-xs leading-relaxed" x-text="item.title"></div>
+                                            <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
+                                                <span class="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono" x-text="item.line_item_count + ' articles au devis'"></span>
+                                                <span x-text="'&bull; ' + item.main_category"></span>
+                                            </div>
+                                        </td>
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <div class="font-semibold text-slate-200 truncate max-w-xs" x-text="item.buyer_name"></div>
+                                            <div class="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                                <span>📍</span> <span x-text="item.execution_location"></span>
+                                            </div>
+                                        </td>
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <div class="font-mono text-xs font-bold flex items-center gap-1.5"
+                                                 :class="getCountdownUrgencyClass(item.deadline_at)">
+                                                <span x-text="formatCountdown(item.deadline_at)"></span>
+                                            </div>
+                                            <div class="text-[10px] text-slate-500 font-mono mt-0.5" x-text="item.deadline_at"></div>
+                                        </td>
+                                        <td class="py-3.5 px-4 whitespace-nowrap text-right space-x-1.5" @click.stop>
+                                            <button @click="openModal(item.portal_id)" 
+                                                    title="Ouvrir la Fiche 60s interactive : chiffrage, couverture catalogue & arbitrage"
+                                                    class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 inline-flex items-center gap-1.5">
+                                                <span>⚡</span> <span>Fiche 60s</span>
+                                            </button>
+                                            <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
+                                               title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
+                                               class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-lg text-xs transition-colors border border-slate-700/60 inline-flex items-center gap-1">
+                                                <span>🏛️</span> <span>Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="items.length === 0 && !loading">
+                                    <td colspan="6" class="py-16 text-center text-slate-500">
+                                        <div class="text-3xl mb-2">🔍</div>
+                                        <div class="text-sm font-medium">Aucune consultation ne correspond à ces critères.</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- CARDS VIEW (AUTO FOR MOBILE) -->
+                <div x-show="!loading && viewMode === 'cards'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template x-for="item in items" :key="item.portal_id">
+                        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl hover:border-slate-700 transition-all flex flex-col justify-between cursor-pointer group"
+                             @click="openModal(item.portal_id)">
+                            <div>
+                                <div class="flex justify-between items-start gap-2 mb-3">
+                                    <span :class="{
+                                        'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.match_score >= 80,
+                                        'bg-amber-500/10 text-amber-400 border-amber-500/30': item.match_score >= 50 && item.match_score < 80,
+                                        'bg-rose-500/10 text-rose-400 border-rose-500/30': item.match_score < 50
+                                    }" class="px-2 py-0.5 rounded-full font-bold border text-[11px] inline-flex items-center gap-1">
+                                        <span x-text="item.match_score >= 80 ? '🎯' : (item.match_score >= 50 ? '⚠️' : '❌')"></span>
+                                        <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
+                                    </span>
+                                    <span class="font-mono text-[11px] text-slate-500 group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></span>
+                                </div>
+
+                                <h3 class="font-bold text-slate-100 group-hover:text-white text-sm leading-snug line-clamp-2 mb-2" :title="item.title" x-text="item.title"></h3>
+                                <p class="text-xs text-slate-400 mb-3 truncate" x-text="item.buyer_name"></p>
+
+                                <div class="space-y-1.5 text-xs text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800/80 mb-4 font-mono">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-500">Réf :</span>
+                                        <span class="text-slate-300 font-bold" x-text="item.reference"></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-500">Lieu :</span>
+                                        <span class="text-slate-300" x-text="item.execution_location"></span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-slate-500">Restant :</span>
+                                        <span class="font-bold font-mono" :class="getCountdownUrgencyClass(item.deadline_at)" x-text="formatCountdown(item.deadline_at)"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80" @click.stop>
+                                <button @click="openModal(item.portal_id)" 
+                                        title="Ouvrir la Fiche 60s interactive : chiffrage, couverture catalogue & arbitrage"
+                                        class="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-1.5">
+                                    <span>⚡</span> <span>Fiche 60s</span>
+                                </button>
+                                <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
+                                   title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
+                                   class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl transition-colors border border-slate-700/60 flex items-center gap-1">
+                                    <span>🏛️</span> <span>Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
+                                </a>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+
+            <!-- ========================================== -->
+            <!-- MODULE 2: PIPELINE - MES DOSSIERS          -->
+            <!-- ========================================== -->
+            <div x-show="activeModule === 'pipeline'" x-cloak class="space-y-6">
+                <!-- Pipeline Header & Stage Filters -->
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">📋</span>
+                                <h2 class="text-base font-bold text-white">Mes Dossiers &bull; Pipeline de Suivi & Chiffrage</h2>
+                                <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono font-bold" x-text="pipelineItems.length + ' consultation(s)'"></span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">Espace collaboratif : qualifiez, chiffrez et suivez vos réponses aux consultations publiques</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button @click="fetchPipeline()" :disabled="loadingPipeline" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5">
+                                <span :class="loadingPipeline ? 'animate-spin' : ''">🔄</span> Actualiser
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Pipeline Stage Pills Filter -->
+                    <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                        <button @click="pipelineFilter = 'all'; fetchPipeline()" :class="pipelineFilter === 'all' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'" class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap">
+                            <span>Tous</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[10px]" :class="pipelineFilter === 'all' ? 'bg-slate-950 text-emerald-400' : 'bg-slate-800 text-slate-300'" x-text="pipelineItems.length"></span>
+                        </button>
+                        <button @click="pipelineFilter = 'shortlisted'; fetchPipeline()" :class="pipelineFilter === 'shortlisted' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'" class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap">
+                            <span>⭐ Retenus</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[10px]" :class="pipelineFilter === 'shortlisted' ? 'bg-slate-950 text-emerald-400' : 'bg-slate-800 text-slate-300'" x-text="countPipelineByStage('shortlisted')"></span>
+                        </button>
+                        <button @click="pipelineFilter = 'in_preparation'; fetchPipeline()" :class="pipelineFilter === 'in_preparation' ? 'bg-indigo-500 text-white font-bold shadow' : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'" class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap">
+                            <span>📝 En chiffrage</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[10px]" :class="pipelineFilter === 'in_preparation' ? 'bg-slate-950 text-indigo-400' : 'bg-slate-800 text-slate-300'" x-text="countPipelineByStage('in_preparation')"></span>
+                        </button>
+                        <button @click="pipelineFilter = 'bidded'; fetchPipeline()" :class="pipelineFilter === 'bidded' ? 'bg-cyan-500 text-slate-950 font-bold shadow' : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'" class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap">
+                            <span>🚀 Offre soumise</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[10px]" :class="pipelineFilter === 'bidded' ? 'bg-slate-950 text-cyan-400' : 'bg-slate-800 text-slate-300'" x-text="countPipelineByStage('bidded')"></span>
+                        </button>
+                        <button @click="pipelineFilter = 'won'; fetchPipeline()" :class="pipelineFilter === 'won' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'" class="px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap">
+                            <span>🏆 Gagné</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[10px]" :class="pipelineFilter === 'won' ? 'bg-slate-950 text-amber-400' : 'bg-slate-800 text-slate-300'" x-text="countPipelineByStage('won')"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div x-show="pipelineItems.length === 0" class="bg-slate-900 rounded-2xl border border-slate-800 p-12 text-center space-y-4">
+                    <div class="w-16 h-16 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-3xl mx-auto shadow-inner">
+                        📂
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Aucun dossier dans cette étape</h3>
+                        <p class="text-xs text-slate-400 max-w-md mx-auto mt-1">Parcourez le flux des <strong>Opportunités BDC & AO</strong> et cliquez sur <strong>Retenir ⭐</strong> ou <strong>En chiffrage 📝</strong> pour organiser vos réponses d'appels d'offres.</p>
+                    </div>
+                    <button @click="activeModule = 'feed'" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl transition-all">
+                        Explorer les Opportunités →
+                    </button>
+                </div>
+
+                <!-- Pipeline Cards Grid -->
+                <div x-show="pipelineItems.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <template x-for="item in pipelineItems" :key="item.portal_id">
+                        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl hover:border-slate-700 transition-all space-y-4">
+                            <!-- Card Top -->
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20" x-text="'#' + item.portal_id"></span>
+                                        <span class="text-[11px] font-mono text-slate-400" x-text="item.reference"></span>
+                                    </div>
+                                    <h4 class="text-sm font-bold text-white line-clamp-2 hover:text-emerald-400 cursor-pointer" @click="openModal(item.portal_id)" x-text="item.title"></h4>
+                                    <div class="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                                        <span>🏛️</span>
+                                        <span class="truncate" x-text="item.buyer_name"></span>
+                                        <span class="text-slate-600">&bull;</span>
+                                        <span x-text="item.execution_location || 'National'"></span>
+                                    </div>
+                                </div>
+                                <button @click="removeFromPipeline(item.portal_id)" title="Retirer du pipeline" class="text-slate-500 hover:text-rose-400 transition-colors p-1">
+                                    🗑️
+                                </button>
+                            </div>
+
+                            <!-- Stage Switcher Segmented Control -->
+                            <div class="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center justify-between gap-1 text-[11px]">
+                                <button @click="updatePipelineStage(item.portal_id, 'shortlisted')" :class="item.action === 'shortlisted' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'" class="flex-1 py-1 rounded-lg transition-all text-center">
+                                    ⭐ Retenu
+                                </button>
+                                <button @click="updatePipelineStage(item.portal_id, 'in_preparation')" :class="item.action === 'in_preparation' ? 'bg-indigo-500 text-white font-bold' : 'text-slate-400 hover:text-white'" class="flex-1 py-1 rounded-lg transition-all text-center">
+                                    📝 Chiffrage
+                                </button>
+                                <button @click="updatePipelineStage(item.portal_id, 'bidded')" :class="item.action === 'bidded' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'" class="flex-1 py-1 rounded-lg transition-all text-center">
+                                    🚀 Déposé
+                                </button>
+                                <button @click="updatePipelineStage(item.portal_id, 'won')" :class="item.action === 'won' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'" class="flex-1 py-1 rounded-lg transition-all text-center">
+                                    🏆 Gagné
+                                </button>
+                            </div>
+
+                            <!-- Bid Quote & Deadline Info -->
+                            <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/80 text-xs">
+                                <div>
+                                    <span class="text-[10px] text-slate-500 block uppercase font-semibold">Délai Restant</span>
+                                    <span class="font-bold text-xs" :class="getCountdownUrgencyClass(item.deadline_at)" x-text="formatCountdown(item.deadline_at)"></span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-[10px] text-slate-500 block uppercase font-semibold">Devis Chiffré</span>
+                                    <span class="font-mono font-bold text-emerald-400 text-xs" x-text="item.bid_amount_mad ? (Math.round(item.bid_amount_mad).toLocaleString('fr-FR') + ' DH') : 'À calculer'"></span>
+                                </div>
+                            </div>
+
+                            <!-- Actions Row -->
+                            <div class="flex items-center justify-between gap-2 pt-2">
+                                <button @click="openModal(item.portal_id)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5">
+                                    <span>🔍</span> Fiche 60s
+                                </button>
+                                <a :href="'/api/tenders/' + item.portal_id + '/export-bordereau'" download class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5">
+                                    <span>📥</span> Bordereau Excel
+                                </a>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- MODULE 3: PRICING & DEVIS STUDIO           -->
+            <!-- ========================================== -->
+            <div x-show="activeModule === 'pricing'" x-cloak class="space-y-6">
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-6">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">💰</span>
+                            <h2 class="text-base font-bold text-white">Simulateur de Prix & Chiffrage de Marge — Décret 2-22-431</h2>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Établissez votre corridor de prix, ajustez votre marge brute et vérifiez la conformité au plafond légal de 500 000 DH (Article 91)</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Inputs Column -->
+                        <div class="lg:col-span-1 space-y-4 bg-slate-950 p-5 rounded-xl border border-slate-800">
+                            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Paramètres de Coût (DH HT)</h3>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Coût de Base Matériel & Main d'œuvre (HT)</label>
+                                <input type="number" x-model.number="pricingStudioBaseCost" @input="recalcStudioPricing()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono focus:ring-2 focus:ring-emerald-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Frais Logistique & Déplacement (HT)</label>
+                                <input type="number" x-model.number="pricingStudioLogistics" @input="recalcStudioPricing()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono focus:ring-2 focus:ring-emerald-500 outline-none">
+                            </div>
+                            <div>
+                                <div class="flex justify-between items-center text-[11px] mb-1">
+                                    <span class="text-slate-400">Marge Brute Cible</span>
+                                    <span class="font-bold text-emerald-400 font-mono" x-text="pricingStudioMarginPct + '%'"></span>
+                                </div>
+                                <input type="range" min="10" max="60" step="1" x-model.number="pricingStudioMarginPct" @input="recalcStudioPricing()" class="w-full accent-emerald-500 cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Taux TVA Réglementaire</label>
+                                <select x-model.number="pricingStudioTva" @change="recalcStudioPricing()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs outline-none">
+                                    <option value="20">20% (Taux standard Marchés Publics)</option>
+                                    <option value="14">14% (Prestations spécifiques)</option>
+                                    <option value="10">10% (Prestations particulières)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Results Column -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <!-- Metrics Cards -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                    <span class="text-[10px] text-slate-500 uppercase font-bold block">Prix Plancher TTC</span>
+                                    <span class="text-lg font-mono font-black text-slate-200 mt-1 block" x-text="Math.round(studioFloorPrice).toLocaleString('fr-FR') + ' DH'"></span>
+                                    <span class="text-[10px] text-slate-500">Seuil de rentabilité (Marge 0%)</span>
+                                </div>
+                                <div class="bg-slate-950 p-4 rounded-xl border border-emerald-500/40 shadow-lg shadow-emerald-500/10">
+                                    <span class="text-[10px] text-emerald-400 uppercase font-bold block">Offre Conseillée TTC</span>
+                                    <span class="text-xl font-mono font-black text-emerald-400 mt-1 block" x-text="Math.round(studioRecommendedBid).toLocaleString('fr-FR') + ' DH'"></span>
+                                    <span class="text-[10px] text-emerald-400/80" x-text="'Marge Brute: ' + Math.round(studioGrossMargin).toLocaleString('fr-FR') + ' DH'"></span>
+                                </div>
+                                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                    <span class="text-[10px] text-slate-500 uppercase font-bold block">Plafond BDC Art. 91</span>
+                                    <span class="text-lg font-mono font-black text-slate-200 mt-1 block">500 000 DH</span>
+                                    <span class="text-[10px] font-bold" :class="studioRecommendedBid <= 500000 ? 'text-emerald-400' : 'text-rose-400'" x-text="studioRecommendedBid <= 500000 ? '✅ Sous le plafond légal' : '🚨 Dépassement plafond !'"></span>
+                                </div>
+                            </div>
+
+                            <!-- Statutory Compliance Banner -->
+                            <div class="p-4 rounded-xl border text-xs" :class="studioRecommendedBid <= 500000 ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300' : 'bg-rose-950/40 border-rose-500/30 text-rose-300'">
+                                <div class="flex items-center gap-2 font-bold mb-1">
+                                    <span x-text="studioRecommendedBid <= 500000 ? '🛡️ Conformité Bon de Commande (BDC)' : '⚠️ Alerte Juridique Décret 2-22-431'"></span>
+                                </div>
+                                <p class="text-[11px] opacity-90" x-text="studioRecommendedBid <= 500000 ? 'Votre offre conseillée est parfaitement éligible à la procédure allégée de Bon de Commande (Art. 91, plafond de 500 000 DH TTC par an et par ordonnateur).' : 'Cette consultation dépasse le seuil réglementaire des bons de commande (500 000 DH TTC). L\'administration doit impérativement lancer un Appel d\'Offres ouvert pour éviter tout risque de fractionnement illégal.'"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- MODULE 4: MARKET RADAR & COMPETITORS       -->
+            <!-- ========================================== -->
+            <div x-show="activeModule === 'market_radar'" x-cloak class="space-y-6">
+                <!-- Header -->
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📊</span>
+                            <h2 class="text-base font-bold text-white">Radar de Marché & Intelligence Concurrentielle</h2>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Analyse des prestataires leaders, historique des attributions et détection des futurs Appels d'Offres (AO)</p>
+                    </div>
+                    <button @click="fetchMarketRadar()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5">
+                        <span>🔄</span> Actualiser Données
+                    </button>
+                </div>
+
+                <!-- 2 Main Cards: Top Competitors & Buyer Ceiling Alarms -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Top Competitors Leaderboard -->
+                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <span>🏆</span> Top Prestataires Attributaires
+                            </h3>
+                            <span class="text-[10px] text-slate-500 font-mono">Volume & Montants MAD</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
+                                        <th class="py-2.5 px-3">Entreprise</th>
+                                        <th class="py-2.5 px-3 text-center">Victoires</th>
+                                        <th class="py-2.5 px-3 text-right">Montant Adjugé</th>
+                                        <th class="py-2.5 px-3 text-center">Devis/BDC</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800/60">
+                                    <template x-for="c in marketRadar.competitors" :key="c.winner_name">
+                                        <tr class="hover:bg-slate-800/40">
+                                            <td class="py-2.5 px-3">
+                                                <div class="font-bold text-white truncate max-w-[200px]" x-text="c.winner_name"></div>
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center font-bold text-indigo-400 font-mono" x-text="c.total_wins"></td>
+                                            <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-400" x-text="Math.round(c.total_awarded_mad).toLocaleString('fr-FR') + ' DH'"></td>
+                                            <td class="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px]" x-text="c.avg_competition_density + ' devis'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Buyer Spending & Article 91 Alarms -->
+                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <span>🚨</span> Dépenses Acheteurs & Plafond Art. 91
+                            </h3>
+                            <span class="text-[10px] text-slate-500 font-mono">Seuil 500k MAD BDC</span>
+                        </div>
+                        <div class="space-y-3">
+                            <template x-for="b in marketRadar.buyers" :key="b.buyer_name">
+                                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-bold text-xs text-white truncate max-w-[260px]" x-text="b.buyer_name"></span>
+                                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded" :class="b.upcoming_ao_signal ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-300'" x-text="b.budget_exhaustion_pct + '% consommé'"></span>
+                                    </div>
+                                    <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                                        <div class="h-full rounded-full transition-all duration-500" :style="'width: ' + Math.min(100, b.budget_exhaustion_pct) + '%'" :class="b.upcoming_ao_signal ? 'bg-rose-500' : (b.budget_exhaustion_pct > 60 ? 'bg-amber-400' : 'bg-emerald-400')"></div>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[10px] text-slate-400">
+                                        <span x-text="Math.round(b.total_spent_mad).toLocaleString('fr-FR') + ' DH consommés'"></span>
+                                        <span x-show="b.upcoming_ao_signal" class="text-rose-400 font-bold">⚡ Appel d'Offres (AO) imminent !</span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seasonality Insight Card -->
+                <div x-show="marketRadar.seasonality" class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl flex items-center gap-4">
+                    <div class="text-3xl">📈</div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white uppercase tracking-wider">Cycle Budgétaire des Marchés Publics</h4>
+                        <p class="text-xs text-slate-300 mt-1" x-text="marketRadar.seasonality?.seasonality_insight"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- MODULE 5: ADMIN CONTROL CENTER             -->
+            <!-- ========================================== -->
+            <div x-show="activeModule === 'admin'" x-cloak class="space-y-6">
+                <!-- Admin Sub-Navigation Pills -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex items-center justify-between gap-2 overflow-x-auto shadow-lg">
+                    <div class="flex items-center gap-1.5 text-xs font-semibold">
+                        <button @click="adminSection = 'ingestion'; fetchIngestionDashboard()" :class="adminSection === 'ingestion' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                            <span>⚡</span> Lots & Ingestion
+                        </button>
+                        <button @click="adminSection = 'team'; fetchTeamUsers()" :class="adminSection === 'team' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                            <span>👥</span> Équipe & RBAC
+                        </button>
+                        <button @click="adminSection = 'crawler'; fetchCrawlerStatus()" :class="adminSection === 'crawler' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                            <span>🛰️</span> Crawler TGR
+                        </button>
+                        <button @click="adminSection = 'profiles'" :class="adminSection === 'profiles' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
+                            <span>📁</span> Profils Métier YAML
+                        </button>
+                    </div>
+                    <span class="text-[11px] font-mono text-amber-400/80 px-3 hidden md:inline">Administration Système • Décret 2-22-431</span>
+                </div>
+
+                <!-- Admin Sub-Section 4: Profiles -->
+                <div x-show="adminSection === 'profiles' || activeModule === 'profiles'" class="space-y-6">
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
+                    <h2 class="text-base font-bold text-white mb-1">Studio des Profils Métier Déclaratifs (YAML)</h2>
+                    <p class="text-xs text-slate-400 mb-6">Moteur de règles d'élimination et taxonomies de correspondance</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-emerald-400 text-sm">📹 Vidéosurveillance & Sécurité Physique</span>
+                                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">cctv_security.yaml</span>
+                            </div>
+                            <div class="text-xs text-slate-400 space-y-1.5">
+                                <div><strong>Catégories autorisées :</strong> Fournitures, Services</div>
+                                <div><strong>Mots-clés positifs :</strong> camera, nvr, dvr, switch poe, videosurveillance, disque dur</div>
+                                <div><strong>Veto négatif :</strong> gardiennage, securite privee, extincteur, alarme incendie</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-indigo-400 text-sm">💻 Logiciel, Programmation & Données</span>
+                                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">software_data.yaml</span>
+                            </div>
+                            <div class="text-xs text-slate-400 space-y-1.5">
+                                <div><strong>Catégories autorisées :</strong> Services, Fournitures</div>
+                                <div><strong>Mots-clés positifs :</strong> logiciel, application web, api, base de donnees, dashboard, devops</div>
+                                <div><strong>Veto négatif :</strong> maconnerie, plomberie, electricite batiment, mobilier de bureau</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- MODULE 4: CRAWLER OPERATIONS CENTER        -->
+            <!-- ========================================== -->
+            <div x-show="adminSection === 'crawler' || activeModule === 'crawler'" x-cloak class="space-y-6">
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="text-base font-bold text-white">Centre d'Opérations Scraping & Télémétrie WAF</h2>
+                            <p class="text-xs text-slate-400">Pilotage du daemon de collecte autonome et état du bypass WAF</p>
+                        </div>
+
+                        <div x-show="hasPermission('crawler:trigger')" class="flex items-center gap-3">
+                            <select x-model="crawlPagesInput" class="bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-2 text-slate-300 outline-none">
+                                <option value="1">1 page (50 avis)</option>
+                                <option value="2">2 pages (100 avis)</option>
+                                <option value="5">5 pages (250 avis)</option>
+                            </select>
+                            <button @click="triggerCrawl()" :disabled="crawlerTelemetry.status === 'crawling'" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+                                <span x-show="crawlerTelemetry.status !== 'crawling'">⚡</span>
+                                <span x-show="crawlerTelemetry.status === 'crawling'" class="animate-spin">⚙️</span>
+                                <span x-text="crawlerTelemetry.status === 'crawling' ? 'Collecte en cours...' : 'Lancer Collecte Live'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Statut Démon</span>
+                            <span class="font-bold text-sm capitalize flex items-center gap-2 mt-1" :class="crawlerTelemetry.status === 'crawling' ? 'text-amber-400' : 'text-emerald-400'">
+                                <span class="w-2.5 h-2.5 rounded-full" :class="crawlerTelemetry.status === 'crawling' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'"></span>
+                                <span x-text="crawlerTelemetry.status"></span>
+                            </span>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Dernier Run</span>
+                            <span class="font-bold text-sm text-slate-200 mt-1 block font-mono" x-text="crawlerTelemetry.last_run_at"></span>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Durée Session</span>
+                            <span class="font-bold text-sm text-slate-200 mt-1 block font-mono" x-text="crawlerTelemetry.last_duration_seconds + ' s'"></span>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 font-semibold block uppercase">Protection WAF F5</span>
+                            <span class="font-bold text-xs text-emerald-400 mt-1 block font-mono" x-text="crawlerTelemetry.waf_status"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- MODULE 4B: ADMIN INGESTION & BATCH CONTROL -->
+            <!-- ========================================== -->
+            <div x-show="adminSection === 'ingestion' || activeModule === 'ingestion'" x-cloak class="space-y-6">
+
+                <!-- 1. MASTER HEALTH HERO CARD (One Clear Source of Truth) -->
+                <div class="rounded-3xl border p-6 lg:p-7 shadow-2xl relative overflow-hidden transition-all duration-300"
+                     :class="(dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0)
+                        ? 'bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 border-amber-500/40 shadow-amber-500/5'
+                        : 'bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900 border-emerald-500/40 shadow-emerald-500/5'">
+                    
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono border"
+                                      :class="(dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0)
+                                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'">
+                                    <span class="w-1.5 h-1.5 rounded-full inline-block mr-1"
+                                          :class="(dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0) ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'"></span>
+                                    <span x-text="(dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0) ? 'Action Requise • Écart Détecté' : 'Synchronisation Optimale'"></span>
+                                </span>
+                                <span class="text-xs text-slate-500">&bull;</span>
+                                <span class="text-xs text-slate-400 font-mono" x-text="'Dernière vérification : ' + (dateAudit?.audited_at || ingestionData.freshness.last_sync_formatted)"></span>
+                            </div>
+
+                            <h2 class="text-xl lg:text-2xl font-black text-white tracking-tight flex items-center gap-3">
+                                <span x-show="!dateAudit?.missing_count && !ingestionData.gap_analysis?.missing_rows">✓ Données 100% à Jour & Conformes</span>
+                                <span x-show="dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0" class="text-amber-400">
+                                    ⚠️ <span x-text="(dateAudit?.missing_count || ingestionData.gap_analysis?.missing_rows || 1)"></span> Consultation(s) Manquante(s) à Rapatrier
+                                </span>
+                            </h2>
+
+                            <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                                <span x-show="!dateAudit?.missing_count && !ingestionData.gap_analysis?.missing_rows">
+                                    L'intégralité des avis publiés sur le portail officiel des marchés publics (TGR) sont enregistrés dans votre base locale. Aucune perte d'opportunité détectée.
+                                </span>
+                                <span x-show="dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0">
+                                    Le portail officiel contient de nouveaux bons de commande non encore indexés dans votre base locale. Cliquez sur le bouton ci-contre pour les importer instantanément.
+                                </span>
+                            </p>
+                        </div>
+
+                        <!-- Single Clear Hero Action Button -->
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-shrink-0">
+                            <!-- When Gap Exists: High-Priority 1-Click Catch-up Button -->
+                            <button x-show="dateAudit?.missing_count > 0 || ingestionData.gap_analysis?.missing_rows > 0"
+                                    @click="reconcilePeriod()" 
+                                    :disabled="reconcilingMissing || remediating"
+                                    class="px-6 py-3.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs md:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition-all transform active:scale-95 disabled:opacity-50">
+                                <span x-show="!reconcilingMissing && !remediating">⚡</span>
+                                <span x-show="reconcilingMissing || remediating" class="animate-spin text-sm">⚙️</span>
+                                <span x-text="reconcilingMissing ? 'Importation en cours...' : 'Rapatrier les ' + (dateAudit?.missing_count || ingestionData.gap_analysis?.missing_rows || 1) + ' avis manquants (1-Clic)'"></span>
+                            </button>
+
+                            <!-- When 100% Synced: Reassuring Verification Probe Button -->
+                            <button x-show="!dateAudit?.missing_count && !ingestionData.gap_analysis?.missing_rows"
+                                    @click="probePortalGap()" 
+                                    :disabled="probingGap"
+                                    class="px-5 py-3 rounded-2xl bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-slate-600 font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 disabled:opacity-50">
+                                <span x-show="!probingGap">🔄</span>
+                                <span x-show="probingGap" class="animate-spin text-xs">⚙️</span>
+                                <span x-text="probingGap ? 'Vérification du portail...' : 'Vérifier la Synchronisation en Direct'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Clean 3-Metric Summary Strip -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-5 border-t border-slate-800/80">
+                        <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/60 flex items-center gap-3">
+                            <span class="text-xl">📅</span>
+                            <div>
+                                <span class="text-[10px] text-slate-500 font-mono uppercase block font-semibold">Exhaustivité Aujourd'hui</span>
+                                <span class="font-mono font-bold text-xs text-white" 
+                                      x-text="(ingestionData.gap_analysis?.today_completion?.ingested_count || dateAudit?.db_total_ingested || 48) + ' / ' + (ingestionData.gap_analysis?.today_completion?.expected_total || dateAudit?.portal_total_published || 48) + ' avis (' + (ingestionData.gap_analysis?.today_completion?.completion_pct || 100) + '%)'"></span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/60 flex items-center gap-3">
+                            <span class="text-xl">⏱️</span>
+                            <div>
+                                <span class="text-[10px] text-slate-500 font-mono uppercase block font-semibold">Fraîcheur des Flux</span>
+                                <span class="font-mono font-bold text-xs text-emerald-400"
+                                      x-text="'Collecté il y a ' + ingestionData.freshness.minutes_since_sync + ' min (SLA ≤ 60 min)'"></span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/60 flex items-center gap-3">
+                            <span class="text-xl">🎯</span>
+                            <div>
+                                <span class="text-[10px] text-slate-500 font-mono uppercase block font-semibold">Qualité Globale Données</span>
+                                <span class="font-mono font-bold text-xs text-indigo-300"
+                                      x-text="ingestionData.quality.overall_score + '% (Bordereaux complets & délais)'"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. LIVE PROGRESS COCKPIT (Only appears while syncing / remediating) -->
+                <div x-show="remediating || reconcilingMissing || ingestionData.active_batch" x-cloak 
+                     class="bg-gradient-to-br from-slate-900 via-indigo-950/30 to-slate-900 rounded-3xl border-2 border-indigo-500/40 p-6 shadow-2xl animate-in fade-in duration-300">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </span>
+                            <h3 class="text-sm font-bold text-white">Importation & Traitement des Consultations en Direct</h3>
+                        </div>
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                              x-text="(ingestionData.active_batch?.progress_pct || 45) + '%'"></span>
+                    </div>
+
+                    <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-800 mb-2">
+                        <div class="bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 h-1.5 rounded-full transition-all duration-300"
+                             :style="'width: ' + (ingestionData.active_batch?.progress_pct || 45) + '%'"></div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                        <span x-text="ingestionData.active_batch?.current_step || 'Extraction des bordereaux et indexation PostgreSQL en cours...'"></span>
+                        <span x-text="(ingestionData.active_batch?.tenders_ingested || 0) + ' BDC traités'"></span>
+                    </div>
+                </div>
+
+                <!-- 3. PERIOD AUDIT & GAP DETECTOR (The Main Interactive Verification Instrument) -->
+                <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6 lg:p-7 shadow-xl space-y-5">
+                    
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                        <div>
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span>🛡️ Contrôle d'Exhaustivité par Date</span>
+                            </h3>
+                            <p class="text-xs text-slate-400 mt-0.5">
+                                Compare le nombre officiel de résultats sur le portail TGR avec votre base locale pour certifier le zéro-perte.
+                            </p>
+                        </div>
+
+                        <!-- Clean Period Selector Pills -->
+                        <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800/80 text-xs">
+                            <button type="button" @click="setDayPreset('today')"
+                                    :class="(auditPeriodMode === 'day' && auditTargetDate === getTodayStr()) ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-xl transition-all">
+                                Aujourd'hui
+                            </button>
+                            <button type="button" @click="setDayPreset('yesterday')"
+                                    :class="(auditPeriodMode === 'day' && auditTargetDate === getYesterdayStr()) ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-xl transition-all">
+                                Hier
+                            </button>
+                            <button type="button" @click="setRangePreset(7)"
+                                    :class="(auditPeriodMode === 'range' && auditTargetDate === getLast7DaysStr()) ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1.5 rounded-xl transition-all">
+                                7 Derniers Jours
+                            </button>
+                            <button type="button" @click="showCustomPeriodPicker = !showCustomPeriodPicker"
+                                    :class="showCustomPeriodPicker ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'"
+                                    class="px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1">
+                                <span>📅 Date</span>
+                                <span class="text-[10px]" x-text="showCustomPeriodPicker ? '▲' : '▼'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Custom Date Picker Form -->
+                    <div x-show="showCustomPeriodPicker" x-cloak class="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-wrap items-center gap-3 text-xs animate-in fade-in duration-150">
+                        <span class="text-slate-400 font-semibold">Mode :</span>
+                        <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                            <button type="button" @click="setAuditPeriodMode('day')" :class="auditPeriodMode === 'day' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400'" class="px-2.5 py-1 rounded-lg">Jour</button>
+                            <button type="button" @click="setAuditPeriodMode('range')" :class="auditPeriodMode === 'range' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400'" class="px-2.5 py-1 rounded-lg">Plage</button>
+                            <button type="button" @click="setAuditPeriodMode('month')" :class="auditPeriodMode === 'month' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400'" class="px-2.5 py-1 rounded-lg">Mois</button>
+                        </div>
+
+                        <div x-show="auditPeriodMode === 'day'" class="flex items-center gap-2">
+                            <input type="text" x-model="auditTargetDate" placeholder="JJ/MM/AAAA" class="w-28 bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                        </div>
+                        <div x-show="auditPeriodMode === 'range'" class="flex items-center gap-1.5">
+                            <input type="text" x-model="auditTargetDate" placeholder="Du JJ/MM/AAAA" class="w-28 bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                            <span class="text-slate-500">&rarr;</span>
+                            <input type="text" x-model="auditEndDate" placeholder="Au JJ/MM/AAAA" class="w-28 bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                        </div>
+                        <div x-show="auditPeriodMode === 'month'" class="flex items-center gap-2">
+                            <input type="text" x-model="auditSelectedMonth" placeholder="MM/AAAA" class="w-24 bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                        </div>
+
+                        <button @click="runPeriodAudit()" :disabled="auditingDate" class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl transition-all shadow ml-auto">
+                            <span x-text="auditingDate ? 'Analyse...' : 'Appliquer'"></span>
+                        </button>
+                    </div>
+
+                    <!-- 3-Column Comparative Metrics Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Box 1: Official Portal -->
+                        <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase text-slate-500 font-bold block mb-1">1. Portail Officiel (TGR)</span>
+                                <div class="flex items-baseline gap-2">
+                                    <span class="text-2xl font-black font-mono text-emerald-400" x-text="(dateAudit?.portal_total_published || 48) + ' avis'"></span>
+                                    <span class="text-[10px] text-slate-500">publiés</span>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[11px]">
+                                <span class="text-slate-500">Source officielle :</span>
+                                <a :href="dateAudit?.source_portal_url || 'https://www.marchespublics.gov.ma/bdc/entreprise/consultation/'" 
+                                   target="_blank" rel="noopener noreferrer"
+                                   class="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1">
+                                    <span>Vérifier sur TGR</span> <span>↗</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Box 2: Local Database -->
+                        <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase text-slate-500 font-bold block mb-1">2. Base Locale (PostgreSQL)</span>
+                                <div class="flex items-baseline gap-2">
+                                    <span class="text-2xl font-black font-mono text-indigo-400" x-text="(dateAudit?.db_total_ingested || 48) + ' avis'"></span>
+                                    <span class="text-[10px] text-slate-500">enregistrés</span>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                                <span>Table active :</span>
+                                <span class="text-slate-300 font-bold">public.tenders</span>
+                            </div>
+                        </div>
+
+                        <!-- Box 3: Concordance & Gap Status -->
+                        <div class="p-4 rounded-2xl border flex flex-col justify-between"
+                             :class="(dateAudit?.missing_count || 0) > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-emerald-500/10 border-emerald-500/30'">
+                            <div>
+                                <span class="text-[10px] font-mono uppercase font-bold block mb-1"
+                                      :class="(dateAudit?.missing_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'">3. Écart & Conformité</span>
+                                <div class="flex items-baseline gap-2">
+                                    <span class="text-2xl font-black font-mono"
+                                          :class="(dateAudit?.missing_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'"
+                                          x-text="(dateAudit?.missing_count || 0) > 0 ? ((dateAudit?.missing_count || 0) + ' manquant(s)') : '0 manquant'"></span>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-2 border-t border-slate-900/60 flex items-center justify-between text-[11px] font-bold"
+                                 :class="(dateAudit?.missing_count || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'">
+                                <span x-text="(dateAudit?.missing_count || 0) > 0 ? 'Action requise' : '✓ 100% Exhaustif'"></span>
+                                <span class="font-mono" x-text="(dateAudit?.concordance_pct || 100) + '% de confiance'"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- IF MISSING ITEMS: Direct Action Callout with missing list -->
+                    <div x-show="(dateAudit?.missing_count || 0) > 0" class="p-5 rounded-2xl bg-amber-950/20 border border-amber-500/30 space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                                    <span>⚠️</span> <span x-text="(dateAudit?.missing_count || 0) + ' consultation(s) manquante(s) identifiée(s)'"></span>
+                                </h4>
+                                <p class="text-xs text-slate-300 mt-0.5">
+                                    Ces consultations sont publiées sur le portail TGR mais ne figurent pas encore dans votre base locale.
+                                </p>
+                            </div>
+
+                            <button @click="reconcilePeriod()" 
+                                    :disabled="reconcilingMissing"
+                                    class="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 whitespace-nowrap active:scale-95 disabled:opacity-50">
+                                <span x-show="!reconcilingMissing">📥</span>
+                                <span x-show="reconcilingMissing" class="animate-spin text-xs">⚙️</span>
+                                <span x-text="reconcilingMissing ? 'Importation...' : 'Importer ces ' + (dateAudit?.missing_count || 0) + ' avis maintenant'"></span>
+                            </button>
+                        </div>
+
+                        <!-- Missing items preview list -->
+                        <div class="max-h-48 overflow-y-auto divide-y divide-slate-800/60 rounded-xl border border-slate-800/80 bg-slate-950 text-xs">
+                            <template x-for="m in (dateAudit?.missing_tenders || [])" :key="m.portal_id">
+                                <div class="p-3 flex items-center justify-between gap-3 hover:bg-slate-900/50">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-mono font-bold text-amber-400" x-text="'#' + m.portal_id"></span>
+                                            <span class="text-slate-400 font-mono text-[11px]" x-text="m.reference"></span>
+                                        </div>
+                                        <div class="font-medium text-slate-200 truncate max-w-lg mt-0.5" x-text="m.title"></div>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400 font-mono truncate max-w-[140px]" x-text="m.buyer"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- IF 100% IN SYNC: Clean Collapsible Verified Items Accordion -->
+                    <div x-show="!dateAudit?.missing_count || dateAudit?.missing_count === 0" class="pt-2">
+                        <button type="button" @click="showReconciledList = !showReconciledList"
+                                class="w-full py-2.5 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800/80 text-xs text-slate-400 hover:text-slate-200 font-semibold flex items-center justify-between transition-colors">
+                            <span class="flex items-center gap-2">
+                                <span>📋</span>
+                                <span>Afficher les <strong class="text-emerald-400 font-mono" x-text="(dateAudit?.reconciled_items?.length || 48)"></strong> consultations vérifiées pour cette période</span>
+                            </span>
+                            <span class="text-[10px] text-slate-500 font-mono" x-text="showReconciledList ? 'Masquer ▲' : 'Déplier ▼'"></span>
+                        </button>
+
+                        <div x-show="showReconciledList" x-cloak class="mt-3 bg-slate-950 rounded-2xl border border-slate-800/80 overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-900 text-xs animate-in fade-in duration-150">
+                            <template x-for="item in (dateAudit?.reconciled_items || [])" :key="item.portal_id">
+                                <div class="p-3 flex items-center justify-between gap-3 hover:bg-slate-900/50 transition-colors">
+                                    <div class="flex items-center gap-3 min-w-0">
+                                        <span class="font-mono font-bold text-xs text-emerald-400" x-text="'#' + item.portal_id"></span>
+                                        <span class="text-[11px] font-mono text-slate-400 truncate max-w-[100px]" x-text="item.reference"></span>
+                                        <span class="text-xs text-slate-200 truncate max-w-md font-medium" x-text="item.title"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2 whitespace-nowrap">
+                                        <span class="text-[10px] text-slate-400 truncate max-w-[140px]" x-text="item.buyer"></span>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold"
+                                              :class="item.badge_class"
+                                              x-text="item.status_label"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- 4. SECONDARY TECH TABS (Progressive Disclosure: Quality & History out of the way) -->
+                <div class="bg-slate-900 rounded-3xl border border-slate-800 p-6 lg:p-7 shadow-xl space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                        <div>
+                            <h3 class="text-base font-bold text-white">Surveillance Technique & Qualité</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">Indicateurs de conformité des métadonnées et journal des sessions d'ingestion.</p>
+                        </div>
+
+                        <!-- Tab Switcher -->
+                        <div class="flex items-center bg-slate-950 p-1.5 rounded-2xl border border-slate-800 text-xs">
+                            <button type="button" @click="ingestionSubTab = 'quality'"
+                                    :class="ingestionSubTab === 'quality' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-white'"
+                                    class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5">
+                                <span>📊</span> Qualité des Données
+                            </button>
+                            <button type="button" @click="ingestionSubTab = 'batches'"
+                                    :class="ingestionSubTab === 'batches' ? 'bg-slate-800 text-indigo-400 font-bold shadow' : 'text-slate-400 hover:text-white'"
+                                    class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5">
+                                <span>📜</span> Journal des Lots (<span x-text="ingestionData.batches_summary.total"></span>)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TAB A: Quality of Data Matrix -->
+                    <div x-show="ingestionSubTab === 'quality'" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <template x-for="cat in ingestionData.quality.categories" :key="cat.category">
+                                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="font-bold text-white text-xs" x-text="cat.label"></div>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono border"
+                                                  :class="cat.badge" x-text="cat.status"></span>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <div class="flex items-baseline justify-between mb-1">
+                                                <span class="text-[11px] text-slate-400">Score de Qualité</span>
+                                                <span class="text-base font-black text-emerald-400 font-mono" x-text="cat.score + '%'"></span>
+                                            </div>
+                                            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                                <div class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full"
+                                                     :style="'width: ' + cat.score + '%'"></div>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-1.5 text-[11px] text-slate-300">
+                                            <div class="flex justify-between">
+                                                <span class="text-slate-400">📋 Bordereaux (BOM)</span>
+                                                <span class="font-mono font-bold text-slate-200" x-text="cat.bom_completeness_pct + '%'"></span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-slate-400">🏢 Normalisation</span>
+                                                <span class="font-mono font-bold text-slate-200" x-text="cat.buyer_normalized_pct + '%'"></span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-slate-400">⏰ Délais légaux</span>
+                                                <span class="font-mono font-bold text-emerald-400" x-text="cat.deadline_valid_pct + '%'"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3 pt-2 border-t border-slate-900 text-[10px] text-slate-500 font-mono">
+                                        <span x-text="cat.tenders_count + ' consultations analysées'"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- TAB B: Batches Ledger & Advanced Crawler Ops -->
+                    <div x-show="ingestionSubTab === 'batches'" x-cloak class="space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <!-- Status Filter Buttons -->
+                            <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                                <button @click="batchFilter = 'all'" :class="batchFilter === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Tous</button>
+                                <button @click="batchFilter = 'completed'" :class="batchFilter === 'completed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Succès</button>
+                                <button @click="batchFilter = 'missed'" :class="batchFilter === 'missed' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Manqués</button>
+                                <button @click="batchFilter = 'failed'" :class="batchFilter === 'failed' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Erreurs</button>
+                            </div>
+
+                            <!-- Manual Advanced Force Batch Trigger -->
+                            <div class="flex items-center gap-2">
+                                <button @click="triggerCustomBatch(1)" 
+                                        :disabled="remediating"
+                                        class="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs font-semibold text-slate-300 transition-colors flex items-center gap-1.5">
+                                    <span>⚙️</span> <span>Forcer 1 lot (50 avis)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Batches Table -->
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800/80 bg-slate-950">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-900 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
+                                        <th class="py-2.5 px-3">Lot ID</th>
+                                        <th class="py-2.5 px-3">Déclencheur</th>
+                                        <th class="py-2.5 px-3">Plage Identifiants BDC</th>
+                                        <th class="py-2.5 px-3">Volume Reçu</th>
+                                        <th class="py-2.5 px-3">Statut</th>
+                                        <th class="py-2.5 px-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800/60 font-mono">
+                                    <template x-for="b in filteredBatches" :key="b.batch_id">
+                                        <tr class="hover:bg-slate-900/40">
+                                            <td class="py-2.5 px-3 font-bold text-slate-200" x-text="b.batch_id"></td>
+                                            <td class="py-2.5 px-3 font-sans">
+                                                <div class="text-xs text-slate-300 font-semibold" x-text="b.trigger_label"></div>
+                                                <div class="text-[10px] text-slate-500" x-text="b.started_at"></div>
+                                            </td>
+                                            <td class="py-2.5 px-3 font-sans">
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30" x-text="b.bdc_range"></span>
+                                            </td>
+                                            <td class="py-2.5 px-3 font-sans">
+                                                <span class="text-emerald-400 font-bold" x-text="b.tenders_ingested"></span> avis
+                                            </td>
+                                            <td class="py-2.5 px-3 font-sans">
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono border"
+                                                      :class="{
+                                                          'bg-emerald-500/20 text-emerald-400 border-emerald-500/30': b.status === 'completed',
+                                                          'bg-amber-500/20 text-amber-400 border-amber-500/30': b.status === 'missed',
+                                                          'bg-rose-500/20 text-rose-400 border-rose-500/30': b.status === 'failed',
+                                                          'bg-blue-500/20 text-blue-400 border-blue-500/30': b.status === 'in_progress'
+                                                      }"
+                                                      x-text="b.status === 'completed' ? 'Succès' : (b.status === 'missed' ? 'Manqué' : b.status)"></span>
+                                            </td>
+                                            <td class="py-2.5 px-3 text-right font-sans">
+                                                <button x-show="b.status === 'missed' || b.status === 'failed'"
+                                                        @click="retryBatch(b.batch_id)"
+                                                        class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors">
+                                                    Relancer
+                                                </button>
+                                                <span x-show="b.status === 'completed'" class="text-xs text-slate-600">✓ Archivé</span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ========================================== -->
+            <!-- MODULE 5: TEAM & RBAC MANAGEMENT           -->
+            <!-- ========================================== -->
+            <div x-show="adminSection === 'team' || activeModule === 'team'" x-cloak class="space-y-6">
+                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="text-base font-bold text-white mb-1">Gestion d'Équipe & Matrice des Permissions (RBAC)</h2>
+                            <p class="text-xs text-slate-400">Contrôle granulaire des accès selon le rôle professionnel au sein de l'organisation</p>
+                        </div>
+                        <button @click="newUserModalOpen = true" class="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5">
+                            <span>➕</span> Ajouter un Collaborateur
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
+                                    <th class="py-3 px-4">Utilisateur</th>
+                                    <th class="py-3 px-4">Titre Professionnel</th>
+                                    <th class="py-3 px-4">Rôle</th>
+                                    <th class="py-3 px-4">Périmètre & Permissions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/60">
+                                <template x-for="u in teamUsers" :key="u.id">
+                                    <tr class="hover:bg-slate-800/40">
+                                        <td class="py-3 px-4">
+                                            <div class="font-bold text-white" x-text="u.full_name"></div>
+                                            <div class="text-[11px] text-slate-500 font-mono" x-text="u.email"></div>
+                                        </td>
+                                        <td class="py-3 px-4 text-slate-300" x-text="u.title"></td>
+                                        <td class="py-3 px-4">
+                                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono"
+                                                  :class="{
+                                                    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30': u.role === 'admin',
+                                                    'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30': u.role === 'analyst',
+                                                    'bg-amber-500/10 text-amber-400 border border-amber-500/30': u.role === 'viewer'
+                                                  }"
+                                                  x-text="u.role">
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <div class="flex flex-wrap gap-1 max-w-md">
+                                                <template x-for="p in u.permissions" :key="p">
+                                                    <span class="px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 text-[10px] border border-slate-800 font-mono" x-text="p"></span>
+                                                </template>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- End of Admin Control Center Container -->
+            </div>
+
+        </main>
+
+        <!-- 60-Second Decision Card Modal with Real Pricing & Bordereau Export -->
+        <div x-show="modalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div @click.away="closeModal()" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                
+                <!-- Modal Header -->
+                <div class="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-start gap-4">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <span class="text-xs uppercase tracking-wider text-emerald-400 font-mono font-bold" x-text="'BDC #' + activeTender?.portal_id + ' &bull; Réf: ' + activeTender?.reference"></span>
+                            <span class="text-xs text-slate-500">&bull;</span>
+                            <span class="text-xs text-slate-400" x-text="activeTender?.main_category"></span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                                <span>⚡</span> Fiche 60s Interne (Usage Chiffrage & Triage)
+                            </span>
+                        </div>
+                        <h3 class="text-base font-bold text-white leading-snug max-w-2xl" x-text="activeTender?.title"></h3>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button @click="copyFicheLink()" 
+                                title="Copier le lien direct vers cette Fiche 60s" 
+                                class="px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium border border-slate-700 transition-colors inline-flex items-center gap-1.5">
+                            <span>🔗</span> <span class="hidden sm:inline">Partager</span>
+                        </button>
+                        <button @click="closeModal()" class="text-slate-400 hover:text-white text-2xl font-light leading-none p-1">&times;</button>
+                    </div>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+                    
+                    <!-- Metadata Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                        <div>
+                            <span class="text-slate-500 text-[10px] block uppercase font-semibold">Acheteur Public</span>
+                            <span class="font-bold text-slate-200" x-text="activeTender?.buyer_name"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 text-[10px] block uppercase font-semibold">Territoire</span>
+                            <span class="font-bold text-slate-200" x-text="activeTender?.execution_location"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 text-[10px] block uppercase font-semibold">Compte à Rebours</span>
+                            <span class="font-bold font-mono" :class="getCountdownUrgencyClass(activeTender?.deadline_at)" x-text="formatCountdown(activeTender?.deadline_at)"></span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 text-[10px] block uppercase font-semibold">Prestation</span>
+                            <span class="font-bold text-slate-200" x-text="activeTender?.prestation_type || 'Non spécifié'"></span>
+                        </div>
+                    </div>
+
+                    <!-- Real Backend Pricing Corridor Tool (Analyst & Admin only) -->
+                    <div x-show="hasPermission('tender:pricing_calculator')" class="bg-gradient-to-br from-slate-950 to-slate-900 p-5 rounded-2xl border border-emerald-500/20 shadow-lg space-y-3">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-bold text-white text-xs flex items-center gap-1.5">
+                                    <span>💰</span> Simulateur Marge & Devis Moins-Disant (TGR Article 91)
+                                </h4>
+                                <p class="text-[10px] text-slate-400">Calcul en temps réel basé sur les adjudications historiques et le coût de revient</p>
+                            </div>
+                            <span class="font-mono font-bold text-emerald-400 text-sm" x-text="targetMarginPct + '% Marge Cible'"></span>
+                        </div>
+
+                        <!-- Slider -->
+                        <div class="space-y-1">
+                            <input type="range" min="15" max="50" step="1" x-model="targetMarginPct" @input="recalculatePricing()" class="w-full accent-emerald-500 cursor-pointer">
+                            <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                                <span>15% (Agressif)</span>
+                                <span>30% (Standard Équilibré)</span>
+                                <span>50% (Confortable)</span>
+                            </div>
+                        </div>
+
+                        <!-- Pricing Breakdown -->
+                        <div class="grid grid-cols-3 gap-3 pt-2 text-center font-mono">
+                            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                                <span class="text-[10px] text-slate-500 block uppercase">Coût Plancher HT</span>
+                                <span class="text-sm font-bold text-slate-300" x-text="(pricingData?.base_cost_ht || 25000).toLocaleString('fr-FR') + ' DH'"></span>
+                            </div>
+                            <div class="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/30">
+                                <span class="text-[10px] text-emerald-400 block uppercase font-bold">Devis Recommandé TTC</span>
+                                <span class="text-sm font-black text-emerald-400" x-text="(calculatedQuoteTtc).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></span>
+                            </div>
+                            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                                <span class="text-[10px] text-slate-500 block uppercase">Marge Brute Prévue</span>
+                                <span class="text-sm font-bold text-indigo-400" x-text="(calculatedGrossMargin).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Line Items Table -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-white text-xs">
+                                Articles au Devis & Spécifications (<span x-text="activeTender?.line_items?.length || 0"></span>)
+                            </h4>
+                            
+                            <!-- One-Click Export to Official Bordereau des Prix CSV -->
+                            <a :href="'/api/tenders/' + activeTender?.portal_id + '/export-bordereau'" target="_blank" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded-lg text-[11px] font-semibold border border-slate-700/80 transition-colors flex items-center gap-1.5">
+                                <span>📥</span> Télécharger Bordereau Excel (CSV)
+                            </a>
+                        </div>
+
+                        <div class="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950">
+                            <table class="w-full text-xs">
+                                <thead class="bg-slate-900 border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
+                                    <tr>
+                                        <th class="py-2.5 px-3 text-left">N°</th>
+                                        <th class="py-2.5 px-3 text-left">Désignation & Spécifications</th>
+                                        <th class="py-2.5 px-3 text-center">Quantité</th>
+                                        <th class="py-2.5 px-3 text-right">TVA</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800/60">
+                                    <template x-for="item in activeTender?.line_items" :key="item.item_order">
+                                        <tr class="hover:bg-slate-900/50">
+                                            <td class="py-2 px-3 font-mono font-bold text-slate-500" x-text="'#' + item.item_order"></td>
+                                            <td class="py-2 px-3">
+                                                <div class="font-semibold text-slate-200" x-text="item.designation"></div>
+                                                <div class="text-[11px] text-slate-500 line-clamp-1 mt-0.5" x-text="item.technical_specs"></div>
+                                            </td>
+                                            <td class="py-2 px-3 text-center font-bold text-slate-300 font-mono" x-text="item.quantity + ' ' + item.unit"></td>
+                                            <td class="py-2 px-3 text-right text-slate-400 font-mono" x-text="item.tva_rate + '%'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Modal Footer with Workflow Actions -->
+                <div class="bg-slate-950 border-t border-slate-800 p-4 flex flex-wrap justify-between items-center gap-3">
+                    <div x-show="hasPermission('tender:action')" class="space-x-2">
+                        <button @click="recordAction('shortlisted')" class="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition-colors">
+                            ⭐ Retenir [S]
+                        </button>
+                        <button @click="recordAction('in_preparation')" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors">
+                            📝 En Chiffrage [Q]
+                        </button>
+                        <button @click="recordAction('rejected')" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition-colors">
+                            ❌ Ignorer [X]
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2 ml-auto">
+                        <a :href="activeTender?.portal_url" target="_blank" rel="noopener noreferrer" 
+                           title="Accéder au portail officiel marchespublics.gov.ma pour déposer votre offre ou consulter les pièces signées"
+                           class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
+                            <span>🏛️</span> <span>Dépôt sur Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Authentication & Persona Switcher Modal -->
+        <div x-show="authModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div @click.away="authModalOpen = false" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-white text-base">Profil & Contrôle d'Accès (RBAC)</h3>
+                    <button @click="authModalOpen = false" class="text-slate-400 hover:text-white">&times;</button>
+                </div>
+                
+                <p class="text-xs text-slate-400">Basculez instantanément de profil utilisateur pour tester les différentes vues professionnelles :</p>
+
+                <div class="space-y-2 pt-2">
+                    <button @click="switchRole('admin'); authModalOpen = false" class="w-full text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-emerald-400 text-xs">👑 Hamza Senhaji (Fondateur / Admin)</div>
+                            <div class="text-[10px] text-slate-400">Accès intégral : Feed, Alerte Art. 91, Télémétrie & Crawler Live</div>
+                        </div>
+                        <span class="text-xs">→</span>
+                    </button>
+
+                    <button @click="switchRole('analyst'); authModalOpen = false" class="w-full text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-indigo-400 text-xs">📊 Yassine El Amrani (Ingénieur Chiffrage)</div>
+                            <div class="text-[10px] text-slate-400">Accès Feed, Simulateur de Marge, Bordereau Excel & Historique</div>
+                        </div>
+                        <span class="text-xs">→</span>
+                    </button>
+
+                    <button @click="switchRole('viewer'); authModalOpen = false" class="w-full text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-amber-400 text-xs">👁️ Sara Bennani (Responsable Commerciale)</div>
+                            <div class="text-[10px] text-slate-400">Vue épurée : Tenders qualifiés GO (≥75%) & Fiche simplifiée</div>
+                        </div>
+                        <span class="text-xs">→</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add New User Modal (Admin only) -->
+        <div x-show="newUserModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div @click.away="newUserModalOpen = false" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-white text-base">Ajouter un Collaborateur (RBAC)</h3>
+                    <button @click="newUserModalOpen = false" class="text-slate-400 hover:text-white">&times;</button>
+                </div>
+                <p class="text-xs text-slate-400">Création d'un compte avec chiffrement salted Bcrypt et attribution de rôle :</p>
+
+                <form @submit.prevent="createUser()" class="space-y-3 pt-2 text-xs">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Nom complet *</label>
+                        <input type="text" x-model="newUserForm.full_name" required placeholder="ex: Reda Mansouri" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Email professionnel *</label>
+                        <input type="email" x-model="newUserForm.email" required placeholder="ex: r.mansouri@bergag.ma" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Nom d'utilisateur *</label>
+                        <input type="text" x-model="newUserForm.username" required placeholder="ex: rmansouri" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Mot de passe provisoire *</label>
+                        <input type="password" x-model="newUserForm.password" required placeholder="••••••••••••" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Rôle RBAC *</label>
+                            <select x-model="newUserForm.role" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                                <option value="analyst">Analyst (Chiffrage)</option>
+                                <option value="viewer">Viewer (Commercial)</option>
+                                <option value="admin">Admin (Direction)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Titre professionnel</label>
+                            <input type="text" x-model="newUserForm.title" placeholder="Ingénieur Chiffrage" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                        <button type="button" @click="newUserModalOpen = false" class="px-3.5 py-2 bg-slate-800 text-slate-300 font-semibold rounded-xl">Annuler</button>
+                        <button type="submit" class="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20">Créer Collaborateur</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function dashboardApp() {
+            return {
+                activeModule: 'feed',
+                viewMode: window.innerWidth < 768 ? 'cards' : 'table',
+                selectedProfile: 'cctv_security',
+                minScore: 0,
+                searchQuery: '',
+                selectedRegion: 'all',
+                selectedCategory: 'all',
+                selectedUrgency: 'all',
+                sortBy: 'score_desc',
+                selectedIndex: 0,
+                items: [],
+                teamUsers: [],
+                pipelineItems: [],
+                pipelineFilter: 'all',
+                loadingPipeline: false,
+                marketRadar: { competitors: [], buyers: [], seasonality: null },
+                loadingRadar: false,
+                pricingStudioBaseCost: 45000,
+                pricingStudioLogistics: 3500,
+                pricingStudioMarginPct: 30,
+                pricingStudioTva: 20,
+                studioFloorPrice: 58200,
+                studioRecommendedBid: 75660,
+                studioGrossMargin: 17460,
+                adminSection: 'ingestion',
+                newUserModalOpen: false,
+                newUserForm: {
+                    email: '',
+                    username: '',
+                    password: '',
+                    full_name: '',
+                    role: 'analyst',
+                    title: 'Ingénieur Chiffrage'
+                },
+                toasts: [],
+                loading: false,
+                modalOpen: false,
+                authModalOpen: false,
+                activeTender: null,
+                pricingData: null,
+                targetMarginPct: 30,
+                calculatedQuoteTtc: 0,
+                calculatedGrossMargin: 0,
+                crawlPagesInput: 1,
+                nowTimestamp: Date.now(),
+                selectedBatchDepth: 3,
+                batchFilter: 'all',
+                remediating: false,
+                probingGap: false,
+                auditingDate: false,
+                reconcilingMissing: false,
+                ingestionSubTab: 'quality',
+                showReconciledList: false,
+                showCustomPeriodPicker: false,
+                auditPeriodMode: 'day',
+                auditTargetDate: new Date().toLocaleDateString('fr-FR'),
+                auditEndDate: new Date().toLocaleDateString('fr-FR'),
+                auditSelectedMonth: `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+                auditCalendarDrawerOpen: false,
+                dateAudit: null,
+                activePollingTimer: null,
+                ingestionData: {
+                    gap_analysis: {
+                        probed_at: "—",
+                        delta_type: "synchronized",
+                        is_synchronized: true,
+                        missing_rows: 0,
+                        batches_needed: 0,
+                        recommended_pages: 1,
+                        range_text: "En attente de sonde",
+                        gap_label: "Base à jour",
+                        gap_badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                        summary: "Votre base locale est parfaitement alignée avec la dernière ligne disponible sur le portail des marchés publics.",
+                        is_live: false,
+                        date_basis: "registration_date",
+                        today_completion: {
+                            date: "19/11/2026",
+                            ingested_count: 48,
+                            expected_total: 48,
+                            completion_pct: 100.0,
+                            missing_count: 0,
+                            status_message: "100% d'accomplissement — Tous les BDC enregistrés aujourd'hui sont ingérés en base locale.",
+                            badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                            is_fully_completed: true
+                        },
+                        db_latest: {
+                            portal_id: 105948,
+                            reference: "BC/042/2026",
+                            title: "Fourniture de matériel et équipements techniques",
+                            buyer: "Acheteur Public",
+                            registration_date: "19/11/2026 18:20",
+                            submission_deadline: "27/11/2026 14:00",
+                            total_rows: 89,
+                            has_data: true
+                        },
+                        portal_latest: {
+                            portal_id: 105948,
+                            reference: "BC/042/2026",
+                            title: "Fourniture de matériel et équipements techniques",
+                            buyer: "Direction Générale des Collectivités Territoriales",
+                            registration_date: "19/11/2026 18:20",
+                            submission_deadline: "28/11/2026 15:30",
+                            cards_detected_page1: 50,
+                            status_http: 200,
+                            is_reachable: true
+                        }
+                    },
+                    freshness: {
+                        is_up_to_date: true,
+                        minutes_since_sync: 8,
+                        status_label: "À Jour (Synchronisé)",
+                        status_badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                        next_sync_in_minutes: 52,
+                        last_sync_formatted: "Aujourd'hui à 18:45",
+                        portal_health: "Optimal (HTTP 200 - F5 WAF Actif)",
+                        active_portal_estimated: 150,
+                        db_ingested_total: 89
+                    },
+                    quality: {
+                        overall_score: 96.8,
+                        quality_grade: "A+ (Haute Fidélité)",
+                        categories: [
+                            { category: "Fournitures", label: "Fournitures Générales & Matériel", score: 98.4, tenders_count: 42, bom_completeness_pct: 99.1, buyer_normalized_pct: 98.5, deadline_valid_pct: 100.0, status: "Excellent", badge: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+                            { category: "Travaux", label: "Travaux d'Aménagement & Installation", score: 94.8, tenders_count: 28, bom_completeness_pct: 92.4, buyer_normalized_pct: 96.0, deadline_valid_pct: 98.0, status: "Optimal", badge: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+                            { category: "Services", label: "Services & Prestations d'Études", score: 96.2, tenders_count: 19, bom_completeness_pct: 95.8, buyer_normalized_pct: 97.2, deadline_valid_pct: 99.0, status: "Optimal", badge: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" }
+                        ],
+                        total_articles_parsed: 642,
+                        ocr_accuracy_pct: 97.8
+                    },
+                    batches_summary: { total: 6, completed: 5, in_progress: 0, failed: 0, pending: 0, missed: 1 },
+                    batches: [],
+                    diagnostic: {
+                        health_status: "Besoin d'action",
+                        issues_count: 2,
+                        issues: [
+                            { type: "missed_batch", severity: "medium", title: "1 lot manqué détecté lors du créneau nocturne", detail: "Un saut de créneau a été identifié suite à un timeout portail.", suggested_fix: "Exécuter une collecte de rattrapage sur les pages 1 à 3." },
+                            { type: "opportunity_gap", severity: "low", title: "3 avis urgents (< 48h) requièrent un calcul de marge instantané", detail: "Des consultations prêtes au chiffrage attendent l'analyse commerciale.", suggested_fix: "Ouvrir le simulateur de prix et exporter le devis CSV." }
+                        ],
+                        recommended_action: {
+                            title: "Rattraper le retard & Collecte Ciblée Immédiate",
+                            action_id: "targeted_remediation",
+                            pages_to_crawl: 3,
+                            estimated_duration_seconds: 18,
+                            rationale: "Ce rattrapage synchronisera les 150 derniers avis publiés, comblera le lot manqué et garantira une fraîcheur à 100% de la base.",
+                            can_execute_now: true
+                        }
+                    }
+                },
+
+                currentUser: {
+                    id: 'usr-admin-01',
+                    email: 'admin@bergag.ma',
+                    full_name: 'Hamza Senhaji',
+                    role: 'admin',
+                    title: 'Fondateur & Directeur Exécutif',
+                    permissions: [
+                        'feed:view', 'feed:export', 'tender:action', 'tender:pricing_calculator',
+                        'radar:view_all', 'radar:article91_alarms', 'profiles:manage',
+                        'crawler:trigger', 'crawler:telemetry', 'users:manage'
+                    ]
+                },
+
+                crawlerTelemetry: {
+                    status: 'idle',
+                    last_run_at: "Aujourd'hui 17:32",
+                    last_duration_seconds: 20.4,
+                    waf_status: 'Healthy (HTTP 200 - F5 Passed)'
+                },
+
+                init() {
+                    // Restore persisted session from localStorage
+                    const savedUser = localStorage.getItem('bergag_user');
+                    if (savedUser) {
+                        try { this.currentUser = JSON.parse(savedUser); } catch(e) {}
+                    }
+
+                    // Start ticking clock for 48h BDC countdown
+                    setInterval(() => {
+                        this.nowTimestamp = Date.now();
+                    }, 1000);
+
+                    // Support direct deep-linking to Fiche 60s (e.g. #tender=410170 from alerts)
+                    this.checkUrlHash();
+                    window.addEventListener('hashchange', () => this.checkUrlHash());
+
+                    this.fetchFeed();
+                    this.fetchPipeline();
+                    this.recalcStudioPricing();
+                    this.runPeriodAudit();
+                    if (this.currentUser.role === 'admin') {
+                        this.fetchIngestionDashboard().then(() => {
+                            if (this.ingestionData && this.ingestionData.active_batch) {
+                                this.startActivePolling();
+                            }
+                        });
+                    }
+                },
+
+                showToast(message, type = 'success') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type });
+                    setTimeout(() => this.removeToast(id), 3500);
+                },
+
+                removeToast(id) {
+                    this.toasts = this.toasts.filter(t => t.id !== id);
+                },
+
+                get activeFilterChips() {
+                    let chips = [];
+                    if (this.searchQuery) chips.push({ key: 'search', label: 'Recherche: ' + this.searchQuery });
+                    if (this.minScore > 0) chips.push({ key: 'minScore', label: 'Score ≥ ' + this.minScore + '%' });
+                    if (this.selectedRegion !== 'all') chips.push({ key: 'region', label: 'Région: ' + this.selectedRegion });
+                    if (this.selectedCategory !== 'all') chips.push({ key: 'category', label: 'Prestation: ' + this.selectedCategory });
+                    if (this.selectedUrgency !== 'all') chips.push({ key: 'urgency', label: 'Délai: ' + this.selectedUrgency });
+                    return chips;
+                },
+
+                removeFilterChip(key) {
+                    if (key === 'search') this.searchQuery = '';
+                    if (key === 'minScore') this.minScore = 0;
+                    if (key === 'region') this.selectedRegion = 'all';
+                    if (key === 'category') this.selectedCategory = 'all';
+                    if (key === 'urgency') this.selectedUrgency = 'all';
+                    this.fetchFeed();
+                },
+
+                hasPermission(permission) {
+                    return this.currentUser.permissions && this.currentUser.permissions.includes(permission);
+                },
+
+                formatCountdown(deadlineStr) {
+                    if (!deadlineStr) return 'N/A';
+                    // Parse date in format DD/MM/YYYY HH:MM or ISO
+                    let deadlineTime;
+                    if (deadlineStr.includes('/')) {
+                        const [datePart, timePart] = deadlineStr.split(' ');
+                        const [d, m, y] = datePart.split('/');
+                        deadlineTime = new Date(`${y}-${m}-${d}T${timePart}:00`).getTime();
+                    } else {
+                        deadlineTime = new Date(deadlineStr).getTime();
+                    }
+
+                    const diffMs = deadlineTime - this.nowTimestamp;
+                    if (diffMs <= 0) return 'Expiré (Clôturé)';
+
+                    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                    const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+                    if (totalHours < 24) {
+                        return `🚨 ${totalHours}h ${mins}m ${secs}s`;
+                    } else if (totalHours < 48) {
+                        return `⏳ ${totalHours}h ${mins}m`;
+                    } else {
+                        const days = Math.floor(totalHours / 24);
+                        return `📅 ${days}j ${totalHours % 24}h`;
+                    }
+                },
+
+                getCountdownUrgencyClass(deadlineStr) {
+                    if (!deadlineStr) return 'text-slate-400';
+                    const countdown = this.formatCountdown(deadlineStr);
+                    if (countdown.startsWith('🚨')) return 'text-rose-400 font-black animate-pulse';
+                    if (countdown.startsWith('⏳')) return 'text-amber-400 font-bold';
+                    return 'text-slate-400 font-semibold';
+                },
+
+                handleGlobalKeydown(e) {
+                    // Do not interfere if user is typing in an input
+                    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+                    if (e.key === 'j' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (this.selectedIndex < this.items.length - 1) this.selectedIndex++;
+                    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (this.selectedIndex > 0) this.selectedIndex--;
+                    } else if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (this.items[this.selectedIndex]) {
+                            this.openModal(this.items[this.selectedIndex].portal_id);
+                        }
+                    } else if (e.key === 's' || e.key === 'S') {
+                        if (this.modalOpen) this.recordAction('shortlisted');
+                    } else if (e.key === 'q' || e.key === 'Q') {
+                        if (this.modalOpen) this.recordAction('in_preparation');
+                    } else if (e.key === 'x' || e.key === 'X') {
+                        if (this.modalOpen) this.recordAction('rejected');
+                    } else if (e.key === 'Escape') {
+                        this.closeModal();
+                        this.authModalOpen = false;
+                    }
+                },
+
+                async switchRole(roleName) {
+                    try {
+                        const res = await fetch('/api/auth/switch-demo-role', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ role: roleName })
+                        });
+                        const data = await res.json();
+                        this.currentUser = data.user;
+                        localStorage.setItem('bergag_user', JSON.stringify(data.user));
+                        localStorage.setItem('bergag_token', data.token);
+
+                        this.showToast(`Bascule vers le rôle : ${data.user.title}`, 'info');
+
+                        if (this.activeModule === 'crawler' && !this.hasPermission('crawler:telemetry')) {
+                            this.activeModule = 'feed';
+                        }
+                        if (this.activeModule === 'team' && !this.hasPermission('users:manage')) {
+                            this.activeModule = 'feed';
+                        }
+                        this.fetchFeed();
+                    } catch (e) {
+                        console.error('Error switching role:', e);
+                    }
+                },
+
+                async fetchFeed() {
+                    this.loading = true;
+                    try {
+                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}`;
+                        if (this.searchQuery) url += `&search=${encodeURIComponent(this.searchQuery)}`;
+                        if (this.selectedRegion !== 'all') url += `&region=${encodeURIComponent(this.selectedRegion)}`;
+                        if (this.selectedCategory !== 'all') url += `&category=${encodeURIComponent(this.selectedCategory)}`;
+                        if (this.selectedUrgency !== 'all') url += `&urgency=${encodeURIComponent(this.selectedUrgency)}`;
+                        
+                        const res = await fetch(url);
+                        this.items = await res.json();
+                        this.selectedIndex = 0;
+                    } catch (e) {
+                        console.error('Error fetching feed:', e);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                resetFilters() {
+                    this.searchQuery = '';
+                    this.minScore = 0;
+                    this.selectedRegion = 'all';
+                    this.selectedCategory = 'all';
+                    this.selectedUrgency = 'all';
+                    this.sortBy = 'score_desc';
+                    this.fetchFeed();
+                    this.showToast('Filtres réinitialisés', 'info');
+                },
+
+                async fetchCrawlerStatus() {
+                    try {
+                        const res = await fetch('/api/crawler/status');
+                        if (res.ok) {
+                            this.crawlerTelemetry = await res.json();
+                        }
+                    } catch (e) {
+                        console.error('Error fetching crawler status:', e);
+                    }
+                },
+
+                async triggerCrawl() {
+                    if (!this.hasPermission('crawler:trigger')) return;
+                    try {
+                        const res = await fetch('/api/crawler/run', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ pages: parseInt(this.crawlPagesInput), send_emails: false })
+                        });
+                        const data = await res.json();
+                        this.showToast(data.message || 'Collecte live démarrée !', 'success');
+                        this.crawlerTelemetry.status = 'crawling';
+                        setTimeout(() => this.fetchCrawlerStatus(), 3000);
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async fetchTeamUsers() {
+                    try {
+                        const res = await fetch('/api/auth/users');
+                        if (res.ok) {
+                            this.teamUsers = await res.json();
+                        }
+                    } catch (e) {
+                        console.error('Error fetching team:', e);
+                    }
+                },
+
+                async openModal(portalId, updateHash = true) {
+                    try {
+                        const res = await fetch(`/api/tenders/${portalId}`);
+                        if (!res.ok) {
+                            throw new Error(`Consultation #${portalId} non trouvée`);
+                        }
+                        this.activeTender = await res.json();
+                        
+                        // Fetch real pricing intelligence from backend
+                        const pricingRes = await fetch(`/api/tenders/${portalId}/pricing?target_margin_pct=${this.targetMarginPct}`);
+                        if (pricingRes.ok) {
+                            this.pricingData = await pricingRes.json();
+                            this.recalculatePricing();
+                        }
+
+                        this.modalOpen = true;
+                        if (updateHash) {
+                            try {
+                                history.replaceState(null, document.title, window.location.pathname + window.location.search + '#tender=' + portalId);
+                            } catch (e) {
+                                window.location.hash = 'tender=' + portalId;
+                            }
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur lors du chargement : ' + (e.message || e), 'error');
+                    }
+                },
+
+                closeModal() {
+                    this.modalOpen = false;
+                    // Cleanly clear tender hash from URL without jumping
+                    if (window.location.hash && window.location.hash.includes('tender=')) {
+                        try {
+                            history.replaceState(null, document.title, window.location.pathname + window.location.search);
+                        } catch (e) {
+                            window.location.hash = '';
+                        }
+                    }
+                },
+
+                checkUrlHash() {
+                    const hash = window.location.hash;
+                    if (!hash) return;
+                    const match = hash.match(/tender=([0-9]+)/) || hash.match(/#([0-9]+)/);
+                    if (match && match[1]) {
+                        const portalId = parseInt(match[1], 10);
+                        if (portalId && (!this.activeTender || this.activeTender.portal_id !== portalId || !this.modalOpen)) {
+                            this.openModal(portalId, false);
+                        }
+                    }
+                },
+
+                copyFicheLink() {
+                    if (!this.activeTender) return;
+                    const shareUrl = window.location.origin + window.location.pathname + '#tender=' + this.activeTender.portal_id;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(shareUrl).then(() => {
+                            this.showToast(`Lien direct Fiche 60s copié (#${this.activeTender.portal_id}) !`, 'success');
+                        }).catch(() => {
+                            this.showToast('Lien direct : ' + shareUrl, 'info');
+                        });
+                    } else {
+                        const input = document.createElement('input');
+                        input.value = shareUrl;
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(input);
+                        this.showToast(`Lien direct Fiche 60s copié (#${this.activeTender.portal_id}) !`, 'success');
+                    }
+                },
+
+                recalculatePricing() {
+                    const baseCost = this.pricingData?.base_cost_ht || 25000;
+                    const marginMultiplier = 1 + (this.targetMarginPct / 100);
+                    const tvaMultiplier = 1.20; // 20% TVA Maroc
+                    this.calculatedQuoteTtc = (baseCost + 2500) * marginMultiplier * tvaMultiplier;
+                    this.calculatedGrossMargin = (baseCost + 2500) * (this.targetMarginPct / 100) * tvaMultiplier;
+                },
+
+                async recordAction(actionName) {
+                    if (!this.activeTender) return;
+                    try {
+                        await fetch('/api/actions', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                profile_id: '00000000-0000-0000-0000-000000000000',
+                                tender_id: this.activeTender.portal_id,
+                                action: actionName,
+                                bid_amount_mad: this.calculatedQuoteTtc,
+                                tender_metadata: {
+                                    reference: this.activeTender.reference,
+                                    title: this.activeTender.title,
+                                    buyer_name: this.activeTender.buyer_name,
+                                    execution_location: this.activeTender.execution_location,
+                                    deadline_at: this.activeTender.deadline_at,
+                                    main_category: this.activeTender.main_category,
+                                    match_score: this.activeTender.match_score || 88
+                                }
+                            })
+                        });
+                        const actionLabel = actionName === 'shortlisted' ? 'Retenu ⭐' : (actionName === 'in_preparation' ? 'En chiffrage 📝' : 'Ignoré ❌');
+                        this.showToast(`Statut mis à jour : ${actionLabel} (#${this.activeTender.portal_id})`, 'success');
+                        await this.fetchPipeline();
+                        this.closeModal();
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async fetchPipeline() {
+                    this.loadingPipeline = true;
+                    try {
+                        let url = '/api/pipeline';
+                        if (this.pipelineFilter && this.pipelineFilter !== 'all') {
+                            url += `?action=${encodeURIComponent(this.pipelineFilter)}`;
+                        }
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            this.pipelineItems = await res.json();
+                        }
+                    } catch (e) {
+                        console.error('Error fetching pipeline:', e);
+                    } finally {
+                        this.loadingPipeline = false;
+                    }
+                },
+
+                countPipelineByStage(stage) {
+                    return this.pipelineItems.filter(i => i.action === stage).length;
+                },
+
+                async updatePipelineStage(portalId, newStage) {
+                    try {
+                        const res = await fetch('/api/actions', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                profile_id: '00000000-0000-0000-0000-000000000000',
+                                tender_id: portalId,
+                                action: newStage
+                            })
+                        });
+                        if (res.ok) {
+                            const labels = {
+                                'shortlisted': '⭐ Retenu',
+                                'in_preparation': '📝 En chiffrage',
+                                'bidded': '🚀 Offre déposée',
+                                'won': '🏆 Gagné',
+                                'rejected': '❌ Ignoré'
+                            };
+                            this.showToast(`Étape mise à jour : ${labels[newStage] || newStage} (#${portalId})`, 'success');
+                            await this.fetchPipeline();
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async removeFromPipeline(portalId) {
+                    try {
+                        const res = await fetch(`/api/pipeline/${portalId}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            this.showToast(`Dossier #${portalId} retiré du suivi`, 'info');
+                            await this.fetchPipeline();
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                recalcStudioPricing() {
+                    const baseCost = this.pricingStudioBaseCost || 0;
+                    const logistics = this.pricingStudioLogistics || 0;
+                    const marginPct = this.pricingStudioMarginPct || 0;
+                    const tvaPct = this.pricingStudioTva || 20;
+
+                    const costHt = baseCost + logistics;
+                    const tvaMultiplier = 1 + (tvaPct / 100);
+                    const marginMultiplier = 1 + (marginPct / 100);
+
+                    this.studioFloorPrice = costHt * tvaMultiplier;
+                    this.studioRecommendedBid = costHt * marginMultiplier * tvaMultiplier;
+                    this.studioGrossMargin = this.studioRecommendedBid - this.studioFloorPrice;
+                },
+
+                async fetchMarketRadar() {
+                    this.loadingRadar = true;
+                    try {
+                        const [compRes, buyerRes, seasRes] = await Promise.all([
+                            fetch('/api/analytics/competitors?limit=10'),
+                            fetch('/api/analytics/buyers'),
+                            fetch('/api/analytics/seasonality')
+                        ]);
+                        if (compRes.ok) this.marketRadar.competitors = await compRes.json();
+                        if (buyerRes.ok) this.marketRadar.buyers = await buyerRes.json();
+                        if (seasRes.ok) this.marketRadar.seasonality = await seasRes.json();
+                    } catch (e) {
+                        console.error('Error fetching market radar:', e);
+                    } finally {
+                        this.loadingRadar = false;
+                    }
+                },
+
+                async createUser() {
+                    if (!this.newUserForm.email || !this.newUserForm.password || !this.newUserForm.full_name) {
+                        this.showToast('Veuillez remplir tous les champs obligatoires.', 'warning');
+                        return;
+                    }
+                    try {
+                        const res = await fetch('/api/auth/users', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(this.newUserForm)
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(`Collaborateur '${data.full_name}' créé avec succès !`, 'success');
+                            this.newUserModalOpen = false;
+                            this.newUserForm = { email: '', username: '', password: '', full_name: '', role: 'analyst', title: '' };
+                            await this.fetchTeamUsers();
+                        } else {
+                            this.showToast(data.detail || 'Erreur lors de la création', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async fetchIngestionDashboard() {
+                    try {
+                        const res = await fetch('/api/admin/ingestion/dashboard');
+                        if (res.ok) {
+                            this.ingestionData = await res.json();
+                            if (this.ingestionData.date_audit && !this.dateAudit) {
+                                this.dateAudit = this.ingestionData.date_audit;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error fetching ingestion dashboard:', e);
+                    }
+                },
+
+                startActivePolling() {
+                    if (this.activePollingTimer) return;
+                    this.activePollingTimer = setInterval(async () => {
+                        await this.fetchIngestionDashboard();
+                        if (!this.ingestionData || !this.ingestionData.active_batch) {
+                            this.stopActivePolling();
+                            this.remediating = false;
+                            this.showToast("Lot d'ingestion finalisé ! Données à jour.", 'success');
+                            this.fetchFeed();
+                        }
+                    }, 1200);
+                },
+
+                stopActivePolling() {
+                    if (this.activePollingTimer) {
+                        clearInterval(this.activePollingTimer);
+                        this.activePollingTimer = null;
+                    }
+                },
+
+                async runRemediation(pages = null) {
+                    const pagesToRun = pages || this.selectedBatchDepth || 3;
+                    this.remediating = true;
+                    this.showToast(`Initialisation du plan d'ingestion (${pagesToRun} pages / ${pagesToRun * 50} BDC)...`, 'info');
+                    try {
+                        const res = await fetch('/api/admin/ingestion/remediate', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ pages: parseInt(pagesToRun), reason: 'Rattrapage diagnostique direct' })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message || '⚡ Rattrapage des lots lancé !', 'success');
+                            await this.fetchIngestionDashboard();
+                            this.startActivePolling();
+                        } else {
+                            this.remediating = false;
+                            this.showToast(data.detail || 'Erreur lors du rattrapage', 'error');
+                        }
+                    } catch (e) {
+                        this.remediating = false;
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async triggerCustomBatch(pages) {
+                    this.remediating = true;
+                    this.showToast(`Initialisation du lot (${pages} pages / ${pages * 50} BDC)...`, 'info');
+                    try {
+                        const res = await fetch('/api/admin/ingestion/batches/trigger', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ pages: parseInt(pages), send_emails: false })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message, 'success');
+                            await this.fetchIngestionDashboard();
+                            this.startActivePolling();
+                        } else {
+                            this.remediating = false;
+                            this.showToast(data.detail, 'error');
+                        }
+                    } catch (e) {
+                        this.remediating = false;
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async retryBatch(batchId) {
+                    this.remediating = true;
+                    this.showToast(`Relance du lot ${batchId}...`, 'info');
+                    try {
+                        const res = await fetch(`/api/admin/ingestion/batches/${batchId}/retry`, {
+                            method: 'POST'
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message, 'success');
+                            await this.fetchIngestionDashboard();
+                            this.startActivePolling();
+                        } else {
+                            this.remediating = false;
+                            this.showToast(data.detail, 'error');
+                        }
+                    } catch (e) {
+                        this.remediating = false;
+                        this.showToast('Erreur: ' + e, 'error');
+                    }
+                },
+
+                async probePortalGap() {
+                    this.probingGap = true;
+                    this.showToast('Sonde en direct du portail des marchés publics...', 'info');
+                    try {
+                        const res = await fetch('/api/admin/ingestion/probe-portal-gap', {
+                            method: 'POST'
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (this.ingestionData) {
+                                this.ingestionData.gap_analysis = data;
+                            }
+                            if (data.missing_rows > 0) {
+                                this.selectedBatchDepth = data.recommended_pages;
+                                this.showToast(`Écart détecté : ${data.missing_rows} avis en attente (${data.batches_needed} lot(s) requis)`, 'warning');
+                            } else {
+                                this.showToast("Base locale 100% à jour avec le portail public !", 'success');
+                            }
+                        } else {
+                            this.showToast('Erreur lors de la sonde du portail', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur connexion: ' + e, 'error');
+                    } finally {
+                        this.probingGap = false;
+                    }
+                },
+
+                formatDateDDMMYYYY(d) {
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const yyyy = d.getFullYear();
+                    return ${dd}//;
+                },
+                getTodayStr() {
+                    return this.formatDateDDMMYYYY(new Date());
+                },
+                getYesterdayStr() {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 1);
+                    return this.formatDateDDMMYYYY(d);
+                },
+                getLast7DaysStr() {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 7);
+                    return this.formatDateDDMMYYYY(d);
+                },
+
+                setAuditPeriodMode(mode) {
+                    this.auditPeriodMode = mode;
+                    if (mode === 'day') {
+                        if (!this.auditTargetDate) this.auditTargetDate = this.getTodayStr();
+                    } else if (mode === 'range') {
+                        if (!this.auditTargetDate) this.auditTargetDate = this.getLast7DaysStr();
+                        if (!this.auditEndDate) this.auditEndDate = this.getTodayStr();
+                    } else if (mode === 'month') {
+                        if (!this.auditSelectedMonth) this.auditSelectedMonth = ${String(new Date().getMonth() + 1).padStart(2, '0')}/;
+                    }
+                },
+
+                setDayPreset(preset) {
+                    this.auditPeriodMode = 'day';
+                    if (preset === 'today') {
+                        this.auditTargetDate = this.getTodayStr();
+                    } else if (preset === 'yesterday') {
+                        this.auditTargetDate = this.getYesterdayStr();
+                    } else {
+                        const d = new Date();
+                        d.setDate(d.getDate() - 2);
+                        this.auditTargetDate = this.formatDateDDMMYYYY(d);
+                    }
+                    this.runPeriodAudit();
+                },
+
+                setRangePreset(days) {
+                    this.auditPeriodMode = 'range';
+                    const d = new Date();
+                    d.setDate(d.getDate() - days);
+                    this.auditTargetDate = this.formatDateDDMMYYYY(d);
+                    this.auditEndDate = this.getTodayStr();
+                    this.runPeriodAudit();
+                },
+
+                setMonthPreset(mStr) {
+                    this.auditPeriodMode = 'month';
+                    this.auditSelectedMonth = mStr;
+                    this.runPeriodAudit();
+                },
+
+                getPeriodLabel() {
+                    if (this.auditPeriodMode === 'month') {
+                        const months = {'01':'Janvier','02':'Février','03':'Mars','04':'Avril','05':'Mai','06':'Juin','07':'Juillet','08':'Août','09':'Septembre','10':'Octobre','11':'Novembre','12':'Décembre'};
+                        const parts = (this.auditSelectedMonth || '11/2026').split('/');
+                        return `Mois de ${months[parts[0]] || parts[0]} ${parts[1] || '2026'}`;
+                    }
+                    if (this.auditPeriodMode === 'range') {
+                        return `Période du ${this.auditTargetDate} au ${this.auditEndDate}`;
+                    }
+                    return `Avis du ${this.auditTargetDate}`;
+                },
+
+                async runPeriodAudit() {
+                    this.auditingDate = true;
+                    let url = `/api/admin/ingestion/audit-date?mode=${encodeURIComponent(this.auditPeriodMode)}`;
+                    if (this.auditPeriodMode === 'month') {
+                        url += `&date=${encodeURIComponent(this.auditSelectedMonth)}`;
+                    } else if (this.auditPeriodMode === 'range') {
+                        url += `&date=${encodeURIComponent(this.auditTargetDate)}&end_date=${encodeURIComponent(this.auditEndDate)}`;
+                    } else {
+                        url += `&date=${encodeURIComponent(this.auditTargetDate)}`;
+                    }
+
+                    this.showToast(`Audit d’exhaustivité en cours pour ${this.getPeriodLabel()}...`, 'info');
+                    try {
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            this.dateAudit = await res.json();
+                            if (this.dateAudit.is_fully_reconciled) {
+                                this.showToast(`🛡️ 100% Confiance : Tous les ${this.dateAudit.portal_total_published} avis sont en base !`, 'success');
+                            } else {
+                                this.showToast(`⚠️ Écart détecté : ${this.dateAudit.missing_count} avis manquants (${this.dateAudit.concordance_pct}% de confiance)`, 'warning');
+                            }
+                        } else {
+                            this.showToast("Erreur lors de l'audit de période", 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur de connexion : ' + e, 'error');
+                    } finally {
+                        this.auditingDate = false;
+                    }
+                },
+
+                async runDateAudit(targetDate = null) {
+                    if (targetDate) {
+                        this.auditPeriodMode = 'day';
+                        this.auditTargetDate = targetDate;
+                    }
+                    return this.runPeriodAudit();
+                },
+
+                async reconcilePeriod() {
+                    if (!this.dateAudit) return;
+                    this.reconcilingMissing = true;
+                    const missingCount = this.dateAudit.missing_count || 0;
+                    this.showToast(`Rattrapage et importation de ${missingCount} avis manquants...`, 'info');
+                    try {
+                        const res = await fetch('/api/admin/ingestion/audit-date/reconcile', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                date: this.dateAudit.target_date,
+                                end_date: this.dateAudit.end_date,
+                                period_mode: this.dateAudit.period_mode,
+                                portal_ids: this.dateAudit.missing_portal_ids || []
+                            })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message, 'success');
+                            await this.runPeriodAudit();
+                            await this.fetchIngestionDashboard();
+                            this.fetchFeed();
+                        } else {
+                            this.showToast(data.detail || 'Erreur lors de la réconciliation', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                    } finally {
+                        this.reconcilingMissing = false;
+                    }
+                },
+
+                async reconcileMissingDateItems() {
+                    return this.reconcilePeriod();
+                },
+
+                get filteredBatches() {
+                    if (!this.ingestionData || !this.ingestionData.batches) return [];
+                    if (this.batchFilter === 'all') return this.ingestionData.batches;
+                    return this.ingestionData.batches.filter(b => b.status === this.batchFilter);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

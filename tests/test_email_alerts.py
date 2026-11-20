@@ -46,7 +46,11 @@ async def test_email_decision_card_rendering_and_dispatch(cctv_tender_data):
     assert "AVIS OFFICIEL PORTAIL TGR" in text
 
     # 3. Test Async Dispatcher
-    dispatcher = EmailDispatcher()
-    success = await dispatcher.send_decision_card(cctv_tender_data, result, profile)
-    assert success is True
+    from unittest.mock import patch, MagicMock
+    mock_smtp_inst = MagicMock()
+    with patch("smtplib.SMTP", return_value=mock_smtp_inst):
+        mock_smtp_inst.__enter__.return_value = mock_smtp_inst
+        dispatcher = EmailDispatcher()
+        success = await dispatcher.send_decision_card(cctv_tender_data, result, profile)
+        assert success is True
 

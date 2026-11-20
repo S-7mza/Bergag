@@ -30,6 +30,20 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD") # Gmail App Password
     alert_recipient_email: str | None = Field(default=None, alias="ALERT_RECIPIENT_EMAIL")
 
+    # Enterprise Alerting & Webhooks
+    webhook_url: str | None = Field(default=None, alias="WEBHOOK_URL")
+    alert_min_score: float = Field(default=80.0, alias="ALERT_MIN_SCORE")
+    alert_enable_email: bool = Field(default=True, alias="ALERT_ENABLE_EMAIL")
+    alert_enable_webhook: bool = Field(default=True, alias="ALERT_ENABLE_WEBHOOK")
+
+    # Security & RBAC
+    jwt_secret_key: str = Field(
+        default="bergag-procurement-secret-key-morocco-2026",
+        alias="JWT_SECRET_KEY"
+    )
+    token_validity_seconds: int = Field(default=86400 * 7, alias="TOKEN_VALIDITY_SECONDS")
+    allow_anonymous_dev_admin: bool = Field(default=True, alias="ALLOW_ANONYMOUS_DEV_ADMIN")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

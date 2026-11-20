@@ -12,6 +12,8 @@ from src.scraper.ingestion_service import IngestionService
 from src.profiles.loader import load_all_profiles
 from src.engine.scoring_cascade import ScoringCascadeEngine
 from src.alerts.email_dispatcher import EmailDispatcher
+from src.alerts.webhook_dispatcher import WebhookDispatcher
+from src.config.settings import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -110,6 +112,7 @@ async def run_active_crawl_cycle(
     client = PortalHttpClient()
     scoring_engine = ScoringCascadeEngine()
     email_dispatcher = EmailDispatcher() if send_emails else None
+    webhook_dispatcher = WebhookDispatcher()
     profiles = load_all_profiles()
     logger.info(f"Loaded {len(profiles)} company profiles: {[p.profile_name for p in profiles]}")
 
@@ -179,15 +182,25 @@ async def run_active_crawl_cycle(
                                     top_score = cascade_res.overall_score
                                     top_verdict = cascade_res.decision_recommendation
                                 
-                                # If recommended GO (Score >= 80%), dispatch email alert
-                                if send_emails and (cascade_res.decision_recommendation == "GO" or cascade_res.overall_score >= 80.0):
+                                # If recommended GO (or Score >= alert_min_score), dispatch multi-channel alerts
+                                is_high_fit = (
+                                    cascade_res.decision_recommendation == "GO" 
+                                    or cascade_res.overall_score >= settings.alert_min_score
+                                )
+                                if is_high_fit:
                                     logger.info(
-                                        f"High-fit tender detected! #{portal_id} '{detail_data.get('title')[:40]}' "
-                                        f"scored {cascade_res.overall_score:.0f}% for '{profile.profile_name}'. Sending email..."
+                                        f"High-fit tender detected! #{portal_id} '{detail_data.get('title', '')[:40]}' "
+                                        f"scored {cascade_res.overall_score:.0f}% for '{profile.profile_name}'."
                                     )
-                                    sent = await email_dispatcher.send_decision_card(detail_data, cascade_res, profile)
-                                    if sent:
-                                        alerts_sent += 1
+                                    # 1. Email notification
+                                    if send_emails and settings.alert_enable_email and email_dispatcher:
+                                        sent_mail = await email_dispatcher.send_decision_card(detail_data, cascade_res, profile)
+                                        if sent_mail:
+                                            alerts_sent += 1
+
+                                    # 2. Webhook notification (Slack / MS Teams / WhatsApp / ERP)
+                                    if settings.alert_enable_webhook:
+                                        await webhook_dispatcher.send_notification(detail_data, cascade_res, profile)
 
                             if progress_callback:
                                 try:

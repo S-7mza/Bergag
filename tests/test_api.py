@@ -20,6 +20,70 @@ def test_serve_dashboard_html(client):
     assert "checkUrlHash" in response.text
     assert "copyFicheLink" in response.text
     assert "Portail TGR" in response.text
+    assert "Mes Dossiers" in response.text
+    assert "Chiffrage & Devis" in response.text
+    assert "Radar & Concurrence" in response.text
+    assert "pipelineItems" in response.text
+
+def test_pipeline_lifecycle(client):
+    test_portal_id = 999123
+    # 1. Shortlist tender
+    shortlist_res = client.post("/api/actions", json={
+        "profile_id": "00000000-0000-0000-0000-000000000000",
+        "tender_id": test_portal_id,
+        "action": "shortlisted",
+        "bid_amount_mad": 85000.0,
+        "user_notes": "Priorité commerciale Q4",
+        "tender_metadata": {
+            "reference": "BC/999/2026",
+            "title": "Acquisition caméras IP et serveurs NVR",
+            "buyer_name": "Commune de Rabat",
+            "execution_location": "Rabat",
+            "deadline_at": "30/11/2026 12:00",
+            "match_score": 92.5
+        }
+    })
+    assert shortlist_res.status_code == 200
+    body = shortlist_res.json()
+    assert body["success"] is True
+    assert body["action"] == "shortlisted"
+    assert body["tender_id"] == test_portal_id
+
+    # 2. Retrieve pipeline
+    get_res = client.get("/api/pipeline")
+    assert get_res.status_code == 200
+    items = get_res.json()
+    matched = [i for i in items if i["portal_id"] == test_portal_id]
+    assert len(matched) == 1
+    assert matched[0]["action"] == "shortlisted"
+    assert matched[0]["bid_amount_mad"] == 85000.0
+    assert matched[0]["title"] == "Acquisition caméras IP et serveurs NVR"
+
+    # 3. Transition to in_preparation (En chiffrage)
+    prep_res = client.post("/api/actions", json={
+        "profile_id": "00000000-0000-0000-0000-000000000000",
+        "tender_id": test_portal_id,
+        "action": "in_preparation",
+        "bid_amount_mad": 92000.0
+    })
+    assert prep_res.status_code == 200
+    assert prep_res.json()["action"] == "in_preparation"
+
+    # 4. Filter pipeline by action
+    filter_res = client.get("/api/pipeline?action=in_preparation")
+    assert filter_res.status_code == 200
+    prep_items = filter_res.json()
+    assert any(i["portal_id"] == test_portal_id for i in prep_items)
+
+    # 5. Remove from pipeline
+    del_res = client.delete(f"/api/pipeline/{test_portal_id}")
+    assert del_res.status_code == 200
+    assert del_res.json()["success"] is True
+
+    # 6. Verify removal
+    after_res = client.get("/api/pipeline")
+    after_items = after_res.json()
+    assert not any(i["portal_id"] == test_portal_id for i in after_items)
 
 def test_get_available_profiles(client):
     response = client.get("/api/profiles")
@@ -48,6 +112,50 @@ def test_auth_login_and_roles(client):
         "password": "wrong_password"
     })
     assert res_bad.status_code == 401
+
+def test_bcrypt_hashing_and_verification():
+    from src.api.auth import hash_password, verify_password
+    plain = "SecurePassword123!"
+    hashed = hash_password(plain)
+    assert hashed.startswith(("$2a$", "$2b$", "$2y$"))
+    assert verify_password(plain, hashed) is True
+    assert verify_password("WrongPassword!", hashed) is False
+
+def test_admin_create_user_and_authenticate(client):
+    # Create new analyst user via Admin API
+    new_user_data = {
+        "email": "karim.tazi@bergag.ma",
+        "username": "ktazi",
+        "password": "KarimPassword2026!",
+        "full_name": "Karim Tazi",
+        "role": "analyst",
+        "title": "Ingénieur Devis & Réponse AO",
+        "avatar_color": "teal"
+    }
+    create_res = client.post("/api/auth/users", json=new_user_data)
+    assert create_res.status_code == 201
+    created = create_res.json()
+    assert created["email"] == "karim.tazi@bergag.ma"
+    assert created["role"] == "analyst"
+    assert "tender:pricing_calculator" in created["permissions"]
+
+    # Verify new user can log in with bcrypt verification
+    login_res = client.post("/api/auth/login", json={
+        "username_or_email": "ktazi",
+        "password": "KarimPassword2026!"
+    })
+    assert login_res.status_code == 200
+    token_data = login_res.json()
+    assert "token" in token_data
+    assert token_data["user"]["full_name"] == "Karim Tazi"
+
+def test_list_team_users(client):
+    res = client.get("/api/auth/users")
+    assert res.status_code == 200
+    users = res.json()
+    assert len(users) >= 3
+    emails = [u["email"] for u in users]
+    assert "admin@bergag.ma" in emails
 
 def test_switch_demo_role(client):
     # Test Analyst switch

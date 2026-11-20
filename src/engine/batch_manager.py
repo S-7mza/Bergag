@@ -653,7 +653,7 @@ class IngestionBatchManager:
 
     async def audit_date_exhaustiveness(
         self, 
-        target_date_str: Optional[str] = "19/11/2026", 
+        target_date_str: Optional[str] = None, 
         end_date_str: Optional[str] = None,
         period_mode: str = "day",
         fetch_live_portal: bool = True
@@ -931,7 +931,7 @@ class IngestionBatchManager:
     async def remediate_missing_portal_ids(
         self, 
         portal_ids: Optional[List[int]] = None, 
-        target_date_str: str = "19/11/2026",
+        target_date_str: Optional[str] = None,
         end_date_str: Optional[str] = None,
         period_mode: str = "day",
         user_name: str = "Admin"
@@ -1010,6 +1010,7 @@ class IngestionBatchManager:
         latest_fetch = None
         category_counts = {"Fournitures": 0, "Travaux": 0, "Services": 0}
         category_items = {"Fournitures": 0, "Travaux": 0, "Services": 0}
+        urgent_tenders = []
         
         try:
             async with async_session_factory() as session:
@@ -1041,6 +1042,15 @@ class IngestionBatchManager:
                 for cat, count in res.all():
                     if cat in category_items:
                         category_items[cat] = count
+
+                # Urgent un-actioned tenders (<48h deadline)
+                res = await session.execute(
+                    select(Tender.portal_id)
+                    .where(Tender.submission_deadline > now)
+                    .where(Tender.submission_deadline <= now + timedelta(hours=48))
+                    .limit(5)
+                )
+                urgent_tenders = [row[0] for row in res.all()]
         except Exception as e:
             logger.warning(f"Database query in BatchManager: {e}")
 
@@ -1088,7 +1098,7 @@ class IngestionBatchManager:
                 "category": "Fournitures",
                 "label": "Fournitures Générales & Matériel",
                 "score": 98.4,
-                "tenders_count": max(category_counts.get("Fournitures", 0), 42),
+                "tenders_count": category_counts.get("Fournitures", 0),
                 "bom_completeness_pct": 99.1,
                 "buyer_normalized_pct": 98.5,
                 "deadline_valid_pct": 100.0,
@@ -1099,7 +1109,7 @@ class IngestionBatchManager:
                 "category": "Travaux",
                 "label": "Travaux d'Aménagement & Installation",
                 "score": 94.8,
-                "tenders_count": max(category_counts.get("Travaux", 0), 28),
+                "tenders_count": category_counts.get("Travaux", 0),
                 "bom_completeness_pct": 92.4,
                 "buyer_normalized_pct": 96.0,
                 "deadline_valid_pct": 98.0,
@@ -1110,7 +1120,7 @@ class IngestionBatchManager:
                 "category": "Services",
                 "label": "Services & Prestations d'Études",
                 "score": 96.2,
-                "tenders_count": max(category_counts.get("Services", 0), 19),
+                "tenders_count": category_counts.get("Services", 0),
                 "bom_completeness_pct": 95.8,
                 "buyer_normalized_pct": 97.2,
                 "deadline_valid_pct": 99.0,
@@ -1164,13 +1174,14 @@ class IngestionBatchManager:
             })
 
         # Ingestion Gap recommendation
-        diagnostic_issues.append({
-            "type": "opportunity_gap",
-            "severity": "low",
-            "title": "3 avis urgents (< 48h) requièrent un calcul de marge instantané",
-            "detail": "Les consultations #105942, #105938 et #105931 ont des bordereaux prêts mais n'ont pas encore été chiffrées par l'équipe.",
-            "suggested_fix": "Ouvrir le simulateur de prix et exporter le devis CSV."
-        })
+        if urgent_tenders:
+            diagnostic_issues.append({
+                "type": "opportunity_gap",
+                "severity": "low",
+                "title": f"{len(urgent_tenders)} avis urgents (< 48h) requièrent un chiffrage rapide",
+                "detail": f"Les consultations {', '.join(f'#{pid}' for pid in urgent_tenders)} approchent de l'échéance et nécessitent une prise de décision.",
+                "suggested_fix": "Ouvrir le simulateur de prix et exporter le devis CSV."
+            })
 
         recommended_action = {
             "title": (
@@ -1196,7 +1207,7 @@ class IngestionBatchManager:
                 "last_sync_formatted": (now - timedelta(minutes=minutes_since_sync)).strftime("%d/%m/%Y à %H:%M"),
                 "portal_health": "Optimal (HTTP 200 - F5 WAF Actif)",
                 "active_portal_estimated": 150,
-                "db_ingested_total": max(db_tenders_count, 89)
+                "db_ingested_total": db_tenders_count
             },
             "gap_analysis": gap_analysis,
             "date_audit": date_audit,
@@ -1204,7 +1215,7 @@ class IngestionBatchManager:
                 "overall_score": overall_quality,
                 "quality_grade": "A+ (Haute Fidélité)",
                 "categories": quality_categories,
-                "total_articles_parsed": max(sum(category_items.values()), 642),
+                "total_articles_parsed": sum(category_items.values()),
                 "ocr_accuracy_pct": 97.8
             },
             "batches_summary": {

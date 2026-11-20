@@ -43,14 +43,17 @@ class TenderDetailResponse(BaseModel):
     portal_url: str
 
 class UserActionRequest(BaseModel):
-    profile_id: uuid.UUID
+    profile_id: Optional[str] = "00000000-0000-0000-0000-000000000000"
     tender_id: int
-    action: str = Field(..., pattern="^(viewed|shortlisted|bidded|won|lost|rejected)$")
+    action: str = Field(..., pattern="^(viewed|shortlisted|in_preparation|bidded|won|lost|rejected)$")
     rejection_reason: Optional[str] = None
     user_notes: Optional[str] = None
+    bid_amount_mad: Optional[float] = None
+    tender_metadata: Optional[Dict[str, Any]] = None
 
 class UserActionResponse(BaseModel):
     success: bool
-    action_id: uuid.UUID
+    action_id: str
     action: str
     tender_id: int
+    message: Optional[str] = None

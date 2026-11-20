@@ -14,6 +14,7 @@ from src.models.profile import CompanyProfile, ProfileMatch, UserTenderAction
 from src.profiles.loader import load_profile, load_all_profiles
 from src.engine.scoring_cascade import ScoringCascadeEngine
 from src.engine.pricing_helper import PricingHelper
+from src.engine.pipeline_manager import pipeline_manager
 from src.api.schemas import (
     TenderFeedItem, 
     TenderDetailResponse, 
@@ -342,42 +343,48 @@ async def export_bordereau_csv(
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
+@router.get("/pipeline")
+async def get_team_pipeline(
+    action: Optional[str] = Query(None, description="Filter by stage: shortlisted, in_preparation, bidded, won, lost, rejected"),
+    session: AsyncSession = Depends(get_db_session)
+) -> List[Dict[str, Any]]:
+    """
+    Returns all opportunities tracked by the team in the procurement pipeline
+    (Mes Dossiers: Retenus, En cours de chiffrage, Soumis, Gagnés).
+    """
+    return await pipeline_manager.get_pipeline_items(session=session, action_filter=action)
+
 @router.post("/actions", response_model=UserActionResponse)
 async def record_user_action(
     req: UserActionRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
     """
-    Records founder actions (shortlist, in_preparation, rejected)
-    for active learning feedback loop.
+    Records or updates a tender's stage in the team pipeline
+    (shortlist, in_preparation, bidded, won, lost, rejected).
     """
-    try:
-        profile_uuid = uuid.UUID(req.profile_id)
-    except ValueError:
-        profile_uuid = uuid.uuid4()
-
-    stmt = select(Tender).where(Tender.portal_id == req.tender_id)
-    res = await session.execute(stmt)
-    tender = res.scalar_one_or_none()
-
-    tender_uuid = tender.id if tender else uuid.uuid4()
-
-    action = UserTenderAction(
-        profile_id=profile_uuid,
-        tender_id=tender_uuid,
+    entry = await pipeline_manager.record_action(
+        portal_id=req.tender_id,
         action=req.action,
-        feedback_notes=req.feedback_notes,
-        bid_amount_mad=req.bid_amount_mad
+        user_notes=req.user_notes,
+        bid_amount_mad=req.bid_amount_mad,
+        profile_id=req.profile_id,
+        session=session,
+        tender_metadata=req.tender_metadata
     )
-    session.add(action)
-    await session.commit()
-    await session.refresh(action)
-
-    logger.info(f"Recorded action '{req.action}' for tender #{req.tender_id}")
-
     return UserActionResponse(
-        action_id=action.id,
-        tender_id=req.tender_id,
-        action=action.action,
-        created_at=action.created_at.isoformat()
+        success=True,
+        action_id=entry["action_id"],
+        action=entry["action"],
+        tender_id=entry["portal_id"],
+        message=f"Dossier #{req.tender_id} mis à jour : {req.action}"
     )
+
+@router.delete("/pipeline/{portal_id}")
+async def remove_from_pipeline(
+    portal_id: int,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Removes a tender from the pipeline tracking"""
+    await pipeline_manager.remove_item(portal_id, session=session)
+    return {"success": True, "message": f"Dossier #{portal_id} retiré du suivi."}
