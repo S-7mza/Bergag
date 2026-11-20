@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bergag &bull; Moroccan Procurement Intelligence Command Center</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Alpine.js CDN -->
@@ -3715,14 +3716,28 @@
                     this.remediating = true;
                     this.showToast(`Lancement de la synchronisation complète (${pagesNeeded} pages / ${totalUnimported} avis restants)...`, 'info');
                     try {
-                        const res = await fetch('/api/admin/ingestion/batches/trigger', {
+                        let pagesToSend = parseInt(pagesNeeded);
+                        let res = await fetch('/api/admin/ingestion/batches/trigger', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ pages: parseInt(pagesNeeded), send_emails: false })
+                            body: JSON.stringify({ pages: pagesToSend, send_emails: false })
                         });
+
+                        // Auto-adaptation de résilience si le serveur distant actif a la contrainte historique <= 10
+                        if (res.status === 422 && pagesToSend > 10) {
+                            console.warn(`[Ingestion] Le serveur impose une limite <= 10 pages. Bascule automatique sur une tranche de 10 pages...`);
+                            pagesToSend = 10;
+                            res = await fetch('/api/admin/ingestion/batches/trigger', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({ pages: pagesToSend, send_emails: false })
+                            });
+                        }
+
                         const data = await res.json();
                         if (res.ok) {
-                            this.showToast(data.message || '⚡ Synchronisation complète initiée en direct !', 'success');
+                            const successMsg = data.message || `⚡ Synchronisation initiée (${pagesToSend} pages / ${pagesToSend * 50} BDC) !`;
+                            this.showToast(successMsg, 'success');
                             await this.fetchIngestionDashboard();
                             this.startActivePolling();
                         } else {

@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -48,6 +48,11 @@ def load_dashboard_html() -> str:
     if template_path.exists():
         return template_path.read_text(encoding="utf-8")
     return "<html><body><h1>Dashboard template not found</h1></body></html>"
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Returns empty 204 for browser favicon probe to avoid 404 noise"""
+    return Response(status_code=204)
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
