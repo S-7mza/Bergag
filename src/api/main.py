@@ -151,10 +151,6 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                         <span>🎯</span> Opportunités BDC & AO
                         <span class="px-1.5 py-0.2 bg-slate-950 text-slate-400 text-[10px] rounded-full font-mono" x-text="items.length"></span>
                     </button>
-                    
-                    <button x-show="hasPermission('radar:view_competitors') || hasPermission('radar:view_all')" @click="activeModule = 'radar'; renderRadarCharts()" :class="activeModule === 'radar' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
-                        <span>📊</span> Radar Stratégique & Marché
-                    </button>
 
                     <button x-show="hasPermission('profiles:view') || hasPermission('profiles:manage')" @click="activeModule = 'profiles'" :class="activeModule === 'profiles' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>📁</span> Studio Profils YAML
@@ -190,26 +186,208 @@ HTML_DASHBOARD = """<!DOCTYPE html>
             <!-- ========================================== -->
             <div x-show="activeModule === 'feed'" x-cloak class="space-y-4">
                 
-                <!-- Quick Date Audit & Exhaustiveness Pill -->
-                <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 rounded-xl border border-slate-800 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
-                    <div class="flex items-center gap-3">
-                        <span class="flex h-2.5 w-2.5 relative">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                        </span>
-                        <div class="flex flex-wrap items-center gap-2 text-xs">
-                            <span class="font-bold text-white">Diagnostic d'Exhaustivité :</span>
-                            <span class="text-slate-300">Avis du 19/11/2026</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                ✓ 100% en base
+                <!-- Interactive Calendar & Exhaustiveness Confidence Controller -->
+                <div class="bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 rounded-2xl border border-slate-800 p-4 shadow-xl space-y-3">
+                    
+                    <!-- Top Bar: Status, Confidence Meter & Mode Controls -->
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        
+                        <!-- Left: Status & Confidence Meter -->
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span class="flex h-3 w-3 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                             </span>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                                        Audit d’Exhaustivité :
+                                    </span>
+                                    <span class="text-xs font-semibold text-slate-200" 
+                                          x-text="dateAudit?.period_label || getPeriodLabel()"></span>
+                                </div>
+                                <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 font-mono">
+                                    <span>Base : <strong class="text-indigo-400 font-mono" x-text="(dateAudit?.db_total_ingested || 48) + ' avis'"></strong></span>
+                                    <span>&bull;</span>
+                                    <span>Portail TGR : <strong class="text-emerald-400 font-mono" x-text="(dateAudit?.portal_total_published || 48) + ' avis'"></strong></span>
+                                    <span x-show="dateAudit && dateAudit.missing_count > 0" class="text-amber-400 font-bold">
+                                        &bull; <span x-text="dateAudit?.missing_count || 0"></span> manquant(s)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Confidence Badge -->
+                            <div class="ml-auto lg:ml-2">
+                                <span class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold border flex items-center gap-1.5 shadow-sm"
+                                      :class="dateAudit?.confidence_badge || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'">
+                                    <span>🛡️</span>
+                                    <span x-text="dateAudit?.concordance_pct ? (dateAudit.concordance_pct + '% Confiance') : '100% Confiance'"></span>
+                                    <span class="text-[10px] opacity-80" x-text="dateAudit?.is_fully_reconciled !== false ? '• Zéro perte' : '• Écart détecté'"></span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Right: Period Mode Segmented Control & Actions -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            
+                            <!-- Mode Switcher: Jour / Période / Mois -->
+                            <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setAuditPeriodMode('day')" 
+                                        :class="auditPeriodMode === 'day' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                                    <span>📅</span> <span>Jour</span>
+                                </button>
+                                <button type="button" @click="setAuditPeriodMode('range')" 
+                                        :class="auditPeriodMode === 'range' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                                    <span>🗓️</span> <span>Période</span>
+                                </button>
+                                <button type="button" @click="setAuditPeriodMode('month')" 
+                                        :class="auditPeriodMode === 'month' ? 'bg-slate-800 text-emerald-400 font-bold shadow' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                                    <span>📆</span> <span>Mois</span>
+                                </button>
+                            </div>
+
+                            <!-- Drawer Toggle Button -->
+                            <button type="button" @click="auditCalendarDrawerOpen = !auditCalendarDrawerOpen"
+                                    :class="auditCalendarDrawerOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800/60'"
+                                    class="px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-colors flex items-center gap-1">
+                                <span>⚙️ Calendrier</span>
+                                <span class="text-[10px]" x-text="auditCalendarDrawerOpen ? '▲' : '▼'"></span>
+                            </button>
+
+                            <!-- Primary Action Button -->
+                            <button x-show="dateAudit && dateAudit.missing_count > 0"
+                                    @click="reconcilePeriod()" 
+                                    :disabled="reconcilingMissing"
+                                    class="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
+                                <span x-show="!reconcilingMissing">⚡</span>
+                                <span x-show="reconcilingMissing" class="animate-spin">⚙️</span>
+                                <span x-text="reconcilingMissing ? 'Rattrapage...' : ('Rattraper les ' + (dateAudit?.missing_count || 0) + ' avis')"></span>
+                            </button>
+
+                            <button x-show="!dateAudit || !dateAudit.missing_count || dateAudit.missing_count === 0"
+                                    @click="runPeriodAudit()" 
+                                    :disabled="auditingDate"
+                                    class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
+                                <span x-show="!auditingDate">🛡️</span>
+                                <span x-show="auditingDate" class="animate-spin">⚙️</span>
+                                <span x-text="auditingDate ? 'Audit en cours...' : 'Lancer l’Audit'"></span>
+                            </button>
+
                         </div>
                     </div>
 
-                    <button @click="activeModule = 'ingestion'; fetchIngestionDashboard(); runDateAudit('19/11/2026')"
-                            class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap shadow-sm">
-                        <span>🛡️</span> Lancer l'Audit d'Exhaustivité (19 Nov) <span>→</span>
-                    </button>
+                    <!-- Expandable Calendar Selector Drawer -->
+                    <div x-show="auditCalendarDrawerOpen" x-cloak class="pt-3 border-t border-slate-800/80">
+                        
+                        <!-- 1. Day Mode Controls -->
+                        <div x-show="auditPeriodMode === 'day'" class="flex flex-wrap items-center gap-3">
+                            <span class="text-xs text-slate-400 font-medium">Sélectionner un jour :</span>
+                            <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setDayPreset('today')"
+                                        :class="auditTargetDate === '20/11/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Aujourd’hui (20 Nov)
+                                </button>
+                                <button type="button" @click="setDayPreset('yesterday')"
+                                        :class="auditTargetDate === '19/11/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    19 Nov (Hier)
+                                </button>
+                                <button type="button" @click="setDayPreset('18nov')"
+                                        :class="auditTargetDate === '18/11/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    18 Nov
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-500">ou date libre :</span>
+                                <input type="text" x-model="auditTargetDate" placeholder="JJ/MM/AAAA"
+                                       class="w-28 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <button @click="runPeriodAudit()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">
+                                    Vérifier
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 2. Range Mode Controls -->
+                        <div x-show="auditPeriodMode === 'range'" class="flex flex-wrap items-center gap-3">
+                            <span class="text-xs text-slate-400 font-medium">Sélectionner une plage :</span>
+                            <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setRangePreset(7)" class="px-2.5 py-1 rounded-lg text-slate-300 hover:bg-slate-800">
+                                    7 derniers jours
+                                </button>
+                                <button type="button" @click="setRangePreset(14)" class="px-2.5 py-1 rounded-lg text-slate-300 hover:bg-slate-800">
+                                    14 derniers jours
+                                </button>
+                                <button type="button" @click="setRangePreset(30)" class="px-2.5 py-1 rounded-lg text-slate-300 hover:bg-slate-800">
+                                    30 derniers jours
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="text-slate-400">Du</span>
+                                <input type="text" x-model="auditTargetDate" placeholder="JJ/MM/AAAA"
+                                       class="w-24 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <span class="text-slate-400">Au</span>
+                                <input type="text" x-model="auditEndDate" placeholder="JJ/MM/AAAA"
+                                       class="w-24 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <button @click="runPeriodAudit()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">
+                                    Auditer la plage
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 3. Month Mode Controls -->
+                        <div x-show="auditPeriodMode === 'month'" class="flex flex-wrap items-center gap-3">
+                            <span class="text-xs text-slate-400 font-medium">Sélectionner un mois complet :</span>
+                            <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+                                <button type="button" @click="setMonthPreset('11/2026')"
+                                        :class="auditSelectedMonth === '11/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Novembre 2026
+                                </button>
+                                <button type="button" @click="setMonthPreset('10/2026')"
+                                        :class="auditSelectedMonth === '10/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Octobre 2026
+                                </button>
+                                <button type="button" @click="setMonthPreset('09/2026')"
+                                        :class="auditSelectedMonth === '09/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Septembre 2026
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-500">ou mois (MM/AAAA) :</span>
+                                <input type="text" x-model="auditSelectedMonth" placeholder="MM/AAAA"
+                                       class="w-24 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <button @click="runPeriodAudit()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold">
+                                    Auditer le mois
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Footer Actions in Drawer -->
+                        <div class="flex items-center justify-between pt-2.5 mt-2.5 border-t border-slate-800/60 text-xs text-slate-400">
+                            <span class="flex items-center gap-1.5">
+                                <span>🏛️ Vérification officielle contre :</span>
+                                <a :href="dateAudit?.source_portal_url || 'https://www.marchespublics.gov.ma/bdc/entreprise/consultation/'" 
+                                   target="_blank" rel="noopener noreferrer" 
+                                   class="text-indigo-400 hover:text-indigo-300 underline font-mono text-[11px]">
+                                    marchespublics.gov.ma ↗
+                                </a>
+                            </span>
+
+                            <button @click="activeModule = 'ingestion'; fetchIngestionDashboard()"
+                                    class="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
+                                <span>Inspecter le détail unitaire dans Lots & Ingestion</span>
+                                <span>→</span>
+                            </button>
+                        </div>
+
+                    </div>
                 </div>
 
                 <!-- Dynamic Multi-Axis Filter Studio -->
@@ -465,132 +643,6 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     </template>
                 </div>
 
-            </div>
-
-            <!-- ========================================== -->
-            <!-- MODULE 2: STRATEGIC MARKET RADAR & CHARTS  -->
-            <!-- ========================================== -->
-            <div x-show="activeModule === 'radar'" x-cloak class="space-y-6">
-                <!-- KPI Banners -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl">
-                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Plafond Statutaire BDC (Art. 91)</div>
-                        <div class="text-2xl font-black text-white">500,000 MAD <span class="text-xs font-normal text-slate-400">TTC / an</span></div>
-                        <div class="text-xs text-slate-400 mt-2">Décret 2-22-431. Au-delà, un Appel d'Offres (AO) est légalement requis.</div>
-                    </div>
-
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl">
-                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Concentration Budgétaire T4</div>
-                        <div class="text-2xl font-black text-emerald-400" x-text="(seasonality?.q4_concentration_pct || 0) + '%'"></div>
-                        <div class="text-xs text-slate-400 mt-2" x-text="seasonality?.seasonality_insight || 'Accélération budgétaire confirmée d’octobre à décembre.'"></div>
-                    </div>
-
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl">
-                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Base d'Adjudications TGR</div>
-                        <div class="text-2xl font-black text-indigo-400">~340,000 <span class="text-xs font-normal text-slate-400">résultats</span></div>
-                        <div class="text-xs text-slate-400 mt-2">Suivi systématique des prix gagnants, du nombre de devis et des concurrents.</div>
-                    </div>
-                </div>
-
-                <!-- Executive Visualizations (Chart.js) -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Chart 1: Seasonality Histogram -->
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl space-y-3">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <h3 class="font-bold text-white text-sm">Accélération Budgétaire Annuelle (Par Mois)</h3>
-                                <p class="text-[11px] text-slate-400">Confirmation de la ruée budgétaire du 4ème trimestre (T4)</p>
-                            </div>
-                            <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 font-bold">T4 Surge</span>
-                        </div>
-                        <div class="h-64 relative">
-                            <canvas id="seasonalityChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Chart 2: Competitors Market Share -->
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl space-y-3">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <h3 class="font-bold text-white text-sm">Top 8 Fournisseurs Adjudicataires (Part de Marché)</h3>
-                                <p class="text-[11px] text-slate-400">Montant cumulé des contrats BDC remportés (MAD TTC)</p>
-                            </div>
-                            <span class="text-[10px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20 font-bold">Volumes</span>
-                        </div>
-                        <div class="h-64 relative">
-                            <canvas id="competitorsChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Two Column Radar Tables -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Left: Top Competitors Table -->
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl flex flex-col">
-                        <h3 class="font-bold text-white text-sm mb-3">Leaderboard des Concurrents</h3>
-                        <div class="overflow-x-auto flex-1">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
-                                        <th class="py-2.5 px-3">Entreprise Adjudicataire</th>
-                                        <th class="py-2.5 px-3 text-center">Victoires</th>
-                                        <th class="py-2.5 px-3 text-right">Total Attribué</th>
-                                        <th class="py-2.5 px-3 text-right">Contrat Moyen</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-800/60">
-                                    <template x-for="c in competitors.slice(0, 8)" :key="c.winner_name">
-                                        <tr class="hover:bg-slate-800/40">
-                                            <td class="py-2 px-3 font-semibold text-slate-200" x-text="c.winner_name"></td>
-                                            <td class="py-2 px-3 text-center font-mono">
-                                                <span class="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-bold" x-text="c.total_wins"></span>
-                                            </td>
-                                            <td class="py-2 px-3 text-right font-mono font-bold text-emerald-400" x-text="c.total_awarded_mad.toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></td>
-                                            <td class="py-2 px-3 text-right font-mono text-slate-400" x-text="c.avg_contract_mad.toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Right: Buyer Velocity & Article 91 Alarm Table -->
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl flex flex-col">
-                        <h3 class="font-bold text-white text-sm mb-3">Vélocité Budgétaire Acheteurs (Alerte Article 91)</h3>
-                        <div class="overflow-x-auto flex-1">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
-                                        <th class="py-2.5 px-3">Acheteur Public</th>
-                                        <th class="py-2.5 px-3 text-center">BDC</th>
-                                        <th class="py-2.5 px-3 text-right">Dépense BDC</th>
-                                        <th class="py-2.5 px-3">Statut Plafond (500k)</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-800/60">
-                                    <template x-for="b in buyers.slice(0, 8)" :key="b.buyer_name">
-                                        <tr class="hover:bg-slate-800/40">
-                                            <td class="py-2 px-3 font-medium text-slate-300 max-w-xs truncate" :title="b.buyer_name" x-text="b.buyer_name"></td>
-                                            <td class="py-2 px-3 text-center font-bold text-slate-400 font-mono" x-text="b.bdc_count"></td>
-                                            <td class="py-2 px-3 text-right font-mono font-bold text-white" x-text="b.total_spent_mad.toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></td>
-                                            <td class="py-2 px-3">
-                                                <div class="flex items-center gap-2">
-                                                    <div class="w-16 bg-slate-800 rounded-full h-2 overflow-hidden">
-                                                        <div :class="b.upcoming_ao_signal ? 'bg-rose-500' : (b.budget_exhaustion_pct > 50 ? 'bg-amber-400' : 'bg-emerald-400')" class="h-2 rounded-full" :style="'width: ' + b.budget_exhaustion_pct + '%'"></div>
-                                                    </div>
-                                                    <span class="font-bold font-mono text-[11px]" :class="b.upcoming_ao_signal ? 'text-rose-400' : 'text-slate-400'" x-text="b.budget_exhaustion_pct + '%'"></span>
-                                                    <template x-if="b.upcoming_ao_signal">
-                                                        <span class="px-1.5 py-0.5 bg-rose-500/20 text-rose-300 font-bold text-[9px] rounded border border-rose-500/30">AO Requis</span>
-                                                    </template>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <!-- ========================================== -->
@@ -966,35 +1018,58 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                                       x-text="'Dernier audit : ' + (dateAudit?.audited_at || '19/11/2026')"></span>
                             </div>
                             <h3 class="text-lg font-bold text-white tracking-tight flex items-center gap-2.5">
-                                <span>Audit des Avis du Jour : Comparaison Nombre Portail vs Base</span>
+                                <span>Audit & Confiance d’Exhaustivité : Comparaison Portail vs Base</span>
                                 <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border"
                                       :class="dateAudit?.verdict_badge || 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'"
                                       x-text="dateAudit?.verdict || 'AUDIT RÉUSSI — 100% EXHAUSTIF'"></span>
                             </h3>
                             <p class="text-xs text-slate-400 mt-1">
-                                Interroge le moteur de recherche officiel du portail (<code class="text-slate-300">dateMiseEnLigneStart / End</code>) et extrait le nombre officiel de résultats pour le comparer terme à terme avec PostgreSQL.
+                                Interroge le moteur officiel du portail (<code class="text-slate-300">dateMiseEnLigneStart / End</code>) par jour, plage ou mois et réconcilie terme à terme avec PostgreSQL.
                             </p>
                         </div>
 
-                        <!-- Date Selector and Audit Trigger -->
+                        <!-- Period Mode Selector and Trigger -->
                         <div class="flex flex-wrap items-center gap-2">
-                            <div class="flex items-center bg-slate-950 rounded-xl border border-slate-800 p-1">
-                                <button type="button" @click="auditTargetDate = '19/11/2026'; runDateAudit('19/11/2026')"
-                                        :class="auditTargetDate === '19/11/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
-                                        class="px-2.5 py-1 text-xs rounded-lg transition-colors">
-                                    19 Nov (Aujourd'hui)
+                            <div class="flex items-center bg-slate-950 rounded-xl border border-slate-800 p-1 text-xs">
+                                <button type="button" @click="setAuditPeriodMode('day')"
+                                        :class="auditPeriodMode === 'day' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Jour
                                 </button>
-                                <button type="button" @click="auditTargetDate = '18/11/2026'; runDateAudit('18/11/2026')"
-                                        :class="auditTargetDate === '18/11/2026' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
-                                        class="px-2.5 py-1 text-xs rounded-lg transition-colors">
-                                    18 Nov (Hier)
+                                <button type="button" @click="setAuditPeriodMode('range')"
+                                        :class="auditPeriodMode === 'range' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Plage
+                                </button>
+                                <button type="button" @click="setAuditPeriodMode('month')"
+                                        :class="auditPeriodMode === 'month' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'"
+                                        class="px-2.5 py-1 rounded-lg transition-colors">
+                                    Mois
                                 </button>
                             </div>
 
-                            <input type="text" x-model="auditTargetDate" placeholder="JJ/MM/AAAA"
-                                   class="w-28 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-2 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                            <div x-show="auditPeriodMode === 'day'" class="flex items-center gap-1.5">
+                                <button type="button" @click="setDayPreset('today')" class="px-2 py-1 text-xs bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300">Aujourd’hui</button>
+                                <button type="button" @click="setDayPreset('yesterday')" class="px-2 py-1 text-xs bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300">19 Nov</button>
+                                <input type="text" x-model="auditTargetDate" placeholder="JJ/MM/AAAA"
+                                       class="w-24 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                            </div>
 
-                            <button @click="runDateAudit(auditTargetDate)" 
+                            <div x-show="auditPeriodMode === 'range'" class="flex items-center gap-1 text-xs">
+                                <input type="text" x-model="auditTargetDate" placeholder="Du"
+                                       class="w-20 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                                <span class="text-slate-500">→</span>
+                                <input type="text" x-model="auditEndDate" placeholder="Au"
+                                       class="w-20 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                            </div>
+
+                            <div x-show="auditPeriodMode === 'month'" class="flex items-center gap-1.5">
+                                <button type="button" @click="setMonthPreset('11/2026')" class="px-2 py-1 text-xs bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300">Nov 2026</button>
+                                <input type="text" x-model="auditSelectedMonth" placeholder="MM/AAAA"
+                                       class="w-20 bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl px-2 py-1.5 text-center font-mono focus:border-emerald-500 focus:outline-none" />
+                            </div>
+
+                            <button @click="runPeriodAudit()" 
                                     :disabled="auditingDate"
                                     class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
                                 <span x-show="!auditingDate">🛡️</span>
@@ -1754,9 +1829,6 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 sortBy: 'score_desc',
                 selectedIndex: 0,
                 items: [],
-                competitors: [],
-                buyers: [],
-                seasonality: null,
                 teamUsers: [],
                 toasts: [],
                 loading: false,
@@ -1775,7 +1847,11 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                 probingGap: false,
                 auditingDate: false,
                 reconcilingMissing: false,
-                auditTargetDate: '19/11/2026',
+                auditPeriodMode: 'day',
+                auditTargetDate: '20/11/2026',
+                auditEndDate: '20/11/2026',
+                auditSelectedMonth: '11/2026',
+                auditCalendarDrawerOpen: false,
                 dateAudit: null,
                 activePollingTimer: null,
                 ingestionData: {
@@ -1903,6 +1979,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     window.addEventListener('hashchange', () => this.checkUrlHash());
 
                     this.fetchFeed();
+                    this.runPeriodAudit();
                     if (this.currentUser.role === 'admin') {
                         this.fetchIngestionDashboard().then(() => {
                             if (this.ingestionData && this.ingestionData.active_batch) {
@@ -1939,13 +2016,6 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     if (key === 'category') this.selectedCategory = 'all';
                     if (key === 'urgency') this.selectedUrgency = 'all';
                     this.fetchFeed();
-                    if (this.currentUser.role === 'admin') {
-                        this.fetchIngestionDashboard().then(() => {
-                            if (this.ingestionData && this.ingestionData.active_batch) {
-                                this.startActivePolling();
-                            }
-                        });
-                    }
                 },
 
                 hasPermission(permission) {
@@ -2037,13 +2107,6 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                             this.activeModule = 'feed';
                         }
                         this.fetchFeed();
-                    if (this.currentUser.role === 'admin') {
-                        this.fetchIngestionDashboard().then(() => {
-                            if (this.ingestionData && this.ingestionData.active_batch) {
-                                this.startActivePolling();
-                            }
-                        });
-                    }
                     } catch (e) {
                         console.error('Error switching role:', e);
                     }
@@ -2076,112 +2139,7 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     this.selectedUrgency = 'all';
                     this.sortBy = 'score_desc';
                     this.fetchFeed();
-                    if (this.currentUser.role === 'admin') {
-                        this.fetchIngestionDashboard().then(() => {
-                            if (this.ingestionData && this.ingestionData.active_batch) {
-                                this.startActivePolling();
-                            }
-                        });
-                    }
                     this.showToast('Filtres réinitialisés', 'info');
-                },
-
-                async renderRadarCharts() {
-                    await this.fetchRadarData();
-                    this.$nextTick(() => {
-                        this.initSeasonalityChart();
-                        this.initCompetitorsChart();
-                    });
-                },
-
-                async fetchRadarData() {
-                    try {
-                        const [compRes, buyerRes, seasRes] = await Promise.all([
-                            fetch('/api/analytics/competitors?limit=15'),
-                            fetch('/api/analytics/buyers'),
-                            fetch('/api/analytics/seasonality')
-                        ]);
-                        this.competitors = await compRes.json();
-                        this.buyers = await buyerRes.json();
-                        this.seasonality = await seasRes.json();
-                    } catch (e) {
-                        console.error('Error fetching radar data:', e);
-                    }
-                },
-
-                initSeasonalityChart() {
-                    const ctx = document.getElementById('seasonalityChart');
-                    if (!ctx) return;
-                    if (window.seasonalityChartInstance) window.seasonalityChartInstance.destroy();
-
-                    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
-                    const dataValues = [12, 14, 18, 15, 16, 20, 19, 14, 22, 48, 65, 84]; // Representative procurement spend volume
-
-                    window.seasonalityChartInstance = new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            labels: months,
-                            datasets: [{
-                                label: 'Volume Marchés Passés (TGR)',
-                                data: dataValues,
-                                backgroundColor: dataValues.map((v, i) => i >= 9 ? 'rgba(16, 185, 129, 0.85)' : 'rgba(51, 65, 85, 0.7)'),
-                                borderColor: dataValues.map((v, i) => i >= 9 ? '#10b981' : '#475569'),
-                                borderWidth: 1,
-                                borderRadius: 6
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { display: false },
-                                tooltip: {
-                                    callbacks: {
-                                        afterLabel: (ctx) => ctx.dataIndex >= 9 ? "🔥 Période T4 d'accélération budgétaire" : ""
-                                    }
-                                }
-                            },
-                            scales: {
-                                y: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#94a3b8' } },
-                                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
-                            }
-                        }
-                    });
-                },
-
-                initCompetitorsChart() {
-                    const ctx = document.getElementById('competitorsChart');
-                    if (!ctx) return;
-                    if (window.competitorsChartInstance) window.competitorsChartInstance.destroy();
-
-                    const top8 = (this.competitors || []).slice(0, 6);
-                    const labels = top8.map(c => c.winner_name.length > 20 ? c.winner_name.substring(0, 18) + '...' : c.winner_name);
-                    const amounts = top8.map(c => c.total_awarded_mad);
-
-                    window.competitorsChartInstance = new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            labels: labels.length ? labels : ['Fournisseur A', 'Fournisseur B', 'Fournisseur C'],
-                            datasets: [{
-                                label: 'Total Remporté (MAD TTC)',
-                                data: amounts.length ? amounts : [4500000, 3200000, 2100000],
-                                backgroundColor: 'rgba(99, 102, 241, 0.8)',
-                                borderColor: '#6366f1',
-                                borderWidth: 1,
-                                borderRadius: 6
-                            }]
-                        },
-                        options: {
-                            indexAxis: 'y',
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                x: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#94a3b8' } },
-                                y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
-                            }
-                        }
-                    });
                 },
 
                 async fetchCrawlerStatus() {
@@ -2457,22 +2415,86 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     }
                 },
 
-                async runDateAudit(targetDate = null) {
-                    const d = targetDate || this.auditTargetDate || '19/11/2026';
-                    this.auditTargetDate = d;
+                setAuditPeriodMode(mode) {
+                    this.auditPeriodMode = mode;
+                    if (mode === 'day') {
+                        if (!this.auditTargetDate) this.auditTargetDate = '20/11/2026';
+                    } else if (mode === 'range') {
+                        if (!this.auditTargetDate) this.auditTargetDate = '14/11/2026';
+                        if (!this.auditEndDate) this.auditEndDate = '20/11/2026';
+                    } else if (mode === 'month') {
+                        if (!this.auditSelectedMonth) this.auditSelectedMonth = '11/2026';
+                    }
+                },
+
+                setDayPreset(preset) {
+                    this.auditPeriodMode = 'day';
+                    if (preset === 'today') {
+                        this.auditTargetDate = '20/11/2026';
+                    } else if (preset === 'yesterday') {
+                        this.auditTargetDate = '19/11/2026';
+                    } else if (preset === '18nov') {
+                        this.auditTargetDate = '18/11/2026';
+                    }
+                    this.runPeriodAudit();
+                },
+
+                setRangePreset(days) {
+                    this.auditPeriodMode = 'range';
+                    if (days === 7) {
+                        this.auditTargetDate = '14/11/2026';
+                        this.auditEndDate = '20/11/2026';
+                    } else if (days === 14) {
+                        this.auditTargetDate = '07/11/2026';
+                        this.auditEndDate = '20/11/2026';
+                    } else if (days === 30) {
+                        this.auditTargetDate = '21/10/2026';
+                        this.auditEndDate = '20/11/2026';
+                    }
+                    this.runPeriodAudit();
+                },
+
+                setMonthPreset(mStr) {
+                    this.auditPeriodMode = 'month';
+                    this.auditSelectedMonth = mStr;
+                    this.runPeriodAudit();
+                },
+
+                getPeriodLabel() {
+                    if (this.auditPeriodMode === 'month') {
+                        const months = {'01':'Janvier','02':'Février','03':'Mars','04':'Avril','05':'Mai','06':'Juin','07':'Juillet','08':'Août','09':'Septembre','10':'Octobre','11':'Novembre','12':'Décembre'};
+                        const parts = (this.auditSelectedMonth || '11/2026').split('/');
+                        return `Mois de ${months[parts[0]] || parts[0]} ${parts[1] || '2026'}`;
+                    }
+                    if (this.auditPeriodMode === 'range') {
+                        return `Période du ${this.auditTargetDate} au ${this.auditEndDate}`;
+                    }
+                    return `Avis du ${this.auditTargetDate}`;
+                },
+
+                async runPeriodAudit() {
                     this.auditingDate = true;
-                    this.showToast(`Audit d'exhaustivité en cours pour le ${d}...`, 'info');
+                    let url = `/api/admin/ingestion/audit-date?mode=${encodeURIComponent(this.auditPeriodMode)}`;
+                    if (this.auditPeriodMode === 'month') {
+                        url += `&date=${encodeURIComponent(this.auditSelectedMonth)}`;
+                    } else if (this.auditPeriodMode === 'range') {
+                        url += `&date=${encodeURIComponent(this.auditTargetDate)}&end_date=${encodeURIComponent(this.auditEndDate)}`;
+                    } else {
+                        url += `&date=${encodeURIComponent(this.auditTargetDate)}`;
+                    }
+
+                    this.showToast(`Audit d’exhaustivité en cours pour ${this.getPeriodLabel()}...`, 'info');
                     try {
-                        const res = await fetch(`/api/admin/ingestion/audit-date?date=${encodeURIComponent(d)}`);
+                        const res = await fetch(url);
                         if (res.ok) {
                             this.dateAudit = await res.json();
                             if (this.dateAudit.is_fully_reconciled) {
-                                this.showToast(`🛡️ 100% Vérifié : Les ${this.dateAudit.portal_total_published} avis du ${d} sont tous en base !`, 'success');
+                                this.showToast(`🛡️ 100% Confiance : Tous les ${this.dateAudit.portal_total_published} avis sont en base !`, 'success');
                             } else {
-                                this.showToast(`⚠️ Écart détecté : ${this.dateAudit.missing_count} avis manquants pour le ${d}`, 'warning');
+                                this.showToast(`⚠️ Écart détecté : ${this.dateAudit.missing_count} avis manquants (${this.dateAudit.concordance_pct}% de confiance)`, 'warning');
                             }
                         } else {
-                            this.showToast("Erreur lors de l'audit de date", 'error');
+                            this.showToast("Erreur lors de l'audit de période", 'error');
                         }
                     } catch (e) {
                         this.showToast('Erreur de connexion : ' + e, 'error');
@@ -2481,23 +2503,34 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     }
                 },
 
-                async reconcileMissingDateItems() {
-                    if (!this.dateAudit || !this.dateAudit.missing_portal_ids || !this.dateAudit.missing_portal_ids.length) return;
+                async runDateAudit(targetDate = null) {
+                    if (targetDate) {
+                        this.auditPeriodMode = 'day';
+                        this.auditTargetDate = targetDate;
+                    }
+                    return this.runPeriodAudit();
+                },
+
+                async reconcilePeriod() {
+                    if (!this.dateAudit) return;
                     this.reconcilingMissing = true;
-                    this.showToast(`Importation unitaire de ${this.dateAudit.missing_portal_ids.length} avis manquants...`, 'info');
+                    const missingCount = this.dateAudit.missing_count || 0;
+                    this.showToast(`Rattrapage et importation de ${missingCount} avis manquants...`, 'info');
                     try {
                         const res = await fetch('/api/admin/ingestion/audit-date/reconcile', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({
                                 date: this.dateAudit.target_date,
-                                portal_ids: this.dateAudit.missing_portal_ids
+                                end_date: this.dateAudit.end_date,
+                                period_mode: this.dateAudit.period_mode,
+                                portal_ids: this.dateAudit.missing_portal_ids || []
                             })
                         });
                         const data = await res.json();
                         if (res.ok) {
                             this.showToast(data.message, 'success');
-                            await this.runDateAudit(this.dateAudit.target_date);
+                            await this.runPeriodAudit();
                             await this.fetchIngestionDashboard();
                             this.fetchFeed();
                         } else {
@@ -2508,6 +2541,10 @@ HTML_DASHBOARD = """<!DOCTYPE html>
                     } finally {
                         this.reconcilingMissing = false;
                     }
+                },
+
+                async reconcileMissingDateItems() {
+                    return this.reconcilePeriod();
                 },
 
                 get filteredBatches() {

@@ -109,15 +109,33 @@ def test_admin_get_gap_analysis(client):
     assert "portal_latest" in data
 
 def test_admin_audit_date_endpoint(client):
-    res = client.get("/api/admin/ingestion/audit-date?date=19/11/2026")
+    # Test Day Mode
+    res = client.get("/api/admin/ingestion/audit-date?date=19/11/2026&mode=day")
     assert res.status_code == 200
     data = res.json()
     assert data["target_date"] == "19/11/2026"
+    assert data["period_mode"] == "day"
     assert "portal_total_published" in data
     assert "db_total_ingested" in data
     assert "concordance_pct" in data
     assert "verdict" in data
     assert "reconciled_items" in data
+
+    # Test Range Mode
+    res_range = client.get("/api/admin/ingestion/audit-date?date=14/11/2026&end_date=20/11/2026&mode=range")
+    assert res_range.status_code == 200
+    data_range = res_range.json()
+    assert data_range["period_mode"] == "range"
+    assert data_range["target_date"] == "14/11/2026"
+    assert data_range["end_date"] == "20/11/2026"
+    assert "Période" in data_range["period_label"]
+
+    # Test Month Mode
+    res_month = client.get("/api/admin/ingestion/audit-date?date=11/2026&mode=month")
+    assert res_month.status_code == 200
+    data_month = res_month.json()
+    assert data_month["period_mode"] == "month"
+    assert "Novembre" in data_month["period_label"]
 
 def test_admin_reconcile_missing_items(client):
     res = client.post("/api/admin/ingestion/audit-date/reconcile", json={

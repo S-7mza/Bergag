@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from typing import Tuple
+from typing import Tuple, Optional
 from src.scraper.client import PortalHttpClient
 from src.scraper.parser import parse_listing_page, parse_total_results
 from src.models.raw import RawIngestionLog
@@ -40,20 +40,22 @@ class ListingSpider:
     async def fetch_by_date(
         self, 
         date_str: str, 
+        end_date_str: Optional[str] = None,
         page: int = 1, 
         page_size: int = 50
     ) -> Tuple[RawIngestionLog, list[dict], int]:
         """
-        Fetches consultations filtered by official publication date ('Date de mise en ligne').
+        Fetches consultations filtered by official publication date or date range ('Date de mise en ligne').
         Returns (raw_log, cards, total_matching_results).
         """
+        end_date = end_date_str or date_str
         url = (
             f"/bdc/entreprise/consultation/?"
             f"search_consultation_entreprise[dateMiseEnLigneStart]={date_str}&"
-            f"search_consultation_entreprise[dateMiseEnLigneEnd]={date_str}&"
+            f"search_consultation_entreprise[dateMiseEnLigneEnd]={end_date}&"
             f"search_consultation_entreprise[pageSize]={page_size}&page={page}"
         )
-        logger.info(f"ListingSpider: Fetching for publication date {date_str} (page {page}, size {page_size})")
+        logger.info(f"ListingSpider: Fetching for publication range {date_str} -> {end_date} (page {page}, size {page_size})")
         
         html = await self.client.get(url)
         content_hash = hashlib.sha256(html.encode('utf-8')).hexdigest()
