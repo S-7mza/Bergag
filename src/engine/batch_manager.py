@@ -910,8 +910,26 @@ class IngestionBatchManager:
                 portal_total = 0
                 portal_cards = []
 
-        portal_id_map = {c["portal_id"]: c for c in portal_cards if c.get("portal_id")}
+        portal_id_map = {int(c["portal_id"]): c for c in portal_cards if c.get("portal_id")}
         portal_ids = set(portal_id_map.keys())
+
+        # Check 1st: verify which portal_ids already exist in DB by PK
+        if portal_ids:
+            try:
+                async with async_session_factory() as pk_session:
+                    stmt_pks = (
+                        select(Tender)
+                        .options(selectinload(Tender.buyer))
+                        .where(Tender.portal_id.in_(list(portal_ids)))
+                    )
+                    res_pks = await pk_session.execute(stmt_pks)
+                    for t_pk in res_pks.scalars().all():
+                        if t_pk.portal_id not in db_id_map:
+                            db_id_map[t_pk.portal_id] = t_pk
+                            db_tenders.append(t_pk)
+                db_ids = set(db_id_map.keys())
+            except Exception as e_pk:
+                logger.debug(f"[BatchManager] Portal PK check failed: {e_pk}")
 
         # 3. Exact Set Difference
         missing_ids = portal_ids - db_ids
@@ -1037,12 +1055,24 @@ class IngestionBatchManager:
                 fetch_live_portal=True
             )
             portal_ids = audit_res.get("missing_portal_ids", [])
+
+        # Check 1st: Query DB to filter out any IDs already in database (bring ONLY non-existing IDs)
+        clean_pids = [int(p) for p in portal_ids if p is not None]
+        if clean_pids:
+            try:
+                async with async_session_factory() as chk_sess:
+                    stmt_exist = select(Tender.portal_id).where(Tender.portal_id.in_(clean_pids))
+                    res_exist = await chk_sess.execute(stmt_exist)
+                    already_in_db = set(res_exist.scalars().all())
+                    portal_ids = [p for p in clean_pids if p not in already_in_db]
+            except Exception as e_chk:
+                logger.warning(f"[BatchManager] Pre-ingestion DB check failed: {e_chk}")
             
         if not portal_ids:
             return {
                 "status": "noop", 
                 "imported_count": 0,
-                "message": "Aucun identifiant manquant à importer : la base est déjà 100% à jour pour cette période."
+                "message": "Tous les identifiants ciblés sont déjà présents en base de données : aucun nouvel avis à importer."
             }
         
         imported_count = 0
@@ -1078,6 +1108,11 @@ class IngestionBatchManager:
                         record.status = "aborted"
                         record.current_step = "Rattrapage interrompu par l'opérateur."
                         break
+
+                    # Check 1st: if tender exists in DB, skip duplicate network fetch
+                    if await service.tender_exists(pid):
+                        logger.info(f"[BatchManager] BDC #{pid} is already in database. Skipping duplicate fetch.")
+                        continue
 
                     # Update loading item
                     record.current_loading_item = {
@@ -1258,8 +1293,26 @@ class IngestionBatchManager:
                 for t in db_active_tenders
             ]
 
-        portal_id_map = {c["portal_id"]: c for c in portal_cards if c.get("portal_id")}
+        portal_id_map = {int(c["portal_id"]): c for c in portal_cards if c.get("portal_id")}
         portal_active_ids = set(portal_id_map.keys())
+
+        # Check 1st: cross-reference all portal IDs with DB to ensure any existing ID is recognized
+        if portal_active_ids:
+            try:
+                async with async_session_factory() as pk_session:
+                    stmt_pks = (
+                        select(Tender)
+                        .options(selectinload(Tender.buyer))
+                        .where(Tender.portal_id.in_(list(portal_active_ids)))
+                    )
+                    res_pks = await pk_session.execute(stmt_pks)
+                    for t_pk in res_pks.scalars().all():
+                        if t_pk.portal_id not in db_id_map:
+                            db_id_map[t_pk.portal_id] = t_pk
+                            db_active_tenders.append(t_pk)
+                db_active_ids = set(db_id_map.keys())
+            except Exception as e_pk:
+                logger.debug(f"[BatchManager] Active PK check failed: {e_pk}")
 
         # 4. Set Differences & Coverage Metrics
         missing_ids = portal_active_ids - db_active_ids
@@ -1395,6 +1448,18 @@ class IngestionBatchManager:
             audit_res = await self.audit_active_tenders_coverage(force_refresh=True)
             portal_ids = audit_res.get("missing_portal_ids", [])
 
+        # Check 1st: Filter out any IDs already in the DB (bring ONLY non-existing IDs)
+        clean_pids = [int(p) for p in portal_ids if p is not None]
+        if clean_pids:
+            try:
+                async with async_session_factory() as chk_sess:
+                    stmt_exist = select(Tender.portal_id).where(Tender.portal_id.in_(clean_pids))
+                    res_exist = await chk_sess.execute(stmt_exist)
+                    already_in_db = set(res_exist.scalars().all())
+                    portal_ids = [p for p in clean_pids if p not in already_in_db]
+            except Exception as e_chk:
+                logger.warning(f"[BatchManager] Pre-active check failed: {e_chk}")
+
         if not portal_ids:
             return {
                 "status": "noop",
@@ -1409,6 +1474,9 @@ class IngestionBatchManager:
                 from src.scraper.ingestion_service import IngestionService
                 service = IngestionService(session, client)
                 for pid in portal_ids:
+                    # Check 1st before fetching detail
+                    if await service.tender_exists(pid):
+                        continue
                     try:
                         raw_detail, detail_data = await service.detail_spider.fetch_detail(pid)
                         await service.ingest_tender_detail(detail_data, raw_log=raw_detail)
@@ -1867,10 +1935,32 @@ class IngestionBatchManager:
                     client_bf = PortalHttpClient()
                     async with async_session_factory() as bf_session:
                         bf_service = IngestionService(bf_session, client_bf)
+
+                        # Check 1st: filter out any backfill IDs that are already in DB!
+                        bf_pids = [int(b["portal_id"]) for b in backfill_list if b.get("portal_id")]
+                        if bf_pids:
+                            try:
+                                stmt_exist = select(Tender.portal_id).where(Tender.portal_id.in_(bf_pids))
+                                res_exist = await bf_session.execute(stmt_exist)
+                                already_in_db = set(res_exist.scalars().all())
+                                if already_in_db:
+                                    self.pending_backfill_queue = [q for q in self.pending_backfill_queue if int(q["portal_id"]) not in already_in_db]
+                                    self._save_backfill_queue()
+                                    backfill_list = [b for b in backfill_list if int(b["portal_id"]) not in already_in_db]
+                            except Exception as e_chk:
+                                logger.warning(f"[BatchManager] Backfill DB check failed: {e_chk}")
+
                         for b_item in backfill_list:
                             if self._abort_requested:
                                 break
                             pid = int(b_item["portal_id"])
+
+                            # Check 1st before fetching detail
+                            if await bf_service.tender_exists(pid):
+                                self.pending_backfill_queue = [q for q in self.pending_backfill_queue if int(q["portal_id"]) != pid]
+                                self._save_backfill_queue()
+                                continue
+
                             record.current_loading_item = {
                                 "portal_id": pid,
                                 "reference": f"#{pid}",

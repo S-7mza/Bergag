@@ -2,8 +2,8 @@ import re
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
-from sqlalchemy import select
+from typing import Optional, List, Sequence
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.scraper.client import PortalHttpClient
 from src.scraper.listing_spider import ListingSpider
@@ -36,6 +36,26 @@ class IngestionService:
         self.listing_spider = ListingSpider(client)
         self.detail_spider = DetailSpider(client)
 
+    async def tender_exists(self, portal_id: int) -> bool:
+        """Checks 1st if a consultation ID already exists in the database"""
+        if not portal_id:
+            return False
+        stmt = select(func.count()).select_from(Tender).where(Tender.portal_id == int(portal_id))
+        res = await self.session.execute(stmt)
+        return (res.scalar() or 0) > 0
+
+    async def filter_non_existing_ids(self, portal_ids: Sequence[int]) -> List[int]:
+        """Filters a collection of IDs to return ONLY non-existing IDs (checks DB 1st)"""
+        if not portal_ids:
+            return []
+        int_ids = [int(p) for p in portal_ids if p is not None]
+        if not int_ids:
+            return []
+        stmt = select(Tender.portal_id).where(Tender.portal_id.in_(int_ids))
+        res = await self.session.execute(stmt)
+        existing_ids = set(res.scalars().all())
+        return [pid for pid in int_ids if pid not in existing_ids]
+
     async def get_or_create_buyer(self, official_name: str, location_hint: Optional[str] = None) -> Buyer:
         slug = slugify(official_name)
         if not slug:
@@ -58,14 +78,28 @@ class IngestionService:
 
         return buyer
 
-    async def ingest_tender_detail(self, detail_data: dict, raw_log: Optional[RawIngestionLog] = None) -> Tender:
-        """Atomically saves raw snapshot and upserts Tender + LineItems into DB"""
-        if raw_log:
-            self.session.add(raw_log)
-
-        portal_id = detail_data["portal_id"]
+    async def ingest_tender_detail(
+        self, 
+        detail_data: dict, 
+        raw_log: Optional[RawIngestionLog] = None,
+        skip_if_exists: bool = True
+    ) -> Tender:
+        """Atomically saves raw snapshot and inserts Tender + LineItems into DB (checks 1st if exists)"""
+        portal_id = int(detail_data["portal_id"])
         reference = detail_data["reference"]
         buyer_name = detail_data["buyer_name"] or "Acheteur Inconnu"
+
+        # Check 1st: if tender is already in DB, skip re-ingestion
+        stmt = select(Tender).where(Tender.portal_id == portal_id)
+        res = await self.session.execute(stmt)
+        tender = res.scalar_one_or_none()
+
+        if tender and skip_if_exists:
+            logger.info(f"Tender #{portal_id} already exists in database. Skipping duplicate ingestion.")
+            return tender
+
+        if raw_log:
+            self.session.add(raw_log)
         
         # Resolve Buyer
         buyer = await self.get_or_create_buyer(buyer_name, detail_data.get("execution_location"))
@@ -81,16 +115,11 @@ class IngestionService:
         clean_ref = re.sub(r'[^a-zA-Z0-9]', '-', reference).strip('-')
         compound_key = f"{buyer.slug}:{clean_ref}:{year}"
 
-        # Check existing tender
-        stmt = select(Tender).where(Tender.portal_id == portal_id)
-        res = await self.session.execute(stmt)
-        tender = res.scalar_one_or_none()
-
         published_dt = datetime.fromisoformat(detail_data["published_at"]) if detail_data.get("published_at") else datetime.now()
         deadline_dt = datetime.fromisoformat(detail_data["deadline_at"]) if detail_data.get("deadline_at") else datetime.now()
 
         if tender:
-            # Update existing tender
+            # Explicit update requested (skip_if_exists=False)
             tender.deadline_at = deadline_dt
             tender.title = detail_data["title"]
             tender.main_category = detail_data["main_category"]

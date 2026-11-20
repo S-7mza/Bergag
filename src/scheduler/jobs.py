@@ -128,13 +128,13 @@ async def run_active_crawl_cycle(
         async with async_session_factory() as session:
             service = IngestionService(session, client)
 
-            # Fast-lookup existing active tenders in database to avoid redundant detail page fetches
+            # Fast-lookup ALL existing tenders in database (checks 1st, regardless of status)
             try:
-                stmt_existing = select(Tender.portal_id).where(Tender.status == "active")
+                stmt_existing = select(Tender.portal_id)
                 res_existing = await session.execute(stmt_existing)
-                existing_active_ids = set(res_existing.scalars().all())
+                existing_portal_ids = {int(p) for p in res_existing.scalars().all() if p is not None}
             except Exception:
-                existing_active_ids = set()
+                existing_portal_ids = set()
 
             for page in range(1, max_pages + 1):
                 if is_aborted_callback and is_aborted_callback():
@@ -184,7 +184,7 @@ async def run_active_crawl_cycle(
                         if is_aborted_callback and is_aborted_callback():
                             logger.info("Crawl cycle aborted by operator at card loop.")
                             break
-                        portal_id = card.get("portal_id")
+                        portal_id = int(card.get("portal_id")) if card.get("portal_id") else None
                         if not portal_id:
                             continue
 
@@ -192,8 +192,8 @@ async def run_active_crawl_cycle(
                             first_portal_id = portal_id
                         last_portal_id = portal_id
 
-                        # Fast-skip if tender is already ingested in database
-                        if portal_id in existing_active_ids:
+                        # Check 1st: if tender is already in database, skip it (bring only non-existing IDs)
+                        if portal_id in existing_portal_ids:
                             processed_count += 1
                             if progress_callback:
                                 try:
@@ -207,10 +207,16 @@ async def run_active_crawl_cycle(
                                         "line_items_count": 0,
                                         "score": 0.0,
                                         "verdict": "EN_BASE",
-                                        "step_description": f"Phase 3 : BDC #{portal_id} déjà en base (conforme)."
+                                        "step_description": f"Phase 3 : BDC #{portal_id} déjà en base (conforme, ignoré)."
                                     })
                                 except Exception:
                                     pass
+                            continue
+
+                        # Check 1st directly against DB before calling network fetch
+                        if await service.tender_exists(portal_id):
+                            existing_portal_ids.add(portal_id)
+                            processed_count += 1
                             continue
 
                         # Emit BDC loading event before fetching detail
@@ -233,7 +239,7 @@ async def run_active_crawl_cycle(
                             tender = await service.ingest_tender_detail(detail_data, raw_log=raw_detail)
                             await session.commit()
                             processed_count += 1
-                            existing_active_ids.add(portal_id)
+                            existing_portal_ids.add(portal_id)
 
                             # Evaluate against each profile
                             top_score = 0.0
@@ -363,11 +369,11 @@ async def run_historical_crawl_cycle(
         async with async_session_factory() as session:
             service = IngestionService(session, client)
 
-            # Fast-lookup all existing portal_ids in database to avoid redundant detail page fetches
+            # Fast-lookup all existing portal_ids in database (checks 1st, regardless of status)
             try:
                 stmt_existing = select(Tender.portal_id)
                 res_existing = await session.execute(stmt_existing)
-                existing_portal_ids = set(res_existing.scalars().all())
+                existing_portal_ids = {int(p) for p in res_existing.scalars().all() if p is not None}
             except Exception:
                 existing_portal_ids = set()
 
@@ -424,7 +430,7 @@ async def run_historical_crawl_cycle(
                         if is_aborted_callback and is_aborted_callback():
                             logger.info("Historical crawl cycle aborted by operator at card loop.")
                             break
-                        portal_id = card.get("portal_id")
+                        portal_id = int(card.get("portal_id")) if card.get("portal_id") else None
                         if not portal_id:
                             continue
 
@@ -432,7 +438,7 @@ async def run_historical_crawl_cycle(
                             first_portal_id = portal_id
                         last_portal_id = portal_id
 
-                        # Fast-skip if tender is already ingested in database
+                        # Check 1st: if tender is already in database, skip it (bring only non-existing IDs)
                         if portal_id in existing_portal_ids:
                             processed_count += 1
                             if progress_callback:
@@ -447,10 +453,16 @@ async def run_historical_crawl_cycle(
                                         "line_items_count": 0,
                                         "score": 0.0,
                                         "verdict": "EN_BASE",
-                                        "step_description": f"Phase 3 : BDC #{portal_id} déjà indexé en base locale (passé)."
+                                        "step_description": f"Phase 3 : BDC #{portal_id} déjà indexé en base locale (ignoré)."
                                     })
                                 except Exception:
                                     pass
+                            continue
+
+                        # Check 1st directly against DB before calling network fetch
+                        if await service.tender_exists(portal_id):
+                            existing_portal_ids.add(portal_id)
+                            processed_count += 1
                             continue
 
                         # Emit BDC loading event before fetching detail
