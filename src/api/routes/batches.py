@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin/ingestion", tags=["Admin Ingestion Batches & Quality"])
 
 class TriggerBatchRequest(BaseModel):
-    pages: int = Field(default=2, ge=1, le=10, description="Nombre de pages de 50 avis à ingérer")
+    pages: int = Field(default=2, ge=1, le=100, description="Nombre de pages de 50 avis à ingérer (jusqu'à 100 pages / 5000 avis)")
     send_emails: bool = Field(default=True, description="Expédier les alertes Gmail pour les offres GO")
 
 class RemediateRequest(BaseModel):
-    pages: int = Field(default=3, ge=1, le=10, description="Nombre de pages de rattrapage")
+    pages: int = Field(default=3, ge=1, le=100, description="Nombre de pages de rattrapage (jusqu'à 100 pages)")
     reason: Optional[str] = Field(default="Rattrapage diagnostique des lots manqués", description="Motif de l'opération")
 
 class DateAuditReconcileRequest(BaseModel):

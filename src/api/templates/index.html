@@ -466,15 +466,24 @@
                             </button>
 
                             <!-- Primary Action Button: Context-Aware -->
-                            <!-- Active Mode: Gap -->
-                            <button x-show="auditPeriodMode === 'active' && activeAudit?.missing_count > 0"
-                                    @click="reconcileActiveTenders()" 
-                                    :disabled="reconcilingActive"
-                                    class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
-                                <span x-show="!reconcilingActive">⚡</span>
-                                <span x-show="reconcilingActive" class="animate-spin">⚙️</span>
-                                <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier les ' + (activeAudit?.missing_count || 0) + ' avis')"></span>
-                            </button>
+                            <!-- Active Mode: Gap - Dual CTAs -->
+                            <div x-show="auditPeriodMode === 'active' && (activeAudit?.missing_count > 0 || activeAudit?.total_unimported_count > 0)" class="flex items-center gap-1.5">
+                                <button @click="reconcileActiveTenders()" 
+                                        :disabled="reconcilingActive || remediating"
+                                        x-show="activeAudit?.immediate_missing_count > 0 || activeAudit?.missing_portal_ids?.length > 0"
+                                        class="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1 whitespace-nowrap active:scale-95 disabled:opacity-50">
+                                    <span x-show="!reconcilingActive">⚡</span>
+                                    <span x-show="reconcilingActive" class="animate-spin text-xs">⚙️</span>
+                                    <span x-text="reconcilingActive ? 'Import...' : ('Rapatrier récents (' + (activeAudit?.immediate_missing_count || activeAudit?.missing_portal_ids?.length || 0) + ')')"></span>
+                                </button>
+                                <button @click="triggerFullActiveSync()" 
+                                        :disabled="remediating"
+                                        class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 whitespace-nowrap active:scale-95 disabled:opacity-50">
+                                    <span x-show="!remediating">🛡️</span>
+                                    <span x-show="remediating" class="animate-spin text-xs">⚙️</span>
+                                    <span x-text="remediating ? 'Sync 100%...' : ('Sync 100% (' + (activeAudit?.total_unimported_count || activeAudit?.missing_count || 1472) + ')')"></span>
+                                </button>
+                            </div>
 
                             <!-- Active Mode: Synced -->
                             <button x-show="auditPeriodMode === 'active' && (!activeAudit?.missing_count || activeAudit?.missing_count === 0)"
@@ -1366,16 +1375,26 @@
                             </p>
                         </div>
 
-                        <!-- Single Clear Hero Action Button -->
-                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-shrink-0">
-                            <!-- When Active Gap Exists: 1-Click Active Catch-up Button -->
-                            <button x-show="activeAudit?.missing_count > 0"
+                        <!-- Hero Action Buttons: Dual Action Architecture -->
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-shrink-0 flex-wrap">
+                            <!-- When Active Gap Exists: Primary 100% Full Sync Button -->
+                            <button x-show="activeAudit?.total_unimported_count > 0 || (activeAudit?.missing_count > 0 && !activeAudit?.is_fully_covered)"
+                                    @click="triggerFullActiveSync()" 
+                                    :disabled="remediating || reconcilingActive"
+                                    class="px-6 py-3.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs md:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition-all transform active:scale-95 disabled:opacity-50">
+                                <span x-show="!remediating">🛡️</span>
+                                <span x-show="remediating" class="animate-spin text-sm">⚙️</span>
+                                <span x-text="remediating ? 'Synchronisation 100% en cours...' : ('Synchroniser à 100% (' + (activeAudit?.total_unimported_count || activeAudit?.missing_count || 1472) + ' restants)')"></span>
+                            </button>
+
+                            <!-- When Active Gap Exists: Fast 1-Click Priority Catch-up Button (Pages 1-4) -->
+                            <button x-show="activeAudit?.immediate_missing_count > 0 || (activeAudit?.missing_portal_ids?.length > 0)"
                                     @click="reconcileActiveTenders()" 
                                     :disabled="reconcilingActive || remediating"
-                                    class="px-6 py-3.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs md:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition-all transform active:scale-95 disabled:opacity-50">
-                                <span x-show="!reconcilingActive && !remediating">⚡</span>
-                                <span x-show="reconcilingActive || remediating" class="animate-spin text-sm">⚙️</span>
-                                <span x-text="reconcilingActive ? 'Importation en cours...' : 'Rapatrier les ' + (activeAudit?.missing_count || 0) + ' avis actifs (1-Clic)'"></span>
+                                    class="px-4 py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50">
+                                <span x-show="!reconcilingActive">⚡</span>
+                                <span x-show="reconcilingActive" class="animate-spin text-xs">⚙️</span>
+                                <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier récents (' + (activeAudit?.immediate_missing_count || activeAudit?.missing_portal_ids?.length || 0) + ' avis)')"></span>
                             </button>
 
                             <!-- When Other Gap Exists: Date/Period Catch-up Button -->
@@ -1389,7 +1408,7 @@
                             </button>
 
                             <!-- When 100% Synced: Reassuring Verification Probe Button -->
-                            <button x-show="!dateAudit?.missing_count && !ingestionData.gap_analysis?.missing_rows"
+                            <button x-show="(!activeAudit?.missing_count || activeAudit?.is_fully_covered) && !dateAudit?.missing_count && !ingestionData.gap_analysis?.missing_rows"
                                     @click="probePortalGap()" 
                                     :disabled="probingGap"
                                     class="px-5 py-3 rounded-2xl bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-slate-600 font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 disabled:opacity-50">
@@ -1402,13 +1421,21 @@
 
                     <!-- Clean 4-Metric Summary Strip -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 pt-5 border-t border-slate-800/80">
-                        <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/60 flex items-center gap-3">
-                            <span class="text-xl">🛡️</span>
-                            <div>
-                                <span class="text-[10px] text-slate-500 font-mono uppercase block font-semibold">Marché Actif (En Dépôt)</span>
-                                <span class="font-mono font-bold text-xs text-emerald-400" 
-                                      x-text="(activeAudit ? activeAudit.db_total_active : 0) + ' / ' + (activeAudit ? activeAudit.portal_total_active : 0) + ' avis (' + (activeAudit ? activeAudit.coverage_pct : 100) + '%)'"></span>
+                        <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/60 flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="text-xl flex-shrink-0">🛡️</span>
+                                <div class="min-w-0">
+                                    <span class="text-[10px] text-slate-500 font-mono uppercase block font-semibold">Marché Actif (En Dépôt)</span>
+                                    <span class="font-mono font-bold text-xs text-emerald-400" 
+                                          x-text="(activeAudit ? activeAudit.db_total_active : 0) + ' / ' + (activeAudit ? activeAudit.portal_total_active : 0) + ' avis (' + (activeAudit ? activeAudit.coverage_pct : 100) + '%)'"></span>
+                                </div>
                             </div>
+                            <button x-show="activeAudit && (activeAudit.total_unimported_count > 0 || !activeAudit.is_fully_covered)"
+                                    @click="triggerFullActiveSync()" 
+                                    :disabled="remediating"
+                                    class="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[10px] rounded-lg shadow transition-all active:scale-95 flex items-center gap-1 flex-shrink-0">
+                                <span>⚡</span> <span>Sync 100%</span>
+                            </button>
                         </div>
 
                         <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/60 flex items-center gap-3">
@@ -1764,24 +1791,33 @@
                         </div>
 
                         <!-- Action Bar when Missing Active Items Exist -->
-                        <div x-show="activeAudit?.missing_count > 0" class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div x-show="activeAudit?.missing_count > 0 || (activeAudit?.total_unimported_count > 0)" class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div class="flex items-center gap-3">
                                 <span class="text-xl">⚠️</span>
                                 <div>
                                     <h4 class="text-xs font-bold text-amber-300">
-                                        <span x-text="activeAudit?.missing_count || 0"></span> consultation(s) active(s) manquent à votre base locale
+                                        <span x-text="activeAudit?.total_unimported_count || activeAudit?.missing_count || 0"></span> consultation(s) active(s) manquent à votre base locale
                                     </h4>
                                     <p class="text-[11px] text-slate-400 mt-0.5">
-                                        Cliquez ci-contre pour rapatrier et indexer automatiquement l'intégralité des avis manquants.
+                                        Rapatriez les avis prioritaires récents ou lancez la synchronisation complète de tous les avis ouverts au dépôt pour garantir 100% de conformité commerciale.
                                     </p>
                                 </div>
                             </div>
-                            <button @click="reconcileActiveTenders()" :disabled="reconcilingActive"
-                                    class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 flex-shrink-0">
-                                <span x-show="!reconcilingActive">⚡</span>
-                                <span x-show="reconcilingActive" class="animate-spin text-xs">⚙️</span>
-                                <span x-text="reconcilingActive ? 'Importation en cours...' : ('Importer les ' + (activeAudit?.missing_count || 0) + ' avis manquants (1-Clic)')"></span>
-                            </button>
+                            <div class="flex items-center gap-2.5 flex-wrap flex-shrink-0">
+                                <button @click="reconcileActiveTenders()" :disabled="reconcilingActive || remediating"
+                                        x-show="activeAudit?.immediate_missing_count > 0 || (activeAudit?.missing_portal_ids?.length > 0)"
+                                        class="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 transition-all">
+                                    <span x-show="!reconcilingActive">⚡</span>
+                                    <span x-show="reconcilingActive" class="animate-spin text-xs">⚙️</span>
+                                    <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier récents (' + (activeAudit?.immediate_missing_count || activeAudit?.missing_portal_ids?.length || 0) + ' avis)')"></span>
+                                </button>
+                                <button @click="triggerFullActiveSync()" :disabled="remediating"
+                                        class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
+                                    <span x-show="!remediating">🛡️</span>
+                                    <span x-show="remediating" class="animate-spin text-xs">⚙️</span>
+                                    <span x-text="remediating ? 'Synchronisation 100%...' : ('Synchroniser à 100% (' + (activeAudit?.total_unimported_count || activeAudit?.missing_count || 1472) + ' avis)')"></span>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Active Consultations Reconciled Table with Filters -->

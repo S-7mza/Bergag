@@ -14,6 +14,8 @@ from src.engine.scoring_cascade import ScoringCascadeEngine
 from src.alerts.email_dispatcher import EmailDispatcher
 from src.alerts.webhook_dispatcher import WebhookDispatcher
 from src.config.settings import settings
+from sqlalchemy import select
+from src.models.tender import Tender
 
 logging.basicConfig(
     level=logging.INFO,
@@ -126,6 +128,14 @@ async def run_active_crawl_cycle(
         async with async_session_factory() as session:
             service = IngestionService(session, client)
 
+            # Fast-lookup existing active tenders in database to avoid redundant detail page fetches
+            try:
+                stmt_existing = select(Tender.portal_id).where(Tender.status == "active")
+                res_existing = await session.execute(stmt_existing)
+                existing_active_ids = set(res_existing.scalars().all())
+            except Exception:
+                existing_active_ids = set()
+
             for page in range(1, max_pages + 1):
                 if is_aborted_callback and is_aborted_callback():
                     logger.info("Crawl cycle aborted by operator at page loop.")
@@ -182,6 +192,27 @@ async def run_active_crawl_cycle(
                             first_portal_id = portal_id
                         last_portal_id = portal_id
 
+                        # Fast-skip if tender is already ingested in database
+                        if portal_id in existing_active_ids:
+                            processed_count += 1
+                            if progress_callback:
+                                try:
+                                    await progress_callback("bdc_ingested", {
+                                        "phase": "bdc_item",
+                                        "processed_count": processed_count,
+                                        "portal_id": portal_id,
+                                        "reference": card.get("reference", f"#{portal_id}"),
+                                        "title": card.get("title", "Consultation BDC"),
+                                        "buyer": card.get("buyer_name", "Acheteur Public"),
+                                        "line_items_count": 0,
+                                        "score": 0.0,
+                                        "verdict": "EN_BASE",
+                                        "step_description": f"Phase 3 : BDC #{portal_id} déjà en base (conforme)."
+                                    })
+                                except Exception:
+                                    pass
+                            continue
+
                         # Emit BDC loading event before fetching detail
                         if progress_callback:
                             try:
@@ -202,6 +233,7 @@ async def run_active_crawl_cycle(
                             tender = await service.ingest_tender_detail(detail_data, raw_log=raw_detail)
                             await session.commit()
                             processed_count += 1
+                            existing_active_ids.add(portal_id)
 
                             # Evaluate against each profile
                             top_score = 0.0

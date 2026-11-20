@@ -1958,6 +1958,10 @@ class IngestionBatchManager:
             record.current_step = f"Échec du lot : {e}"
         finally:
             self.active_batch = None
+            if "active_coverage_audit" in self._audit_cache:
+                del self._audit_cache["active_coverage_audit"]
+            if "active_coverage_audit" in self._audit_cache_times:
+                del self._audit_cache_times["active_coverage_audit"]
             self._save_to_storage()
             try:
                 await self._save_batch_to_db(record)
