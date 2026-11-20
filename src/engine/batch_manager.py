@@ -218,6 +218,7 @@ class IngestionBatchManager:
         return cls._instance
 
     STORAGE_FILE = Path("data/batches_ledger.json")
+    BACKFILL_QUEUE_FILE = Path("data/pending_backfill_queue.json")
 
     def _init_state(self):
         self.batches: List[IngestionBatchRecord] = []
@@ -227,7 +228,50 @@ class IngestionBatchManager:
         self._last_gap_probe_time: Optional[datetime] = None
         self._audit_cache: Dict[str, Dict[str, Any]] = {}
         self._audit_cache_times: Dict[str, datetime] = {}
+        self.pending_backfill_queue: List[Dict[str, Any]] = []
         self._load_from_storage()
+        self._load_backfill_queue()
+
+    def _load_backfill_queue(self):
+        """Loads pending missing portal IDs from persistent storage"""
+        if self.BACKFILL_QUEUE_FILE.exists():
+            try:
+                with open(self.BACKFILL_QUEUE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        self.pending_backfill_queue = data
+            except Exception as e:
+                logger.warning(f"[BatchManager] Failed to read {self.BACKFILL_QUEUE_FILE}: {e}")
+
+    def _save_backfill_queue(self):
+        """Persists pending backfill queue to data/pending_backfill_queue.json"""
+        try:
+            self.BACKFILL_QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.BACKFILL_QUEUE_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.pending_backfill_queue, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"[BatchManager] Failed to persist {self.BACKFILL_QUEUE_FILE}: {e}")
+
+    def enqueue_missing_ids(self, portal_ids: List[int], reason: str = "audit"):
+        """Enqueues missing portal IDs to guarantee priority ingestion in the next batch"""
+        existing_ids = {int(item["portal_id"]) for item in self.pending_backfill_queue}
+        added = False
+        for pid in portal_ids:
+            try:
+                pid_int = int(pid)
+                if pid_int not in existing_ids:
+                    self.pending_backfill_queue.append({
+                        "portal_id": pid_int,
+                        "reason": reason,
+                        "enqueued_at": datetime.now().isoformat()
+                    })
+                    existing_ids.add(pid_int)
+                    added = True
+            except (ValueError, TypeError):
+                continue
+        if added:
+            self._save_backfill_queue()
+            logger.info(f"[BatchManager] Priority Backfill Queue updated: {len(self.pending_backfill_queue)} missing IDs scheduled for next batch.")
 
     def _load_from_storage(self):
         """Loads batches from data/batches_ledger.json if available, otherwise initializes seed ledger"""
@@ -939,6 +983,9 @@ class IngestionBatchManager:
                 f"{missing_count} avis doivent être importés pour atteindre 100% d’exhaustivité."
             )
 
+        if missing_ids:
+            self.enqueue_missing_ids(list(missing_ids), reason=f"audit_date_{start_date_str}")
+
         res_dict = {
             "period_mode": mode,
             "target_date": start_date_str,
@@ -1074,6 +1121,9 @@ class IngestionBatchManager:
                         record.loaded_items.insert(0, loaded_obj)
                         record.recent_ingested_bdcs.insert(0, loaded_obj)
                         record.current_bdc = loaded_obj
+                        # Remove from persistent backfill queue
+                        self.pending_backfill_queue = [q for q in self.pending_backfill_queue if int(q["portal_id"]) != pid]
+                        self._save_backfill_queue()
                     except Exception as e:
                         logger.warning(f"Failed to ingest missing tender #{pid}: {e}")
                         await session.rollback()
@@ -1293,6 +1343,9 @@ class IngestionBatchManager:
             verdict = "AUCUN_AVIS_ACTIF"
             verdict_badge = "bg-slate-500/20 text-slate-400 border-slate-500/30"
             message = "Aucun avis actif actuellement détecté."
+
+        if missing_ids:
+            self.enqueue_missing_ids(list(missing_ids), reason="audit_active")
 
         result = {
             "audited_at": now.strftime("%d/%m/%Y à %H:%M:%S"),
@@ -1669,6 +1722,8 @@ class IngestionBatchManager:
             "batches": batches_list[:20],
             "active_batch": self.active_batch.to_dict() if self.active_batch else None,
             "latest_database_records": latest_database_records,
+            "pending_backfill_count": len(self.pending_backfill_queue),
+            "pending_backfill_items": self.pending_backfill_queue[:15],
             "diagnostic": {
                 "health_status": "Besoin d'action" if diagnostic_issues else "Parfait",
                 "issues_count": len(diagnostic_issues),
@@ -1784,6 +1839,69 @@ class IngestionBatchManager:
 
         try:
             logger.info(f"[BatchManager] Starting batch {batch_id} for {pages} pages with live BDC callback...")
+
+            # Phase 0 : Priority Backfill Queue Processing (Guarantees missing data is ingested in the very next batch)
+            if self.pending_backfill_queue and not self._abort_requested:
+                backfill_list = list(self.pending_backfill_queue)
+                logger.info(f"[BatchManager] Executing Phase 0 Priority Backfill for {len(backfill_list)} missing IDs...")
+                record.current_phase = "backfill"
+                record.current_step = f"Phase 0 : Rattrapage prioritaire de {len(backfill_list)} avis manquants découverts..."
+                record.queued_items = [
+                    {
+                        "portal_id": int(item["portal_id"]),
+                        "reference": f"#{item['portal_id']}",
+                        "title": f"Consultation BDC #{item['portal_id']} (Rattrapage Prioritaire)",
+                        "buyer": "Portail TGR"
+                    }
+                    for item in backfill_list
+                ]
+                try:
+                    from src.scraper.ingestion_service import IngestionService
+                    client_bf = PortalHttpClient()
+                    async with async_session_factory() as bf_session:
+                        bf_service = IngestionService(bf_session, client_bf)
+                        for b_item in backfill_list:
+                            if self._abort_requested:
+                                break
+                            pid = int(b_item["portal_id"])
+                            record.current_loading_item = {
+                                "portal_id": pid,
+                                "reference": f"#{pid}",
+                                "title": f"Rattrapage unitaire du BDC #{pid}...",
+                                "buyer": "Portail TGR",
+                                "status": "Extraction fiche & devis..."
+                            }
+                            record.queued_items = [q for q in record.queued_items if q.get("portal_id") != pid]
+                            try:
+                                raw_detail, detail_data = await bf_service.detail_spider.fetch_detail(pid)
+                                tender = await bf_service.ingest_tender_detail(detail_data, raw_log=raw_detail)
+                                await bf_session.commit()
+                                record.tenders_ingested += 1
+                                record.total_loaded += 1
+                                if record.first_bdc_id is None:
+                                    record.first_bdc_id = pid
+                                record.last_bdc_id = pid
+                                loaded_bf = {
+                                    "portal_id": pid,
+                                    "reference": detail_data.get("reference", f"#{pid}"),
+                                    "title": detail_data.get("title", f"Consultation BDC #{pid}"),
+                                    "buyer": detail_data.get("buyer_name", "Acheteur Public"),
+                                    "line_items_count": len(detail_data.get("line_items", [])),
+                                    "score": 85.0,
+                                    "verdict": "GO",
+                                    "in_database": True,
+                                    "loaded_at": datetime.now().strftime("%H:%M:%S")
+                                }
+                                record.loaded_items.insert(0, loaded_bf)
+                                record.current_bdc = loaded_bf
+                                # Successfully reconciled: remove from pending queue
+                                self.pending_backfill_queue = [q for q in self.pending_backfill_queue if int(q["portal_id"]) != pid]
+                                self._save_backfill_queue()
+                            except Exception as e_pid:
+                                logger.warning(f"[BatchManager] Could not backfill ID {pid}: {e_pid}")
+                except Exception as e_phase0:
+                    logger.warning(f"[BatchManager] Phase 0 backfill error: {e_phase0}")
+
             import inspect
             crawl_kwargs = {
                 "max_pages": pages,
