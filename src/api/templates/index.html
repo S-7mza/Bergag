@@ -536,7 +536,7 @@
                                         <button type="button" @click="activeTendersFilter = 'missing'"
                                                 :class="activeTendersFilter === 'missing' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30' : 'text-slate-400 hover:text-white'"
                                                 class="px-2.5 py-1 rounded-lg">
-                                            ⚠️ Manquants (<span x-text="activeAudit?.missing_count || 0"></span>)
+                                            ⚠️ Manquants (<span x-text="activeAudit?.missing_tenders?.length || activeAudit?.missing_count || 0"></span>)
                                         </button>
                                         <button type="button" @click="activeTendersFilter = 'ingested'"
                                                 :class="activeTendersFilter === 'ingested' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-white'"
@@ -1835,7 +1835,7 @@
                                         <button type="button" @click="activeTendersFilter = 'missing'"
                                                 :class="activeTendersFilter === 'missing' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30' : 'text-slate-400 hover:text-white'"
                                                 class="px-2.5 py-1 rounded-lg">
-                                            ⚠️ Manquants (<span x-text="activeAudit?.missing_count || 0"></span>)
+                                            ⚠️ Manquants (<span x-text="activeAudit?.missing_tenders?.length || activeAudit?.missing_count || 0"></span>)
                                         </button>
                                         <button type="button" @click="activeTendersFilter = 'ingested'"
                                                 :class="activeTendersFilter === 'ingested' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-white'"
@@ -3913,14 +3913,17 @@
                 },
 
                 get filteredActiveItems() {
-                    if (!this.activeAudit || !this.activeAudit.all_active_items) return [];
+                    if (!this.activeAudit) return [];
                     if (this.activeTendersFilter === 'missing') {
-                        return this.activeAudit.all_active_items.filter(item => !item.is_in_db);
+                        if (this.activeAudit.missing_tenders && this.activeAudit.missing_tenders.length > 0) {
+                            return this.activeAudit.missing_tenders;
+                        }
+                        return (this.activeAudit.all_active_items || []).filter(item => !item.is_in_db);
                     }
                     if (this.activeTendersFilter === 'ingested') {
-                        return this.activeAudit.all_active_items.filter(item => item.is_in_db);
+                        return (this.activeAudit.all_active_items || []).filter(item => item.is_in_db);
                     }
-                    return this.activeAudit.all_active_items;
+                    return this.activeAudit.all_active_items || [];
                 },
 
                 get filteredBatches() {

@@ -1299,35 +1299,42 @@ class IngestionBatchManager:
                 minutes = int(diff.seconds / 60)
                 return f"Dans {minutes}m"
 
-        # 5. Build Reconciled Active Items List
-        all_active_items = []
+        # 5. Build Reconciled Active Items List (Guaranteed Complete Missing Items)
+        missing_tenders = []
+        in_db_tenders = []
         all_ids = sorted(list(portal_active_ids | db_active_ids), reverse=True)
         for pid in all_ids:
             in_db = pid in db_active_ids
             card = portal_id_map.get(pid)
             db_row = db_id_map.get(pid)
 
-            ref = (db_row.reference if db_row else None) or (card.get("reference") if card else f"#{pid}")
-            title = (db_row.title if db_row else None) or (card.get("title") if card else "Consultation active")
-            buyer = ((db_row.buyer.official_name if db_row and db_row.buyer else None) or 
-                     (card.get("buyer_name") if card else "Acheteur"))
-            deadline_str = (db_row.deadline_at.strftime("%d/%m/%Y %H:%M") if db_row and db_row.deadline_at else None) or (card.get("deadline_raw") if card else "—")
-            deadline_dt = db_row.deadline_at if db_row else (datetime.fromisoformat(card["deadline_at"]) if card and card.get("deadline_at") else None)
+            ref = (card.get("reference") if card else None) or (db_row.reference if db_row else f"#{pid}")
+            title = (card.get("title") if card else None) or (db_row.title if db_row else "Consultation active")
+            buyer = ((card.get("buyer_name") if card else None) or 
+                     (db_row.buyer.official_name if db_row and db_row.buyer else "Acheteur Public"))
+            deadline_str = (card.get("deadline_raw") if card else None) or (db_row.deadline_at.strftime("%d/%m/%Y %H:%M") if db_row and db_row.deadline_at else "—")
+            deadline_dt = (datetime.fromisoformat(card["deadline_at"]) if card and card.get("deadline_at") else None) or (db_row.deadline_at if db_row else None)
 
-            all_active_items.append({
+            item_obj = {
                 "portal_id": pid,
                 "reference": ref,
                 "title": title,
                 "buyer": buyer,
-                "execution_location": (db_row.execution_location if db_row else None) or (card.get("execution_location") if card else ""),
+                "execution_location": (card.get("execution_location") if card else "") or (db_row.execution_location if db_row else ""),
                 "deadline_raw": deadline_str,
                 "deadline_countdown": _format_countdown(deadline_dt),
                 "is_in_db": in_db,
                 "status_label": "En Base" if in_db else "Manquant",
                 "badge_class": "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" if in_db else "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-            })
+            }
 
-        missing_tenders = [item for item in all_active_items if not item["is_in_db"]]
+            if not in_db:
+                missing_tenders.append(item_obj)
+            else:
+                in_db_tenders.append(item_obj)
+
+        # Place ALL missing items first so they are NEVER truncated away
+        all_active_items = missing_tenders + in_db_tenders
 
         if is_fully_covered:
             verdict = "CONFORME_100_PCT"
@@ -1357,10 +1364,10 @@ class IngestionBatchManager:
             "total_unimported_count": total_unimported,
             "immediate_missing_count": immediate_missing_count,
             "pages_needed_for_100_pct": pages_needed,
-            "missing_count": total_unimported if total_unimported > 0 else immediate_missing_count,
+            "missing_count": len(missing_tenders),
             "missing_portal_ids": sorted(list(missing_ids)),
-            "missing_tenders": missing_tenders[:30],
-            "all_active_items": all_active_items[:100],
+            "missing_tenders": missing_tenders,
+            "all_active_items": all_active_items[:300],
             "is_live_probe": is_live,
             "source_portal_url": "https://www.marchespublics.gov.ma/bdc/entreprise/consultation/?search_consultation_entreprise[pageSize]=50&page=1"
         }

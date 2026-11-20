@@ -413,6 +413,11 @@ async def test_audit_active_coverage_logic():
         assert len(result["all_active_items"]) >= 2
         assert "coverage_pct" in result
         assert "is_fully_covered" in result
+        # Verify that all missing tenders are strictly preserved without truncation
+        assert len(result["missing_tenders"]) == result["missing_count"]
+        for missing in result["missing_tenders"]:
+            assert missing["is_in_db"] is False
+            assert missing["status_label"] == "Manquant"
 
 
 
