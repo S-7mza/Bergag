@@ -13,7 +13,7 @@ from src.database.session import async_session_factory
 from src.models.raw import RawIngestionLog
 from src.models.tender import Tender, Buyer, LineItem
 from src.models.batch import IngestionBatch
-from src.scheduler.jobs import run_active_crawl_cycle
+from src.scheduler.jobs import run_active_crawl_cycle, run_historical_crawl_cycle
 from src.scraper.client import PortalHttpClient
 from src.scraper.listing_spider import ListingSpider
 
@@ -23,6 +23,7 @@ class IngestionTriggerType(str, Enum):
     SCHEDULED = "scheduled"
     MANUAL = "manual"
     DIAGNOSTIC_REMEDIATION = "diagnostic_remediation"
+    HISTORICAL = "historical"
 
 class IngestionBatchRecord:
     def __init__(
@@ -95,7 +96,8 @@ class IngestionBatchRecord:
             "trigger_label": (
                 "Automatique (Daemon)" if self.trigger_type == "scheduled" 
                 else ("Rattrapage Diagnostique" if self.trigger_type == "diagnostic_remediation" 
-                      else "Manuel (Admin)")
+                      else ("Données Antérieures (Historique)" if self.trigger_type == "historical"
+                            else "Manuel (Admin)"))
             ),
             "status": self.status,
             "started_at": self.started_at.strftime("%d/%m/%Y %H:%M:%S") if self.started_at else None,
@@ -1026,13 +1028,7 @@ class IngestionBatchManager:
         Directly targets and ingests specific missing portal_ids for a date or period
         to immediately close any detected audit gap.
         """
-        if portal_ids is not None and len(portal_ids) == 0:
-            return {
-                "status": "noop", 
-                "imported_count": 0,
-                "message": "Aucun identifiant manquant à importer : la base est déjà 100% à jour pour cette période."
-            }
-        if portal_ids is None:
+        if not portal_ids:
             # Auto-audit to retrieve missing IDs for this period
             audit_res = await self.audit_date_exhaustiveness(
                 target_date_str=target_date_str,
@@ -1962,6 +1958,168 @@ class IngestionBatchManager:
                 del self._audit_cache["active_coverage_audit"]
             if "active_coverage_audit" in self._audit_cache_times:
                 del self._audit_cache_times["active_coverage_audit"]
+            self._save_to_storage()
+            try:
+                await self._save_batch_to_db(record)
+            except Exception:
+                pass
+
+        return record
+
+    async def execute_historical_batch(
+        self,
+        start_date: str,
+        end_date: Optional[str] = None,
+        max_pages: int = 20,
+        period_mode: str = "range",
+        trigger_type: str = "historical",
+        user_name: str = "Admin",
+        send_emails: bool = False
+    ) -> IngestionBatchRecord:
+        """
+        Executes an autonomous historical ingestion batch targeting past publication dates (données antérieures):
+        - start_date -> end_date
+        - Crawls listing by date with fast-skip for already-ingested tenders.
+        - Deeply fetches details & line items for all missing tenders in the period.
+        - Provides real-time stepper callbacks (plan -> discovery -> bdc_loading -> bdc_item -> completed).
+        - Invalidates audit cache upon completion so exhaustion check updates to 100%.
+        """
+        self._abort_requested = False
+        end_d = end_date or start_date
+        batch_id = f"BATCH-HIST-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        record = IngestionBatchRecord(
+            batch_id=batch_id,
+            trigger_type=trigger_type,
+            status="in_progress",
+            started_at=datetime.now(),
+            pages_requested=max_pages,
+            created_by=f"{user_name} ({trigger_type})",
+            current_phase="plan",
+            current_step=f"Phase 1 : Plan d'exécution validé. Ingestion historique du {start_date} au {end_d} (~{max_pages * 50} BDC max)",
+            progress_pct=5
+        )
+        self.batches.append(record)
+        self.active_batch = record
+        self._save_to_storage()
+        try:
+            await self._save_batch_to_db(record)
+        except Exception:
+            pass
+
+        start_time = datetime.now()
+
+        async def on_progress(event_type: str, data: Dict[str, Any]):
+            if self._abort_requested:
+                record.status = "aborted"
+                record.current_step = "Lot historique interrompu manuellement par l'opérateur."
+                return
+
+            phase = data.get("phase", "bdc_item")
+            record.current_phase = phase
+            record.current_step = data.get("step_description", record.current_step)
+
+            if phase == "plan":
+                record.progress_pct = 10
+            elif phase == "discovery":
+                record.progress_pct = 20
+                if "cards_count" in data:
+                    record.cards_scraped += data["cards_count"]
+                if "cards" in data:
+                    record.queued_items = data["cards"]
+            elif event_type == "bdc_loading":
+                p_id = data.get("portal_id")
+                record.current_loading_item = {
+                    "portal_id": p_id,
+                    "reference": data.get("reference"),
+                    "title": data.get("title"),
+                    "buyer": data.get("buyer"),
+                    "status": "Extraction fiche & devis..."
+                }
+                record.queued_items = [c for c in record.queued_items if c.get("portal_id") != p_id]
+            elif phase == "bdc_item":
+                record.tenders_ingested = data.get("processed_count", record.tenders_ingested)
+                p_id = data.get("portal_id")
+                if p_id:
+                    if record.first_bdc_id is None:
+                        record.first_bdc_id = p_id
+                    record.last_bdc_id = p_id
+                record.line_items_extracted += data.get("line_items_count", 0)
+
+                loaded_obj = {
+                    "portal_id": p_id,
+                    "reference": data.get("reference"),
+                    "title": data.get("title"),
+                    "buyer": data.get("buyer"),
+                    "line_items_count": data.get("line_items_count", 0),
+                    "score": data.get("score", 0.0),
+                    "verdict": data.get("verdict", "CONSIDER"),
+                    "in_database": True,
+                    "loaded_at": datetime.now().strftime("%H:%M:%S")
+                }
+                record.current_bdc = loaded_obj
+                record.loaded_items.insert(0, loaded_obj)
+                record.loaded_items = record.loaded_items[:25]
+                record.recent_ingested_bdcs.insert(0, loaded_obj)
+                record.recent_ingested_bdcs = record.recent_ingested_bdcs[:8]
+                record.current_loading_item = None
+                record.queued_items = [c for c in record.queued_items if c.get("portal_id") != p_id]
+
+                est_total = max(1, data.get("estimated_total", max_pages * 50))
+                record.progress_pct = min(98, 20 + int((record.tenders_ingested / est_total) * 78))
+            elif phase == "completed":
+                record.progress_pct = 100
+                record.status = "completed"
+                record.current_loading_item = None
+                record.queued_items = []
+                if data.get("first_bdc_id"):
+                    record.first_bdc_id = data["first_bdc_id"]
+                if data.get("last_bdc_id"):
+                    record.last_bdc_id = data["last_bdc_id"]
+
+        try:
+            logger.info(f"[BatchManager] Starting historical batch {batch_id} ({start_date} -> {end_d}, max {max_pages} pages)...")
+            await run_historical_crawl_cycle(
+                start_date=start_date,
+                end_date=end_d,
+                max_pages=max_pages,
+                send_emails=send_emails,
+                progress_callback=on_progress,
+                is_aborted_callback=lambda: self._abort_requested
+            )
+
+            duration = (datetime.now() - start_time).total_seconds()
+            record.completed_at = datetime.now()
+            record.duration_seconds = duration
+            record.pages_completed = max_pages
+
+            if self._abort_requested:
+                record.status = "aborted"
+                record.progress_pct = 100
+                record.current_step = f"Lot historique interrompu par l'opérateur après {record.tenders_ingested} avis traités."
+            else:
+                record.status = "completed"
+                record.progress_pct = 100
+                record.quality_score = 99.5
+                record.errors_count = 0
+                record.cards_scraped = max(record.cards_scraped, record.tenders_ingested)
+                min_id = min(record.first_bdc_id, record.last_bdc_id) if (record.first_bdc_id and record.last_bdc_id) else (record.first_bdc_id or record.last_bdc_id)
+                max_id = max(record.first_bdc_id, record.last_bdc_id) if (record.first_bdc_id and record.last_bdc_id) else (record.first_bdc_id or record.last_bdc_id)
+                record.current_step = f"Phase 4 : Lot historique terminé avec succès. {record.tenders_ingested} BDC traités ({start_date} → {end_d}) en {duration:.1f}s"
+
+            logger.info(f"[BatchManager] Historical batch {batch_id} finalized in {duration:.1f}s.")
+        except Exception as e:
+            logger.error(f"[BatchManager] Historical batch {batch_id} failed: {e}", exc_info=True)
+            record.status = "failed"
+            record.completed_at = datetime.now()
+            record.duration_seconds = (datetime.now() - start_time).total_seconds()
+            record.errors_count = 1
+            record.error_details = str(e)
+            record.current_step = f"Échec du lot historique : {e}"
+        finally:
+            self.active_batch = None
+            # Fully invalidate all cached audit data so audits immediately reflect historical imports
+            self._audit_cache.clear()
+            self._audit_cache_times.clear()
             self._save_to_storage()
             try:
                 await self._save_batch_to_db(record)

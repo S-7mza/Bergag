@@ -27,6 +27,13 @@ class DateAuditReconcileRequest(BaseModel):
 class ActiveAuditReconcileRequest(BaseModel):
     portal_ids: List[int] = Field(default_factory=list, description="Liste des identifiants BDC actifs manquants à importer (ou vide pour auto-détection)")
 
+class TriggerHistoricalBatchRequest(BaseModel):
+    start_date: str = Field(description="Date de début (DD/MM/YYYY)")
+    end_date: Optional[str] = Field(default=None, description="Date de fin optionnelle pour plage (DD/MM/YYYY)")
+    period_mode: str = Field(default="range", description="Mode de période ('day', 'range', 'month')")
+    pages: int = Field(default=20, ge=1, le=100, description="Nombre max de pages (50 avis/page, jusqu'à 100 pages)")
+    send_emails: bool = Field(default=False, description="Expédier les alertes pour les avis historiques")
+
 @router.get("/dashboard")
 async def get_ingestion_dashboard(user: User = Depends(require_role(["admin", "analyst"]))):
     """
@@ -173,6 +180,39 @@ async def trigger_custom_batch(
     return {
         "status": "batch_started",
         "message": f"Lot d'ingestion manuel initié pour {req.pages} pages par {user.full_name}."
+    }
+
+@router.post("/batches/trigger-historical")
+async def trigger_historical_batch_endpoint(
+    req: TriggerHistoricalBatchRequest,
+    bg_tasks: BackgroundTasks,
+    user: User = Depends(require_role(["admin"]))
+):
+    """
+    Triggers an autonomous historical ingestion batch for previous publication dates (Admin only).
+    Scans past dates/periods, fast-skips existing entries, and completes missing tenders.
+    """
+    if batch_manager.active_batch is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Un lot d'ingestion est déjà en cours d'exécution. Veuillez patienter ou interrompre le lot actuel."
+        )
+
+    end_d = req.end_date or req.start_date
+    bg_tasks.add_task(
+        batch_manager.execute_historical_batch,
+        start_date=req.start_date,
+        end_date=end_d,
+        max_pages=req.pages,
+        period_mode=req.period_mode,
+        trigger_type="historical",
+        user_name=user.full_name,
+        send_emails=req.send_emails
+    )
+
+    return {
+        "status": "historical_batch_started",
+        "message": f"⚡ Lot historique initié pour la période {req.start_date} → {end_d} (max {req.pages} pages / ~{req.pages * 50} BDC) par {user.full_name}."
     }
 
 @router.post("/batches/{batch_id}/retry")

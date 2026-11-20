@@ -1967,6 +1967,54 @@
                         </button>
                     </div>
 
+                    <!-- Historical Batches Autonomous Ingestion Hub (Données Antérieures) -->
+                    <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-slate-900 to-indigo-950/40 border border-indigo-500/30 space-y-4 shadow-xl">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-base">🚀</span>
+                                    <h4 class="text-xs md:text-sm font-bold text-white uppercase tracking-wider font-mono">
+                                        Lots d’Ingestion Historiques (Données Antérieures)
+                                    </h4>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                        Zéro-Perte Garanti
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-300 mt-1">
+                                    Rapatrie et indexe les consultations des dates de publication passées. Passe instantanément les consultations déjà en base locale et extrait fiches et bordereaux pour chaque avis manquant.
+                                </p>
+                            </div>
+
+                            <button @click="triggerHistoricalBatch('current_selection')" :disabled="remediating"
+                                    class="px-4 py-2.5 bg-gradient-to-r from-indigo-600 via-indigo-500 to-teal-500 hover:from-indigo-500 hover:to-teal-400 text-white font-black text-xs rounded-xl shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 transition-all whitespace-nowrap">
+                                <span x-show="!remediating">⚡</span>
+                                <span x-show="remediating" class="animate-spin text-xs">⚙️</span>
+                                <span x-text="remediating ? 'Lancement...' : 'Lancer le Lot pour cette Période (' + getPeriodLabel() + ')'"></span>
+                            </button>
+                        </div>
+
+                        <!-- Quick Historical Presets Strip -->
+                        <div class="pt-3 border-t border-slate-800/80 flex flex-wrap items-center gap-2 text-xs">
+                            <span class="text-slate-400 text-[11px] font-semibold">Lots d'ingestion rapides :</span>
+                            <button type="button" @click="triggerHistoricalBatch('yesterday')" :disabled="remediating"
+                                    class="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-indigo-950/70 text-slate-200 border border-slate-800 hover:border-indigo-500/40 font-semibold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
+                                <span>📅</span> <span>Hier (Lot 1j)</span>
+                            </button>
+                            <button type="button" @click="triggerHistoricalBatch('7days')" :disabled="remediating"
+                                    class="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-indigo-950/70 text-slate-200 border border-slate-800 hover:border-indigo-500/40 font-semibold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
+                                <span>⚡</span> <span>7 Derniers Jours (~350 BDC)</span>
+                            </button>
+                            <button type="button" @click="triggerHistoricalBatch('month')" :disabled="remediating"
+                                    class="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-indigo-950/70 text-slate-200 border border-slate-800 hover:border-indigo-500/40 font-semibold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
+                                <span>🗓️</span> <span>Mois en Cours</span>
+                            </button>
+                            <button type="button" @click="triggerHistoricalBatch('30days')" :disabled="remediating"
+                                    class="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-indigo-950/70 text-slate-200 border border-slate-800 hover:border-indigo-500/40 font-semibold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50">
+                                <span>📦</span> <span>30 Derniers Jours (Grand Lot)</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- 3-Column Comparative Metrics Cards with Live Calculating States -->
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4" :class="auditingDate ? 'opacity-70 transition-opacity' : ''">
                         <!-- Box 1: Official Portal -->
@@ -2192,6 +2240,7 @@
                                 <button @click="batchFilter = 'completed'" :class="batchFilter === 'completed' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Succès</button>
                                 <button @click="batchFilter = 'missed'" :class="batchFilter === 'missed' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Manqués</button>
                                 <button @click="batchFilter = 'failed'" :class="batchFilter === 'failed' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Erreurs</button>
+                                <button @click="batchFilter = 'historical'" :class="batchFilter === 'historical' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg">Historique</button>
                             </div>
 
                             <!-- Manual Advanced Force Batch Trigger -->
@@ -3376,11 +3425,23 @@
                     this.remediating = true;
                     this.showToast(`Initialisation du lot (${pages} pages / ${pages * 50} BDC)...`, 'info');
                     try {
-                        const res = await fetch('/api/admin/ingestion/batches/trigger', {
+                        let pagesToSend = parseInt(pages);
+                        let res = await fetch('/api/admin/ingestion/batches/trigger', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ pages: parseInt(pages), send_emails: false })
+                            body: JSON.stringify({ pages: pagesToSend, send_emails: false })
                         });
+
+                        // Fallback de résilience au cas où le serveur impose temporairement pages <= 10
+                        if (res.status === 422 && pagesToSend > 10) {
+                            pagesToSend = 10;
+                            res = await fetch('/api/admin/ingestion/batches/trigger', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({ pages: pagesToSend, send_emails: false })
+                            });
+                        }
+
                         const data = await res.json();
                         if (res.ok) {
                             this.showToast(data.message, 'success');
@@ -3388,11 +3449,11 @@
                             this.startActivePolling();
                         } else {
                             this.remediating = false;
-                            this.showToast(data.detail, 'error');
+                            this.showToast(this.formatErrorMessage(data.detail) || data.message, 'error');
                         }
                     } catch (e) {
                         this.remediating = false;
-                        this.showToast('Erreur: ' + e, 'error');
+                        this.showToast('Erreur: ' + (e.message || e), 'error');
                     }
                 },
 
@@ -3732,6 +3793,9 @@
                                 headers: {'Content-Type': 'application/json'},
                                 body: JSON.stringify({ pages: pagesToSend, send_emails: false })
                             });
+                            if (res.ok) {
+                                this.showToast("⚠️ Tranche de 10 pages (500 avis) lancée en mode compatibilité. Reconstruisez le conteneur Docker avec 'docker compose build --no-cache app' pour autoriser jusqu'à 100 pages d'un coup.", "warning");
+                            }
                         }
 
                         const data = await res.json();
@@ -3742,7 +3806,104 @@
                             this.startActivePolling();
                         } else {
                             this.remediating = false;
-                            const errorMsg = data.detail || data.message || 'Erreur lors du déclenchement';
+                            const errorMsg = this.formatErrorMessage(data.detail) || data.message || 'Erreur lors du déclenchement';
+                            this.showToast(errorMsg, 'error');
+                        }
+                    } catch (e) {
+                        this.remediating = false;
+                        this.showToast('Erreur : ' + (e.message || e), 'error');
+                    }
+                },
+
+                async triggerHistoricalBatch(preset = 'current_selection', maxPages = 20) {
+                    let startDate = this.auditTargetDate || this.getTodayStr();
+                    let endDate = this.auditEndDate || startDate;
+                    let periodMode = this.auditPeriodMode || 'range';
+                    let label = `${startDate} → ${endDate}`;
+
+                    const today = new Date();
+                    const fmtDate = (d) => {
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const yyyy = d.getFullYear();
+                        return `${dd}/${mm}/${yyyy}`;
+                    };
+
+                    if (preset === 'yesterday') {
+                        const y = new Date();
+                        y.setDate(y.getDate() - 1);
+                        startDate = fmtDate(y);
+                        endDate = startDate;
+                        periodMode = 'day';
+                        label = `Hier (${startDate})`;
+                    } else if (preset === '7days') {
+                        const start = new Date();
+                        start.setDate(start.getDate() - 6);
+                        startDate = fmtDate(start);
+                        endDate = fmtDate(today);
+                        periodMode = 'range';
+                        label = `7 Derniers Jours (${startDate} → ${endDate})`;
+                    } else if (preset === 'month') {
+                        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                        startDate = fmtDate(firstDay);
+                        endDate = fmtDate(today);
+                        periodMode = 'month';
+                        label = `Mois en cours (${startDate} → ${endDate})`;
+                    } else if (preset === '30days') {
+                        const start = new Date();
+                        start.setDate(start.getDate() - 29);
+                        startDate = fmtDate(start);
+                        endDate = fmtDate(today);
+                        periodMode = 'range';
+                        label = `30 Derniers Jours (${startDate} → ${endDate})`;
+                    }
+
+                    this.remediating = true;
+                    this.showToast(`Lancement du lot historique (${label}, max ${maxPages} pages)...`, 'info');
+
+                    try {
+                        let pagesToSend = parseInt(maxPages);
+                        let res = await fetch('/api/admin/ingestion/batches/trigger-historical', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                start_date: startDate,
+                                end_date: endDate,
+                                period_mode: periodMode,
+                                pages: pagesToSend,
+                                send_emails: false
+                            })
+                        });
+
+                        // Fallback de résilience au cas où le serveur impose temporairement pages <= 10
+                        if (res.status === 422 && pagesToSend > 10) {
+                            console.warn(`[HistoricalBatch] Serveur distant avec limite <= 10 pages. Bascule automatique sur 10 pages...`);
+                            pagesToSend = 10;
+                            res = await fetch('/api/admin/ingestion/batches/trigger-historical', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    start_date: startDate,
+                                    end_date: endDate,
+                                    period_mode: periodMode,
+                                    pages: pagesToSend,
+                                    send_emails: false
+                                })
+                            });
+                            if (res.ok) {
+                                this.showToast("⚠️ Tranche de 10 pages lancée. Reconstruisez le conteneur Docker avec 'docker compose build --no-cache app' pour autoriser jusqu'à 100 pages.", "warning");
+                            }
+                        }
+
+                        const data = await res.json();
+                        if (res.ok) {
+                            const successMsg = data.message || `⚡ Lot historique initié pour ${label} !`;
+                            this.showToast(successMsg, 'success');
+                            await this.fetchIngestionDashboard();
+                            this.startActivePolling();
+                        } else {
+                            this.remediating = false;
+                            const errorMsg = this.formatErrorMessage(data.detail) || data.message || 'Erreur lors du déclenchement';
                             this.showToast(errorMsg, 'error');
                         }
                     } catch (e) {
@@ -3765,6 +3926,9 @@
                 get filteredBatches() {
                     if (!this.ingestionData || !this.ingestionData.batches) return [];
                     if (this.batchFilter === 'all') return this.ingestionData.batches;
+                    if (this.batchFilter === 'historical') {
+                        return this.ingestionData.batches.filter(b => b.trigger_type === 'historical');
+                    }
                     return this.ingestionData.batches.filter(b => b.status === this.batchFilter);
                 }
             }

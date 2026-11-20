@@ -280,6 +280,24 @@ def test_admin_batch_trigger(client):
         assert res37.json()["status"] == "batch_started"
 
 
+def test_admin_historical_batch_trigger(client):
+    from src.engine.batch_manager import batch_manager
+    with patch("src.engine.batch_manager.run_historical_crawl_cycle", new_callable=AsyncMock) as mock_hist_crawl, \
+         patch.object(batch_manager, "pending_backfill_queue", []):
+        mock_hist_crawl.return_value = None
+        res = client.post("/api/admin/ingestion/batches/trigger-historical", json={
+            "start_date": "10/11/2026",
+            "end_date": "17/11/2026",
+            "period_mode": "range",
+            "pages": 15,
+            "send_emails": False
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "historical_batch_started"
+        assert "10/11/2026" in data["message"]
+
+
 @pytest.mark.asyncio
 async def test_batch_manager_cards_accumulation():
     from src.engine.batch_manager import IngestionBatchManager
