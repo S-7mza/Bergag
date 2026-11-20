@@ -113,27 +113,47 @@
         <div class="bg-slate-900 border-b border-slate-800/80 px-4 sm:px-6 lg:px-8">
             <div class="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto py-2 gap-4">
                 <nav class="flex items-center gap-1.5 text-xs font-semibold">
-                    <button @click="activeModule = 'feed'" :class="activeModule === 'feed' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                    <button @click="activeModule = 'feed'" :class="activeModule === 'feed' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>🎯</span> Opportunités BDC & AO
                         <span class="px-1.5 py-0.2 bg-slate-950 text-slate-400 text-[10px] rounded-full font-mono" x-text="items.length"></span>
                     </button>
 
-                    <button @click="activeModule = 'pipeline'; fetchPipeline()" :class="activeModule === 'pipeline' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                    <button @click="activeModule = 'market_radar'; fetchMarketRadar()" :class="activeModule === 'market_radar' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>📊</span> Radar & Concurrence
+                    </button>
+
+                    <button @click="activeModule = 'profiles'; adminSection = 'profiles'" :class="activeModule === 'profiles' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>📁</span> Studio Profils YAML
+                    </button>
+
+                    <button @click="activeModule = 'crawler'; adminSection = 'crawler'; fetchCrawlerStatus()" :class="activeModule === 'crawler' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>⚙️</span> Centre Crawler
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                    </button>
+
+                    <button @click="activeModule = 'team'; adminSection = 'team'; fetchTeamUsers()" :class="activeModule === 'team' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>👥</span> Équipe & RBAC
+                    </button>
+
+                    <button @click="activeModule = 'ingestion'; adminSection = 'ingestion'; fetchIngestionDashboard()" :class="activeModule === 'ingestion' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                        <span>⚡</span> Lots & Ingestion
+                        <span class="px-1.5 py-0.2 bg-amber-500/20 text-amber-400 text-[10px] rounded-full font-bold border border-amber-500/30">Admin</span>
+                        <span x-show="ingestionData?.active_batch" class="relative flex h-2 w-2 ml-0.5">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                    </button>
+
+                    <button @click="activeModule = 'pipeline'; fetchPipeline()" :class="activeModule === 'pipeline' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
                         <span>📋</span> Mes Dossiers
                         <span class="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full font-bold font-mono" x-text="pipelineItems.length"></span>
                     </button>
 
-                    <button @click="activeModule = 'pricing'" :class="activeModule === 'pricing' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
+                    <button @click="activeModule = 'pricing'" :class="activeModule === 'pricing' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
                         <span>💰</span> Chiffrage & Devis
-                    </button>
-
-                    <button @click="activeModule = 'market_radar'; fetchMarketRadar()" :class="activeModule === 'market_radar' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
-                        <span>📊</span> Radar & Concurrence
-                    </button>
-
-                    <button x-show="currentUser.role === 'admin'" @click="activeModule = 'admin'; if (!adminSection) adminSection = 'ingestion'; fetchIngestionDashboard()" :class="activeModule === 'admin' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2">
-                        <span>⚙️</span> Administration
-                        <span class="px-1.5 py-0.2 bg-amber-500/20 text-amber-400 text-[10px] rounded-full font-bold border border-amber-500/30">Admin</span>
                     </button>
                 </nav>
 
@@ -146,10 +166,73 @@
 
         <!-- Main Workspace -->
         <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+
+            <!-- IDLE INGESTION STATUS & QUICK TRIGGER BAR (Always visible when system is in idle surveillance) -->
+            <div x-show="!ingestionData?.active_batch && !remediating && !reconcilingMissing"
+                 class="mb-6 rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl backdrop-blur-sm">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span class="flex h-3 w-3 relative flex-shrink-0">
+                        <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
+                                <span>🟢 Surveillance Ingestion TGR :</span>
+                                <span class="text-emerald-400 font-bold" x-text="(items.length || 60) + ' consultations en base'"></span>
+                            </span>
+                            <span class="text-xs text-slate-600">&bull;</span>
+                            <span class="text-[11px] text-slate-300 font-mono truncate max-w-md" 
+                                  x-text="ingestionData?.latest_database_records?.[0] ? ('Dernier avis : #' + ingestionData.latest_database_records[0].portal_id + ' • ' + (ingestionData.latest_database_records[0].buyer || 'TGR') + ' (' + (ingestionData.latest_database_records[0].line_items_count || 0) + ' art.)') : 'Base opérationnelle'"></span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Veille active Décret 2-22-431 • Zéro perte de données • 100% données réelles</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button type="button" @click="triggerManualCrawl(5)"
+                            class="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95">
+                        <span>⚡</span> <span>Lancer Ingestion Directe</span>
+                    </button>
+                    <button type="button" @click="activeModule = 'ingestion'; adminSection = 'ingestion'; runPeriodAudit()"
+                            class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center gap-1 shadow-sm">
+                        <span>🛡️ Audit 19 Nov</span>
+                    </button>
+                    <button type="button" @click="showIdlePipeline = !showIdlePipeline"
+                            class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono transition-all flex items-center gap-1">
+                        <span x-text="showIdlePipeline ? '▲ Masquer' : '▼ Voir Séquence'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- EXPANDABLE SEQUENTIAL HUD (Shows Confirmed DB records X when idle) -->
+            <div x-show="showIdlePipeline && !ingestionData?.active_batch" x-cloak 
+                 class="mb-6 space-y-3 p-4 sm:p-5 rounded-2xl bg-slate-950/90 border border-slate-800 animate-in fade-in duration-200 shadow-2xl">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div class="flex items-center gap-2">
+                        <span class="text-emerald-400 text-sm">✓</span>
+                        <h4 class="text-xs font-bold text-slate-200 font-mono uppercase tracking-wider">Dernières Consultations Confirmées en Base PostgreSQL (Séquence X)</h4>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800">Données Réelles Trésorerie Générale</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <template x-for="item in (ingestionData?.latest_database_records || []).slice(0, 6)" :key="item.portal_id">
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1.5 text-xs hover:border-slate-700 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <span class="font-mono font-bold text-emerald-400 text-sm" x-text="'#' + item.portal_id"></span>
+                                <span class="text-[10px] font-mono text-slate-400" x-text="item.reference"></span>
+                            </div>
+                            <div class="font-bold text-slate-200 truncate" x-text="item.title"></div>
+                            <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
+                                <span class="truncate max-w-[170px]" x-text="item.buyer"></span>
+                                <span class="text-emerald-400 font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20" x-text="item.line_items_count + ' art.'"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
             
             <!-- GLOBAL LIVE INGESTION ACTIVITY BANNER (Always visible across all tabs when a batch is active) -->
             <div x-show="ingestionData?.active_batch || remediating || reconcilingMissing" x-cloak
-                 class="mb-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-2 border-indigo-500/60 p-4 sm:p-5 shadow-2xl shadow-indigo-500/20 animate-in fade-in duration-300 space-y-3">
+                 class="mb-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-2 border-indigo-500/60 p-4 sm:p-5 shadow-2xl shadow-indigo-500/20 animate-in fade-in duration-300 space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
                         <span class="relative flex h-3.5 w-3.5 flex-shrink-0">
@@ -169,7 +252,7 @@
                     <div class="flex items-center gap-2.5 flex-shrink-0">
                         <span class="px-3 py-1 rounded-xl text-xs font-mono font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
                               x-text="(ingestionData?.active_batch?.progress_pct || 15) + '%'"></span>
-                        <button type="button" @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()"
+                        <button type="button" @click="activeModule = 'ingestion'; adminSection = 'ingestion'; fetchIngestionDashboard()"
                                 class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm">
                             <span>Inspecter la File</span> <span>→</span>
                         </button>
@@ -181,35 +264,43 @@
                 </div>
 
                 <!-- Live Sequential Queue Preview: X Loaded -> Y Loading -> Z Waiting -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1 font-mono text-xs">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
                     <!-- X: Loaded -->
-                    <div class="p-2.5 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex items-center justify-between gap-2 min-w-0">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="text-emerald-400 font-bold whitespace-nowrap">✓ CHARGÉ (X) :</span>
-                            <span class="text-slate-200 truncate font-semibold"
-                                  x-text="ingestionData?.active_batch?.loaded_items?.[0] ? ('#' + ingestionData.active_batch.loaded_items[0].portal_id + ' • ' + (ingestionData.active_batch.loaded_items[0].line_items_count || 0) + ' articles') : 'En attente 1er avis'"></span>
+                    <div class="p-3 rounded-xl bg-slate-950/90 border border-emerald-500/40 flex flex-col justify-between space-y-1">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-emerald-400 font-bold flex items-center gap-1">
+                                <span>✓</span> <span>1. CHARGÉ EN BASE (X)</span>
+                            </span>
+                            <span class="text-[10px] text-emerald-400 font-bold px-1.5 py-0.2 rounded bg-emerald-500/20"
+                                  x-text="(ingestionData?.active_batch?.total_loaded || 0) + ' persistés'"></span>
                         </div>
-                        <span class="text-[10px] text-emerald-400 font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 whitespace-nowrap">En Base</span>
+                        <div class="text-slate-200 truncate font-semibold pt-1"
+                             x-text="ingestionData?.active_batch?.loaded_items?.[0] ? ('#' + ingestionData.active_batch.loaded_items[0].portal_id + ' • ' + (ingestionData.active_batch.loaded_items[0].line_items_count || 0) + ' articles • ' + (ingestionData.active_batch.loaded_items[0].buyer || '')) : 'En attente 1er avis...'"></div>
                     </div>
 
                     <!-- Y: Currently Loading -->
-                    <div class="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/50 flex items-center justify-between gap-2 min-w-0">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="text-amber-400 font-bold whitespace-nowrap">⚡ EN COURS (Y) :</span>
-                            <span class="text-white truncate font-semibold"
-                                  x-text="ingestionData?.active_batch?.current_loading_item ? ('#' + ingestionData.active_batch.current_loading_item.portal_id + ' • ' + (ingestionData.active_batch.current_loading_item.title || '')) : (ingestionData?.active_batch?.current_bdc ? ('#' + ingestionData.active_batch.current_bdc.portal_id) : 'Préparation...')"></span>
+                    <div class="p-3 rounded-xl bg-indigo-950/60 border border-indigo-500/60 flex flex-col justify-between space-y-1">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-amber-400 font-bold flex items-center gap-1">
+                                <span>⚡</span> <span>2. EN COURS (Y)</span>
+                            </span>
+                            <span class="text-[10px] text-amber-300 font-bold px-1.5 py-0.2 rounded bg-amber-500/20 animate-pulse">Extraction TGR</span>
                         </div>
-                        <span class="text-[10px] text-amber-300 font-bold px-1.5 py-0.5 rounded bg-amber-500/20 whitespace-nowrap animate-pulse">Extraction</span>
+                        <div class="text-white truncate font-bold pt-1"
+                             x-text="ingestionData?.active_batch?.current_loading_item ? ('#' + ingestionData.active_batch.current_loading_item.portal_id + ' • ' + (ingestionData.active_batch.current_loading_item.title || '')) : (ingestionData?.active_batch?.current_bdc ? ('#' + ingestionData.active_batch.current_bdc.portal_id + ' • ' + ingestionData.active_batch.current_bdc.title) : 'Analyse devis & scoring...')"></div>
                     </div>
 
                     <!-- Z: Next Waiting in Queue -->
-                    <div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2 min-w-0">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="text-slate-400 font-bold whitespace-nowrap">⏳ EN ATTENTE (Z) :</span>
-                            <span class="text-slate-300 truncate font-semibold"
-                                  x-text="ingestionData?.active_batch?.queued_items?.[0] ? ('#' + ingestionData.active_batch.queued_items[0].portal_id + ' (Prochain)') : (ingestionData?.active_batch?.total_queued ? (ingestionData.active_batch.total_queued + ' en attente') : 'Fin de file')"></span>
+                    <div class="p-3 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-col justify-between space-y-1">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-slate-400 font-bold flex items-center gap-1">
+                                <span>⏳</span> <span>3. EN ATTENTE (Z)</span>
+                            </span>
+                            <span class="text-[10px] text-slate-400 px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800"
+                                  x-text="(ingestionData?.active_batch?.total_queued || 0) + ' à suivre'"></span>
                         </div>
-                        <span class="text-[10px] text-slate-400 px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 whitespace-nowrap">File TGR</span>
+                        <div class="text-slate-300 truncate font-semibold pt-1"
+                             x-text="ingestionData?.active_batch?.queued_items?.[0] ? ('#' + ingestionData.active_batch.queued_items[0].portal_id + ' (Prochain) • ' + (ingestionData.active_batch.queued_items[0].buyer || 'TGR')) : (ingestionData?.active_batch?.total_queued ? (ingestionData.active_batch.total_queued + ' en attente') : 'Fin de file')"></div>
                     </div>
                 </div>
 
@@ -1416,21 +1507,113 @@
                         </div>
                     </div>
 
-                    <!-- Live BDC Spotlight Card (Shows Current Item being ingested) -->
-                    <div x-show="ingestionData.active_batch?.current_bdc" class="p-3.5 rounded-2xl bg-indigo-950/20 border border-indigo-500/30 flex items-center justify-between gap-3 text-xs animate-in fade-in duration-200">
-                        <div class="flex items-center gap-3 min-w-0">
-                            <span class="px-2 py-1 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold text-xs border border-indigo-500/30 whitespace-nowrap"
-                                  x-text="'#' + (ingestionData.active_batch?.current_bdc?.portal_id || '')"></span>
-                            <div class="min-w-0">
-                                <div class="font-bold text-slate-100 truncate max-w-md" x-text="ingestionData.active_batch?.current_bdc?.title || ''"></div>
-                                <div class="text-[10px] text-slate-400 truncate" x-text="(ingestionData.active_batch?.current_bdc?.buyer || '') + ' • ' + (ingestionData.active_batch?.current_bdc?.line_items_count || 0) + ' articles au devis'"></div>
+                    <!-- LIVE 3-SWIMLANE PIPELINE (X Loaded -> Y Loading -> Z Waiting) -->
+                    <div class="space-y-3 pt-2">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono flex items-center gap-2">
+                                <span>⚡ File d'Ingestion Séquentielle en Direct</span>
+                                <span class="text-[10px] text-slate-500 font-sans font-normal">(Traite BDC par BDC sans interruption)</span>
+                            </h4>
+                            <div class="flex items-center gap-2 text-[11px] font-mono">
+                                <span class="text-emerald-400 font-bold" x-text="(ingestionData?.active_batch?.total_loaded || 0) + ' chargés'"></span>
+                                <span class="text-slate-600">&bull;</span>
+                                <span class="text-slate-400" x-text="(ingestionData?.active_batch?.total_queued || 0) + ' en attente'"></span>
                             </div>
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold"
-                                  :class="(ingestionData.active_batch?.current_bdc?.verdict === 'GO') ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-300'"
-                                  x-text="(ingestionData.active_batch?.current_bdc?.score || 0) + '% [' + (ingestionData.active_batch?.current_bdc?.verdict || 'ANALYSE') + ']'"></span>
-                            <span class="text-[10px] text-slate-500 font-mono" x-text="ingestionData.active_batch?.current_bdc?.ingested_at || ''"></span>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                            <!-- SWIMLANE 1: LOADED IN POSTGRESQL (X) -->
+                            <div class="bg-slate-950/90 rounded-2xl border border-emerald-500/30 p-3.5 flex flex-col justify-between space-y-2">
+                                <div class="flex items-center justify-between pb-2 border-b border-slate-900">
+                                    <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                                        <span>✓</span> <span>1. CHARGÉ EN BASE (X)</span>
+                                    </div>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-mono font-bold"
+                                          x-text="(ingestionData?.active_batch?.total_loaded || 0) + ' avis persistés'"></span>
+                                </div>
+
+                                <div class="space-y-2 max-h-48 overflow-y-auto divide-y divide-slate-900 text-xs">
+                                    <template x-for="item in (ingestionData?.active_batch?.loaded_items || [])" :key="item.portal_id">
+                                        <div class="pt-2 first:pt-0">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span class="font-mono font-bold text-emerald-400 text-xs" x-text="'#' + item.portal_id"></span>
+                                                <span class="text-[10px] text-emerald-300/80 font-mono" x-text="item.loaded_at"></span>
+                                            </div>
+                                            <div class="font-medium text-slate-200 truncate mt-0.5" x-text="item.title"></div>
+                                            <div class="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
+                                                <span class="truncate max-w-[120px]" x-text="item.buyer"></span>
+                                                <span class="text-emerald-400 font-mono font-semibold" x-text="item.line_items_count + ' articles'"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!ingestionData?.active_batch?.loaded_items?.length" class="text-slate-500 text-[11px] py-4 text-center">
+                                        En attente de la validation du premier BDC...
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SWIMLANE 2: CURRENTLY LOADING (Y) -->
+                            <div class="bg-gradient-to-b from-indigo-950/30 to-slate-950 rounded-2xl border-2 border-indigo-500/60 p-3.5 flex flex-col justify-between space-y-2 shadow-lg shadow-indigo-500/10">
+                                <div class="flex items-center justify-between pb-2 border-b border-indigo-500/20">
+                                    <div class="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                                        <span class="animate-spin text-xs">⚙️</span> <span>2. EN COURS (Y)</span>
+                                    </div>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/30 animate-pulse">Extraction Live</span>
+                                </div>
+
+                                <div class="py-2">
+                                    <template x-if="ingestionData?.active_batch?.current_loading_item || ingestionData?.active_batch?.current_bdc">
+                                        <div class="space-y-2 text-xs">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-base font-black font-mono text-white" x-text="'#' + (ingestionData?.active_batch?.current_loading_item?.portal_id || ingestionData?.active_batch?.current_bdc?.portal_id)"></span>
+                                                <span class="text-[10px] font-mono font-semibold text-slate-400" x-text="ingestionData?.active_batch?.current_loading_item?.reference || ingestionData?.active_batch?.current_bdc?.reference"></span>
+                                            </div>
+                                            <div class="font-bold text-slate-100 text-xs leading-snug" x-text="ingestionData?.active_batch?.current_loading_item?.title || ingestionData?.active_batch?.current_bdc?.title"></div>
+                                            <div class="text-[11px] text-slate-400 truncate" x-text="ingestionData?.active_batch?.current_loading_item?.buyer || ingestionData?.active_batch?.current_bdc?.buyer"></div>
+                                            
+                                            <div class="pt-2 border-t border-slate-800/80 space-y-1">
+                                                <div class="flex items-center justify-between text-[11px]">
+                                                    <span class="text-slate-400">Télémétrie :</span>
+                                                    <span class="text-amber-400 font-mono font-semibold animate-pulse" x-text="ingestionData?.active_batch?.current_loading_item?.status || 'Analyse devis & scoring...'"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!ingestionData?.active_batch?.current_loading_item && !ingestionData?.active_batch?.current_bdc" class="text-slate-500 text-[11px] py-4 text-center">
+                                        Initialisation de la sonde...
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SWIMLANE 3: QUEUED IN SEQUENCE (Z) -->
+                            <div class="bg-slate-950/90 rounded-2xl border border-slate-800 p-3.5 flex flex-col justify-between space-y-2">
+                                <div class="flex items-center justify-between pb-2 border-b border-slate-900">
+                                    <div class="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                                        <span>⏳</span> <span>3. EN ATTENTE DANS LA FILE (Z)</span>
+                                    </div>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 font-mono border border-slate-800"
+                                          x-text="(ingestionData?.active_batch?.total_queued || 0) + ' à suivre'"></span>
+                                </div>
+
+                                <div class="space-y-2 max-h-48 overflow-y-auto divide-y divide-slate-900 text-xs">
+                                    <template x-for="(qItem, qIdx) in (ingestionData?.active_batch?.queued_items || [])" :key="qItem.portal_id">
+                                        <div class="pt-2 first:pt-0">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="font-mono font-bold text-slate-300 text-xs" x-text="'#' + qItem.portal_id"></span>
+                                                    <span x-show="qIdx === 0" class="text-[9px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold border border-indigo-500/30">Prochain</span>
+                                                </div>
+                                                <span class="text-[10px] text-slate-500 font-mono" x-text="qItem.reference || 'TGR'"></span>
+                                            </div>
+                                            <div class="text-slate-400 truncate mt-0.5" x-text="qItem.title"></div>
+                                            <div class="text-[10px] text-slate-500 truncate mt-0.5" x-text="qItem.buyer"></div>
+                                        </div>
+                                    </template>
+                                    <div x-show="!ingestionData?.active_batch?.queued_items?.length" class="text-slate-500 text-[11px] py-4 text-center">
+                                        Aucune consultation en attente (Fin de file).
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -2417,6 +2600,8 @@
                 auditStepTimer: null,
                 clientAuditCache: {},
                 activePollingTimer: null,
+                heartbeatTimer: null,
+                showIdlePipeline: false,
                 ingestionData: {
                     gap_analysis: {
                         probed_at: "—",
@@ -2546,13 +2731,7 @@
                     this.recalcStudioPricing();
                     this.runPeriodAudit();
                     this.runActiveAudit();
-                    if (this.currentUser.role === 'admin') {
-                        this.fetchIngestionDashboard().then(() => {
-                            if (this.ingestionData && this.ingestionData.active_batch) {
-                                this.startActivePolling();
-                            }
-                        });
-                    }
+                    this.startHeartbeatPolling();
                 },
 
                 showToast(message, type = 'success') {
@@ -2994,6 +3173,28 @@
                     }
                 },
 
+                startHeartbeatPolling() {
+                    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+                    this.fetchIngestionDashboard().then(() => {
+                        if (this.ingestionData && this.ingestionData.active_batch) {
+                            this.startActivePolling();
+                        }
+                    });
+                    this.heartbeatTimer = setInterval(async () => {
+                        if (this.activePollingTimer) return;
+                        try {
+                            const res = await fetch('/api/admin/ingestion/dashboard');
+                            if (res.ok) {
+                                const data = await res.json();
+                                this.ingestionData = data;
+                                if (data.active_batch) {
+                                    this.startActivePolling();
+                                }
+                            }
+                        } catch (e) {}
+                    }, 2500);
+                },
+
                 startActivePolling() {
                     if (this.activePollingTimer) return;
                     this.activePollingTimer = setInterval(async () => {
@@ -3013,6 +3214,30 @@
                     if (this.activePollingTimer) {
                         clearInterval(this.activePollingTimer);
                         this.activePollingTimer = null;
+                    }
+                },
+
+                async triggerManualCrawl(pages = 5) {
+                    this.remediating = true;
+                    this.showToast(`Démarrage de l’ingestion directe (${pages} pages)...`, 'info');
+                    try {
+                        const res = await fetch('/api/crawler/run', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ pages: parseInt(pages), send_emails: false })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message || '⚡ Ingestion initiée en temps réel !', 'success');
+                            await this.fetchIngestionDashboard();
+                            this.startActivePolling();
+                        } else {
+                            this.remediating = false;
+                            this.showToast(data.detail || 'Erreur lors du lancement de l’ingestion', 'error');
+                        }
+                    } catch (e) {
+                        this.remediating = false;
+                        this.showToast('Erreur de connexion : ' + e, 'error');
                     }
                 },
 

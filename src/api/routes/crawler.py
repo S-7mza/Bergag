@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from src.api.auth import User, require_role
 from src.scheduler.jobs import run_active_crawl_cycle
+from src.engine.batch_manager import batch_manager, IngestionTriggerType
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/crawler", tags=["Crawler Operations"])
@@ -25,15 +26,20 @@ class TriggerCrawlRequest(BaseModel):
     pages: int = 2
     send_emails: bool = True
 
-async def background_crawl_task(pages: int, send_emails: bool):
+async def background_crawl_task(pages: int, send_emails: bool, user_name: str = "Admin"):
     global crawler_telemetry
     crawler_telemetry["status"] = "crawling"
     start = datetime.now()
     try:
-        await run_active_crawl_cycle(max_pages=pages, send_emails=send_emails)
+        batch_record = await batch_manager.execute_batch(
+            pages=pages,
+            trigger_type=IngestionTriggerType.MANUAL.value,
+            user_name=user_name
+        )
         duration = (datetime.now() - start).total_seconds()
         crawler_telemetry["last_run_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         crawler_telemetry["last_duration_seconds"] = round(duration, 1)
+        crawler_telemetry["last_tenders_ingested"] = batch_record.tenders_ingested
         crawler_telemetry["status"] = "idle"
         crawler_telemetry["waf_status"] = "Healthy (HTTP 200 - F5 Passed)"
     except Exception as e:
@@ -53,10 +59,10 @@ async def trigger_manual_crawl(
     user: User = Depends(require_role(["admin"]))
 ):
     """Triggers an on-demand active procurement crawl cycle (Admin only)"""
-    if crawler_telemetry["status"] == "crawling":
+    if crawler_telemetry["status"] == "crawling" or (batch_manager.active_batch and batch_manager.active_batch.status == "in_progress"):
         raise HTTPException(status_code=409, detail="Un cycle de collecte est déjà en cours d'exécution.")
 
-    bg_tasks.add_task(background_crawl_task, req.pages, req.send_emails)
+    bg_tasks.add_task(background_crawl_task, req.pages, req.send_emails, user.full_name)
     return {
         "status": "started",
         "message": f"Collecte déclenchée pour {req.pages} pages par l'administrateur {user.full_name}."

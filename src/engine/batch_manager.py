@@ -2,6 +2,7 @@ import logging
 import asyncio
 import json
 import calendar
+from enum import Enum
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
@@ -17,6 +18,11 @@ from src.scraper.client import PortalHttpClient
 from src.scraper.listing_spider import ListingSpider
 
 logger = logging.getLogger(__name__)
+
+class IngestionTriggerType(str, Enum):
+    SCHEDULED = "scheduled"
+    MANUAL = "manual"
+    DIAGNOSTIC_REMEDIATION = "diagnostic_remediation"
 
 class IngestionBatchRecord:
     def __init__(
