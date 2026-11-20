@@ -83,7 +83,8 @@ async def run_dry_run_validation(max_pages: int = 1, export_path: str = "data/dr
 async def run_active_crawl_cycle(
     max_pages: int = 5, 
     send_emails: bool = True,
-    progress_callback = None
+    progress_callback = None,
+    is_aborted_callback = None
 ):
     """
     Executes an autonomous active BDC ingestion and alert cycle:
@@ -126,6 +127,9 @@ async def run_active_crawl_cycle(
             service = IngestionService(session, client)
 
             for page in range(1, max_pages + 1):
+                if is_aborted_callback and is_aborted_callback():
+                    logger.info("Crawl cycle aborted by operator at page loop.")
+                    break
                 try:
                     if progress_callback:
                         try:
@@ -152,12 +156,24 @@ async def run_active_crawl_cycle(
                                 "phase": "discovery",
                                 "page": page,
                                 "cards_count": len(cards),
+                                "cards": [
+                                    {
+                                        "portal_id": c.get("portal_id"),
+                                        "reference": c.get("reference", f"#{c.get('portal_id')}"),
+                                        "title": c.get("title", "Consultation BDC")[:60],
+                                        "buyer": c.get("buyer_name", "Acheteur Public")
+                                    }
+                                    for c in cards if c.get("portal_id")
+                                ],
                                 "step_description": f"Phase 2 : {len(cards)} avis BDC détectés sur la page {page}. Début de l'ingestion unitaire..."
                             })
                         except Exception:
                             pass
 
                     for card in cards:
+                        if is_aborted_callback and is_aborted_callback():
+                            logger.info("Crawl cycle aborted by operator at card loop.")
+                            break
                         portal_id = card.get("portal_id")
                         if not portal_id:
                             continue
@@ -165,6 +181,20 @@ async def run_active_crawl_cycle(
                         if first_portal_id is None:
                             first_portal_id = portal_id
                         last_portal_id = portal_id
+
+                        # Emit BDC loading event before fetching detail
+                        if progress_callback:
+                            try:
+                                await progress_callback("bdc_loading", {
+                                    "phase": "bdc_loading",
+                                    "portal_id": portal_id,
+                                    "reference": card.get("reference", f"#{portal_id}"),
+                                    "title": card.get("title", "Consultation BDC")[:60],
+                                    "buyer": card.get("buyer_name", "Acheteur Public"),
+                                    "step_description": f"Phase 3 : Extraction fiche & devis BDC #{portal_id} : « {card.get('title', '')[:35]} »..."
+                                })
+                            except Exception:
+                                pass
 
                         # Fetch detail and accordion line items
                         try:

@@ -24,6 +24,9 @@ class DateAuditReconcileRequest(BaseModel):
     period_mode: str = Field(default="day", description="Mode de période ('day', 'range', 'month')")
     portal_ids: List[int] = Field(default_factory=list, description="Liste des identifiants BDC manquants à importer (ou vide pour auto-détection)")
 
+class ActiveAuditReconcileRequest(BaseModel):
+    portal_ids: List[int] = Field(default_factory=list, description="Liste des identifiants BDC actifs manquants à importer (ou vide pour auto-détection)")
+
 @router.get("/dashboard")
 async def get_ingestion_dashboard(user: User = Depends(require_role(["admin", "analyst"]))):
     """
@@ -71,6 +74,31 @@ async def reconcile_missing_date_items(
         target_date_str=req.date,
         end_date_str=req.end_date,
         period_mode=req.period_mode,
+        user_name=user.full_name
+    )
+
+@router.get("/audit-active")
+async def audit_active_tenders_endpoint(
+    force: bool = Query(False, description="Forcer une nouvelle interrogation en direct du portail TGR"),
+    user: User = Depends(require_role(["admin", "analyst"]))
+):
+    """
+    Audits active tenders exhaustiveness: guarantees that 100% of currently active consultations
+    (submission deadline > now) on the public portal exist in the local database.
+    """
+    return await batch_manager.audit_active_tenders_coverage(force_refresh=force)
+
+@router.post("/audit-active/reconcile")
+async def reconcile_missing_active_items(
+    req: Optional[ActiveAuditReconcileRequest] = None,
+    user: User = Depends(require_role(["admin"]))
+):
+    """
+    Directly targets and ingests missing active consultations so no business opportunity is lost.
+    """
+    p_ids = req.portal_ids if req else []
+    return await batch_manager.reconcile_missing_active_tenders(
+        portal_ids=p_ids,
         user_name=user.full_name
     )
 
@@ -174,4 +202,13 @@ async def retry_missed_or_failed_batch(
         "status": "retry_started",
         "message": f"Relance du lot {batch_id} enclenchée par {user.full_name}."
     }
+
+@router.post("/batches/abort")
+async def abort_active_batch(
+    user: User = Depends(require_role(["admin"]))
+):
+    """
+    Aborts the currently running ingestion batch immediately (Admin only).
+    """
+    return batch_manager.abort_active_batch(user_name=user.full_name)
 

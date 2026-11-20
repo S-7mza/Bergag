@@ -41,6 +41,7 @@ app.include_router(batches_router)
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Template loader (dynamic reload to reflect template edits immediately)
 def load_dashboard_html() -> str:
     """Loads dashboard HTML from templates directory with fallback"""
     template_path = TEMPLATES_DIR / "index.html"
@@ -48,10 +49,7 @@ def load_dashboard_html() -> str:
         return template_path.read_text(encoding="utf-8")
     return "<html><body><h1>Dashboard template not found</h1></body></html>"
 
-# Cached template content for high performance and backward compatibility
-HTML_DASHBOARD = load_dashboard_html()
-
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
     """Serves the single-page responsive procurement dashboard with RBAC and Chart.js"""
-    return HTMLResponse(content=HTML_DASHBOARD)
+    return HTMLResponse(content=load_dashboard_html())

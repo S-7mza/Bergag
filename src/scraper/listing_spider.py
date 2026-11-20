@@ -37,6 +37,35 @@ class ListingSpider:
         
         return raw_log, cards
 
+    async def fetch_active(self, page: int = 1, page_size: int = 50) -> Tuple[RawIngestionLog, list[dict], int]:
+        """
+        Fetches active consultations (submission deadline not arrived yet).
+        Returns (raw_log, cards, total_active_count).
+        """
+        url = f"/bdc/entreprise/consultation/?search_consultation_entreprise[pageSize]={page_size}&page={page}"
+        logger.info(f"ListingSpider: Fetching active listings page {page} with pageSize={page_size}")
+        
+        html = await self.client.get(url)
+        content_hash = hashlib.sha256(html.encode('utf-8')).hexdigest()
+
+        raw_log = RawIngestionLog(
+            source_url=url,
+            portal_id=None,
+            page_type="listing_active",
+            http_status=200,
+            html_content=html,
+            content_hash=content_hash,
+            scraper_version="1.0.0"
+        )
+
+        cards = parse_listing_page(html)
+        total_results = parse_total_results(html)
+        if total_results == 0 and cards:
+            total_results = len(cards)
+
+        logger.info(f"ListingSpider: Found {total_results} active consultations on portal ({len(cards)} on page {page})")
+        return raw_log, cards, total_results
+
     async def fetch_by_date(
         self, 
         date_str: str, 

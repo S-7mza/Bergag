@@ -276,7 +276,7 @@ async def test_batch_manager_cards_accumulation():
     from src.engine.batch_manager import IngestionBatchManager
     bm = IngestionBatchManager()
     
-    async def fake_crawl(max_pages, send_emails, progress_callback):
+    async def fake_crawl(max_pages, send_emails, progress_callback, **kwargs):
         for p in range(1, max_pages + 1):
             await progress_callback("cards_found", {
                 "phase": "discovery",
@@ -296,5 +296,96 @@ async def test_batch_manager_cards_accumulation():
         assert record.cards_scraped == 150
         assert record.tenders_ingested == 144
         assert record.line_items_extracted == 144 * 7
+
+
+def test_admin_abort_batch_endpoint(client):
+    from src.engine.batch_manager import batch_manager, IngestionBatchRecord
+    from datetime import datetime
+
+    # Set an active batch
+    active = IngestionBatchRecord(
+        batch_id="BATCH-TEST-ABORT",
+        trigger_type="manual",
+        status="in_progress",
+        started_at=datetime.now(),
+        pages_requested=2
+    )
+    batch_manager.active_batch = active
+    batch_manager.batches.append(active)
+
+    res = client.post("/api/admin/ingestion/batches/abort")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "aborted"
+    assert data["batch_id"] == "BATCH-TEST-ABORT"
+    assert batch_manager.active_batch.status == "aborted"
+
+    # Reset
+    batch_manager.active_batch = None
+    batch_manager._abort_requested = False
+
+
+def test_batch_manager_bdc_range_formatting():
+    from src.engine.batch_manager import IngestionBatchRecord
+    from datetime import datetime
+
+    rec = IngestionBatchRecord(
+        batch_id="BATCH-TEST-RANGE",
+        trigger_type="manual",
+        status="completed",
+        started_at=datetime.now(),
+        first_bdc_id=410218,
+        last_bdc_id=410170
+    )
+    d = rec.to_dict()
+    assert d["first_bdc_id"] == 410170
+    assert d["last_bdc_id"] == 410218
+    assert d["bdc_range"] == "#410170 → #410218"
+
+
+def test_audit_active_tenders_endpoint(client):
+    res = client.get("/api/admin/ingestion/audit-active")
+    assert res.status_code == 200
+    data = res.json()
+    assert "is_fully_covered" in data
+    assert "portal_total_active" in data
+    assert "db_total_active" in data
+    assert "coverage_pct" in data
+    assert "missing_count" in data
+    assert "all_active_items" in data
+
+
+def test_reconcile_active_tenders_endpoint(client):
+    res = client.post("/api/admin/ingestion/audit-active/reconcile", json={"portal_ids": []})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] in ("reconciled", "noop")
+    assert "message" in data
+
+
+@pytest.mark.asyncio
+async def test_audit_active_coverage_logic():
+    from src.engine.batch_manager import IngestionBatchManager
+    from unittest.mock import AsyncMock, patch
+
+    bm = IngestionBatchManager()
+
+    mock_cards = [
+        {"portal_id": 999001, "reference": "REF-001", "title": "Fourniture IT", "buyer_name": "Acheteur A", "deadline_raw": "25/11/2026 12:00", "deadline_at": "2026-11-25T12:00:00+01:00", "status": "active"},
+        {"portal_id": 999002, "reference": "REF-002", "title": "Maintenance Réseau", "buyer_name": "Acheteur B", "deadline_raw": "26/11/2026 14:00", "deadline_at": "2026-11-26T14:00:00+01:00", "status": "active"}
+    ]
+
+    mock_spider = AsyncMock()
+    mock_spider.fetch_active.return_value = (None, mock_cards, 2)
+
+    with patch("src.engine.batch_manager.ListingSpider", return_value=mock_spider), \
+         patch("src.engine.batch_manager.PortalHttpClient"):
+        result = await bm.audit_active_tenders_coverage(force_refresh=True)
+        assert result["portal_total_active"] >= 2
+        assert len(result["all_active_items"]) >= 2
+        assert "coverage_pct" in result
+        assert "is_fully_covered" in result
+
+
 
 
