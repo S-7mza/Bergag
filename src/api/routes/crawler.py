@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from src.api.auth import User, require_role
 from src.scheduler.jobs import run_active_crawl_cycle
 from src.engine.batch_manager import batch_manager, IngestionTriggerType
@@ -23,7 +23,7 @@ crawler_telemetry: Dict[str, Any] = {
 }
 
 class TriggerCrawlRequest(BaseModel):
-    pages: int = 2
+    pages: int = Field(default=2, ge=1, le=100, description="Nombre de pages de 50 avis à collecter (jusqu'à 100 pages)")
     send_emails: bool = True
 
 async def background_crawl_task(pages: int, send_emails: bool, user_name: str = "Admin"):

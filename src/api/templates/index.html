@@ -2659,16 +2659,19 @@
                     confidence_badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                 },
                 activeAudit: {
-                    is_fully_covered: true,
-                    coverage_pct: 100.0,
+                    is_fully_covered: false,
+                    coverage_pct: 0.0,
                     portal_total_active: 0,
                     db_total_active: 0,
+                    total_unimported_count: 0,
+                    immediate_missing_count: 0,
                     missing_count: 0,
+                    pages_needed_for_100_pct: 1,
                     missing_portal_ids: [],
                     missing_tenders: [],
                     all_active_items: [],
-                    verdict: 'CONFORME_100_PCT',
-                    verdict_badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    verdict: 'CHARGEMENT',
+                    verdict_badge: 'bg-slate-500/20 text-slate-400 border-slate-500/30'
                 },
                 auditingActive: false,
                 reconcilingActive: false,
@@ -2813,10 +2816,33 @@
                     this.startHeartbeatPolling();
                 },
 
+                formatErrorMessage(err) {
+                    if (!err) return 'Une erreur est survenue';
+                    if (typeof err === 'string') return err;
+                    if (Array.isArray(err)) {
+                        return err.map(item => {
+                            if (typeof item === 'object' && item !== null) {
+                                const field = Array.isArray(item.loc) ? item.loc.filter(l => l !== 'body').join('.') : '';
+                                const msg = item.msg || item.message || JSON.stringify(item);
+                                return field ? `${field}: ${msg}` : msg;
+                            }
+                            return String(item);
+                        }).join(' • ');
+                    }
+                    if (typeof err === 'object') {
+                        if (err.detail) return this.formatErrorMessage(err.detail);
+                        if (err.message) return String(err.message);
+                        if (err.msg) return String(err.msg);
+                        return JSON.stringify(err);
+                    }
+                    return String(err);
+                },
+
                 showToast(message, type = 'success') {
+                    const formatted = this.formatErrorMessage(message);
                     const id = Date.now();
-                    this.toasts.push({ id, message, type });
-                    setTimeout(() => this.removeToast(id), 3500);
+                    this.toasts.push({ id, message: formatted, type });
+                    setTimeout(() => this.removeToast(id), 5000);
                 },
 
                 removeToast(id) {
@@ -3684,10 +3710,10 @@
                 },
 
                 async triggerFullActiveSync(pages = null) {
-                    const totalUnimported = this.activeAudit?.total_unimported_count || ((this.activeAudit?.portal_total_active || 1850) - (this.activeAudit?.db_total_active || 407));
-                    const pagesNeeded = pages || this.activeAudit?.pages_needed_for_100_pct || Math.min(37, Math.ceil(totalUnimported / 50));
+                    const totalUnimported = this.activeAudit?.total_unimported_count || Math.max(0, (this.activeAudit?.portal_total_active || 1850) - (this.activeAudit?.db_total_active || 407));
+                    const pagesNeeded = pages || this.activeAudit?.pages_needed_for_100_pct || Math.min(37, Math.max(1, Math.ceil(totalUnimported / 50)));
                     this.remediating = true;
-                    this.showToast(`Lancement de la synchronisation complète (${pagesNeeded} pages / ${totalUnimported} avis)...`, 'info');
+                    this.showToast(`Lancement de la synchronisation complète (${pagesNeeded} pages / ${totalUnimported} avis restants)...`, 'info');
                     try {
                         const res = await fetch('/api/admin/ingestion/batches/trigger', {
                             method: 'POST',
@@ -3701,11 +3727,12 @@
                             this.startActivePolling();
                         } else {
                             this.remediating = false;
-                            this.showToast(data.detail || 'Erreur lors du déclenchement', 'error');
+                            const errorMsg = data.detail || data.message || 'Erreur lors du déclenchement';
+                            this.showToast(errorMsg, 'error');
                         }
                     } catch (e) {
                         this.remediating = false;
-                        this.showToast('Erreur : ' + e, 'error');
+                        this.showToast('Erreur : ' + (e.message || e), 'error');
                     }
                 },
 

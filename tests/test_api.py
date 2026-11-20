@@ -269,10 +269,15 @@ def test_admin_batch_trigger(client):
     with patch("src.engine.batch_manager.run_active_crawl_cycle", new_callable=AsyncMock) as mock_crawl, \
          patch.object(batch_manager, "pending_backfill_queue", []):
         mock_crawl.return_value = None
+        # Test default and multi-page triggers (up to 37 pages for 100% active parity)
         res = client.post("/api/admin/ingestion/batches/trigger", json={"pages": 1})
         assert res.status_code == 200
         data = res.json()
         assert data["status"] == "batch_started"
+
+        res37 = client.post("/api/admin/ingestion/batches/trigger", json={"pages": 37, "send_emails": False})
+        assert res37.status_code == 200
+        assert res37.json()["status"] == "batch_started"
 
 
 @pytest.mark.asyncio
