@@ -182,3 +182,4 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${GREEN}${BOLD}   Subdomain Ready: https://${DOMAIN}${NC}"
 echo -e "${CYAN}══════════════════════════════════════════════════════════════${NC}"
 echo ""
+

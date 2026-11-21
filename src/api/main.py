@@ -10,6 +10,7 @@ from src.api.routes.analytics import router as analytics_router
 from src.api.routes.auth import router as auth_router
 from src.api.routes.crawler import router as crawler_router
 from src.api.routes.batches import router as batches_router
+from src.api.routes.awards_ingestion import router as awards_ingestion_router
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ app.include_router(crawler_router)
 app.include_router(feed_router)
 app.include_router(analytics_router)
 app.include_router(batches_router)
+app.include_router(awards_ingestion_router)
 
 # Mount static files directory if present
 if STATIC_DIR.exists():

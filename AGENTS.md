@@ -48,6 +48,7 @@ mp/
 │   ├── config/                # Pydantic BaseSettings (`settings.py`) loading `.env`
 │   ├── database/              # Async SQLAlchemy engine & session factory (`session.py`)
 │   ├── engine/                # Cascade scoring, Buyer Radar, Competitor Radar, Pipeline
+│   ├── ingestion/             # Modular Domain Ingestion: BDC consultations, Awards archive & Batches
 │   ├── models/                # SQLAlchemy models (Tender, Buyer, LineItem, Award, Batch, User)
 │   ├── profiles/              # Multi-industry YAML profiles (`software_data.yaml`, `cctv_security.yaml`)
 │   ├── scheduler/             # APScheduler jobs for periodic crawling & reconciliation

@@ -10,7 +10,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 def test_slugify():
     assert slugify("Commune rurale de RDADNA O. MALEK") == "commune-rurale-de-rdadna-o-malek"
     assert slugify("Ministère de l'Équipement & de l'Eau") == "ministere-de-l-equipement-de-l-eau"
-    assert slugify("   ") == ""
+    assert slugify("   ") == "acheteur-inconnu"
 
 @pytest.mark.asyncio
 async def test_listing_spider_with_fixture():

@@ -94,3 +94,4 @@ If you ever need to restore the Traefik configuration to the exact state before 
 sudo cp $(ls -t /opt/traefik/dynamic/routes.yml.bak_bergag_* | head -1) /opt/traefik/dynamic/routes.yml
 sudo docker restart traefik
 ```
+

@@ -30,16 +30,30 @@ class PortalHttpClient:
         self.rate_limit_seconds = settings.scraper_rate_limit_seconds
         self.proxy_url = settings.proxy_url
         self.client: httpx.AsyncClient | None = None
+        self._session_initialized = False
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self.client is None or self.client.is_closed:
             self.client = httpx.AsyncClient(
                 headers=DEFAULT_HEADERS,
-                timeout=httpx.Timeout(connect=10.0, read=25.0, write=10.0, pool=30.0),
+                timeout=httpx.Timeout(connect=15.0, read=45.0, write=15.0, pool=60.0),
                 follow_redirects=True,
                 proxy=self.proxy_url if self.proxy_url else None
             )
+            self._session_initialized = False
         return self.client
+
+    async def _ensure_session(self, client: httpx.AsyncClient):
+        """Initial handshake to acquire F5 ASM session cookies (TS01c367b8, DCOOKIE)"""
+        if not self._session_initialized:
+            try:
+                handshake_url = f"{self.base_url}/bdc/entreprise/consultation/"
+                logger.debug(f"Performing initial WAF session handshake with {handshake_url}")
+                resp = await client.get(handshake_url)
+                if resp.status_code == 200:
+                    self._session_initialized = True
+            except Exception as e:
+                logger.warning(f"Initial WAF handshake notice: {e}")
 
     async def _polite_delay(self):
         """Applies a jittered polite rate delay (e.g. 1.0s +/- 0.3s)"""
@@ -52,14 +66,20 @@ class PortalHttpClient:
         wait=wait_exponential(multiplier=1.5, min=2, max=10),
         retry=retry_if_exception_type((httpx.RequestError, TimeoutError))
     )
-    async def get(self, url: str) -> str:
+    async def get(self, url: str, params: dict | None = None) -> str:
         client = await self._get_client()
+        await self._ensure_session(client)
         await self._polite_delay()
 
         full_url = url if url.startswith("http") else f"{self.base_url}{url}"
+        
+        # Protect against unencoded brackets triggering F5 WAF RFC violations
+        if "[" in full_url or "]" in full_url:
+            full_url = full_url.replace("[", "%5B").replace("]", "%5D")
+
         logger.debug(f"Fetching URL: {full_url}")
 
-        response = await client.get(full_url)
+        response = await client.get(full_url, params=params)
         
         if response.status_code == 403:
             logger.error(f"F5 WAF 403 Forbidden encountered at {full_url}")

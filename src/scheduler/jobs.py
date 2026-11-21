@@ -581,6 +581,28 @@ async def wait_for_database_ready(max_retries: int = 30, retry_delay: float = 3.
     logger.warning("Database readiness wait timed out. Proceeding anyway...")
     return False
 
+async def run_awards_crawl_cycle(
+    max_pages: int = 5,
+    page_size: int = 50,
+    date_start: str = None,
+    date_end: str = None,
+    progress_callback = None
+):
+    """
+    Executes an autonomous awards synchronization cycle against the Moroccan
+    Procurement results archive (/bdc/entreprise/consultation/resultat).
+    """
+    from src.ingestion.awards.pipeline import AwardsIngestionPipeline
+    pipeline = AwardsIngestionPipeline()
+    return await pipeline.run(
+        max_pages=max_pages,
+        page_size=page_size,
+        date_start=date_start,
+        date_end=date_end,
+        progress_callback=progress_callback,
+        triggered_by="Daemon / Scheduler"
+    )
+
 async def run_daemon_loop(pages: int = 5, interval_seconds: int = 3600, send_emails: bool = True):
     """
     Runs the autonomous ingestion and alert pipeline continuously as a background daemon.
@@ -605,6 +627,11 @@ if __name__ == "__main__":
     parser.add_argument("--pages", type=int, default=5, help="Number of listing pages to crawl (50 per page)")
     parser.add_argument("--dry-run", action="store_true", help="Crawl and score locally without writing to DB or sending email")
     parser.add_argument("--no-email", action="store_true", help="Save to DB but suppress Gmail alerts")
+    parser.add_argument("--offline", action="store_true", help="Collect data locally and generate portable JSON bundle in data/offline_exports/ (no database required)")
+    parser.add_argument("--output", type=str, default=None, help="Custom file path for offline export package")
+    parser.add_argument("--awards", action="store_true", help="Crawl historical awards & results instead of active BDC notices")
+    parser.add_argument("--date-start", type=str, default=None, help="Start date for awards crawl (DD/MM/YYYY)")
+    parser.add_argument("--date-end", type=str, default=None, help="End date for awards crawl (DD/MM/YYYY)")
     parser.add_argument("--daemon", action="store_true", help="Run continuously in background daemon loop")
     parser.add_argument("--interval", type=int, default=3600, help="Interval between crawl cycles in seconds (default: 3600)")
 
@@ -612,6 +639,23 @@ if __name__ == "__main__":
 
     if args.dry_run:
         asyncio.run(run_dry_run_validation(max_pages=args.pages))
+    elif args.offline:
+        from src.ingestion.offline.exporter import OfflineExporter
+        exporter = OfflineExporter()
+        if args.awards:
+            asyncio.run(exporter.collect_awards(
+                max_pages=args.pages,
+                date_start=args.date_start,
+                date_end=args.date_end,
+                output_path=args.output
+            ))
+        else:
+            asyncio.run(exporter.collect_bdc(
+                max_pages=args.pages,
+                output_path=args.output
+            ))
+    elif args.awards:
+        asyncio.run(run_awards_crawl_cycle(max_pages=args.pages, date_start=args.date_start, date_end=args.date_end))
     elif args.daemon:
         asyncio.run(run_daemon_loop(pages=args.pages, interval_seconds=args.interval, send_emails=not args.no_email))
     else:
