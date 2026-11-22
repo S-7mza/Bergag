@@ -7,7 +7,7 @@ from urllib.parse import quote
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from sqlalchemy import select, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -212,6 +212,56 @@ def extract_profile_candidate_keywords(profile: CompanyProfileSchema) -> List[st
     return [k for k in sorted_keywords if len(k) >= 3]
 
 
+# Discrete interval buckets for tender deadlines (more than / between specific days, not cumulative)
+# e.g. "between 1 day and 2 days", "between 2 days and 3 days", etc.
+URGENCY_RANGE_MAP: Dict[str, Tuple[int, Optional[int]]] = {
+    # < 1 day (closing within next 24 hours: 0 to 1 day)
+    "1d": (0, 1),
+    "24h": (0, 1),
+    "urgent_24h": (0, 1),
+    "under_1d": (0, 1),
+
+    # Between 1 day and 2 days (24h to 48h)
+    "2d": (1, 2),
+    "48h": (1, 2),
+    "urgent_48h": (1, 2),
+    "1_2d": (1, 2),
+
+    # Between 2 days and 3 days (48h to 72h)
+    "3d": (2, 3),
+    "72h": (2, 3),
+    "2_3d": (2, 3),
+
+    # Between 3 days and 4 days (72h to 96h)
+    "4d": (3, 4),
+    "96h": (3, 4),
+    "3_4d": (3, 4),
+
+    # Between 4 days and 7 days (4 days to 1 week)
+    "1w": (4, 7),
+    "5d": (4, 7),
+    "7d": (4, 7),
+    "4_7d": (4, 7),
+
+    # Between 1 week and 2 weeks (7 days to 14 days)
+    "2w": (7, 14),
+    "14d": (7, 14),
+    "1_2w": (7, 14),
+
+    # Between 2 weeks and 1 month (14 days to 30 days)
+    "1m": (14, 30),
+    "30d": (14, 30),
+    "2w_1m": (14, 30),
+
+    # More than 1 month (> 30 days)
+    "gt_1m": (30, None),
+    "over_1m": (30, None),
+    "plus_1m": (30, None)
+}
+
+urgency_range_map = URGENCY_RANGE_MAP
+
+
 @router.get("/feed", response_model=List[TenderFeedItem])
 async def get_tender_feed(
     response: Response,
@@ -350,32 +400,13 @@ async def get_tender_feed(
             )
         )
 
-    # Urgency / Deadline filtering (closing in 1d, 2d, 3d, 4d, 1w, 2w, 1m)
-    urgency_days_map = {
-        "1d": 1,
-        "24h": 1,
-        "urgent_24h": 1,
-        "2d": 2,
-        "48h": 2,
-        "urgent_48h": 2,
-        "3d": 3,
-        "72h": 3,
-        "4d": 4,
-        "96h": 4,
-        "5d": 5,
-        "1w": 7,
-        "7d": 7,
-        "2w": 14,
-        "14d": 14,
-        "1m": 30,
-        "30d": 30
-    }
-    if urgency and urgency in urgency_days_map:
-        days_limit = urgency_days_map[urgency]
-        stmt = stmt.where(
-            Tender.deadline_at > now,
-            Tender.deadline_at <= (now + timedelta(days=days_limit))
-        )
+    if urgency and urgency in URGENCY_RANGE_MAP:
+        min_days, max_days = URGENCY_RANGE_MAP[urgency]
+        min_boundary = now + timedelta(days=min_days) if min_days > 0 else now
+        stmt = stmt.where(Tender.deadline_at > min_boundary)
+        if max_days is not None:
+            max_boundary = now + timedelta(days=max_days)
+            stmt = stmt.where(Tender.deadline_at <= max_boundary)
 
     # Fetch candidate pool (sized to evaluate all active tenders in DB, up to 5000)
     pool_limit = max(limit, 3000)
