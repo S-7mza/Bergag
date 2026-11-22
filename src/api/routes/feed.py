@@ -89,6 +89,8 @@ async def get_tender_feed(
     region: Optional[str] = Query(None, description="Filter by location/region"),
     category: Optional[str] = Query(None, description="Filter by category (Fournitures, Services, etc.)"),
     urgency: Optional[str] = Query(None, description="Urgency filter (urgent_24h, urgent_48h)"),
+    status_filter: Optional[str] = Query("all", description="Status filter: 'all', 'open' (eliminate closed), 'closed'"),
+    exclude_closed: bool = Query(False, description="Whether to eliminate closed/expired offers"),
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, deadline_asc, items_desc, id_desc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
     limit: int = Query(200, ge=1, le=500),
@@ -147,10 +149,17 @@ async def get_tender_feed(
         stmt = stmt.where(Tender.main_category.ilike(f"%{category}%"))
 
     now = datetime.now(timezone.utc)
+    is_open_only = (status_filter == "open" or exclude_closed)
+
+    if is_open_only:
+        stmt = stmt.where(Tender.deadline_at > now)
+    elif status_filter == "closed":
+        stmt = stmt.where(Tender.deadline_at <= now)
+
     if urgency == "urgent_24h":
-        stmt = stmt.where(Tender.deadline_at <= (now + timedelta(hours=24)))
+        stmt = stmt.where(Tender.deadline_at > now, Tender.deadline_at <= (now + timedelta(hours=24)))
     elif urgency == "urgent_48h":
-        stmt = stmt.where(Tender.deadline_at <= (now + timedelta(hours=48)))
+        stmt = stmt.where(Tender.deadline_at > now, Tender.deadline_at <= (now + timedelta(hours=48)))
 
     # Fetch candidate pool (up to 500 candidate tenders)
     stmt = stmt.order_by(Tender.deadline_at.asc()).limit(500)
@@ -204,6 +213,18 @@ async def get_tender_feed(
                 portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}"
             )
         )
+
+    # Eliminate closed/expired offers if requested
+    if is_open_only:
+        scored_items = [
+            item for item in scored_items 
+            if "CLÔTURÉ" not in item.decision_verdict and "CLOTURE" not in item.decision_verdict
+        ]
+    elif status_filter == "closed":
+        scored_items = [
+            item for item in scored_items 
+            if "CLÔTURÉ" in item.decision_verdict or "CLOTURE" in item.decision_verdict
+        ]
 
     # Compute comprehensive sector statistics across all scored candidate items
     total_candidates = len(scored_items)

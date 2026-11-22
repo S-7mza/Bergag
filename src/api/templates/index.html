@@ -700,6 +700,14 @@
                             </button>
                         </div>
 
+                        <!-- Quick Filter: Éliminer Clôturés -->
+                        <button @click="statusFilter = (statusFilter === 'open' ? 'all' : 'open'); fetchFeed()"
+                                :class="statusFilter === 'open' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'"
+                                class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap">
+                            <span :class="statusFilter === 'open' ? 'text-emerald-400' : 'text-slate-500'">⚡</span>
+                            <span x-text="statusFilter === 'open' ? '🟢 Clôturés Éliminés' : 'Masquer Clôturés'"></span>
+                        </button>
+
                         <!-- Sorting Dropdown -->
                         <div class="flex items-center gap-2 text-xs">
                             <label class="text-slate-500 text-[11px] font-medium hidden sm:inline">Trier par :</label>
@@ -724,7 +732,7 @@
                     </div>
 
                     <!-- Faceted Filters Bar -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
                         
                         <!-- Filter 1: Moroccan Regions -->
                         <div>
@@ -752,6 +760,16 @@
                                 <option value="Fournitures">Fournitures</option>
                                 <option value="Services">Services</option>
                                 <option value="Travaux">Travaux</option>
+                            </select>
+                        </div>
+
+                        <!-- Filter: Statut Marché (Éliminer clôturés) -->
+                        <div>
+                            <label class="text-[10px] text-slate-500 font-semibold block mb-1">Statut Marché</label>
+                            <select x-model="statusFilter" @change="fetchFeed()" class="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
+                                <option value="all">Tous (y compris clôturés)</option>
+                                <option value="open">🟢 En cours (Éliminer clôturés)</option>
+                                <option value="closed">⏳ Clôturés uniquement</option>
                             </select>
                         </div>
 
@@ -3112,6 +3130,8 @@
                 selectedProfile: 'it_hardware',
                 minScore: 0,
                 feedStats: { total: 0, ge80: 0, ge50: 0 },
+                statusFilter: 'all',
+
                 searchQuery: '',
                 selectedRegion: 'all',
                 selectedCategory: 'all',
@@ -3398,6 +3418,10 @@
                     if (this.selectedRegion !== 'all') chips.push({ key: 'region', label: 'Région: ' + this.selectedRegion });
                     if (this.selectedCategory !== 'all') chips.push({ key: 'category', label: 'Prestation: ' + this.selectedCategory });
                     if (this.selectedUrgency !== 'all') chips.push({ key: 'urgency', label: 'Délai: ' + this.selectedUrgency });
+
+                    if (this.statusFilter === 'open') chips.push({ key: 'statusFilter', label: '🟢 Clôturés éliminés' });
+
+                    if (this.statusFilter === 'closed') chips.push({ key: 'statusFilter', label: '⏳ Clôturés uniquement' });
                     return chips;
                 },
 
@@ -3407,6 +3431,8 @@
                     if (key === 'region') this.selectedRegion = 'all';
                     if (key === 'category') this.selectedCategory = 'all';
                     if (key === 'urgency') this.selectedUrgency = 'all';
+
+                    if (key === 'statusFilter') this.statusFilter = 'all';
                     this.fetchFeed();
                 },
 
@@ -3512,6 +3538,8 @@
                         if (this.selectedRegion !== 'all') url += `&region=${encodeURIComponent(this.selectedRegion)}`;
                         if (this.selectedCategory !== 'all') url += `&category=${encodeURIComponent(this.selectedCategory)}`;
                         if (this.selectedUrgency !== 'all') url += `&urgency=${encodeURIComponent(this.selectedUrgency)}`;
+
+                        if (this.statusFilter && this.statusFilter !== 'all') url += `&status_filter=${encodeURIComponent(this.statusFilter)}`;
                         
                         const res = await fetch(url);
                         const totalHeader = res.headers.get('x-total-count');

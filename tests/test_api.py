@@ -420,5 +420,72 @@ async def test_audit_active_coverage_logic():
             assert missing["status_label"] == "Manquant"
 
 
+def test_feed_status_filter_open_eliminates_closed(client):
+    """Verifies that status_filter=open eliminates any expired/closed consultation"""
+    from unittest.mock import AsyncMock, patch
+    from datetime import datetime, timezone, timedelta
+    from src.models.tender import Tender, Buyer
+
+    now = datetime.now(timezone.utc)
+    t_open = Tender(
+        portal_id=888001,
+        source_type="bdc",
+        reference="BC/888/001",
+        compound_natural_key="buyer:ref:2026",
+        buyer_id=uuid.uuid4(),
+        title="Acquisition ordinateurs de bureau et imprimantes",
+        main_category="Fournitures",
+        published_at=now - timedelta(days=1),
+        deadline_at=now + timedelta(days=2),
+        status="active"
+    )
+    t_open.buyer = Buyer(slug="buyer-a", official_name="Ministère A", buyer_type="ministère")
+    t_open.line_items = []
+
+    t_expired = Tender(
+        portal_id=888002,
+        source_type="bdc",
+        reference="BC/888/002",
+        compound_natural_key="buyer:ref:2026-b",
+        buyer_id=uuid.uuid4(),
+        title="Fourniture de matériel informatique et serveurs",
+        main_category="Fournitures",
+        published_at=now - timedelta(days=5),
+        deadline_at=now - timedelta(days=1),
+        status="active"
+    )
+    t_expired.buyer = Buyer(slug="buyer-b", official_name="Ministère B", buyer_type="ministère")
+    t_expired.line_items = []
+
+    mock_res = MagicMock()
+    mock_res.scalars.return_value.all.return_value = [t_open, t_expired]
+
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_res
+
+    from src.database.session import get_db_session
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    try:
+        # 1. With status_filter=open -> Only t_open must survive, t_expired must be eliminated
+        res = client.get("/api/feed?profile_name=it_hardware&status_filter=open")
+        assert res.status_code == 200
+        items = res.json()
+        assert len(items) == 1
+        assert items[0]["portal_id"] == 888001
+        assert "CLÔTURÉ" not in items[0]["decision_verdict"]
+        assert res.headers["x-total-count"] == "1"
+
+        # 2. With status_filter=all -> Both survive
+        res_all = client.get("/api/feed?profile_name=it_hardware&status_filter=all")
+        assert res_all.status_code == 200
+        items_all = res_all.json()
+        assert len(items_all) == 2
+        assert res_all.headers["x-total-count"] == "2"
+    finally:
+        app.dependency_overrides.pop(get_db_session, None)
+
+
+
 
 
