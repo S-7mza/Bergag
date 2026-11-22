@@ -123,14 +123,21 @@ async def get_tender_feed(
     )
 
     if search and search.strip():
-        search_pattern = f"%{search.strip().lower()}%"
-        stmt = stmt.where(
-            or_(
-                Tender.title.ilike(search_pattern),
-                Tender.reference.ilike(search_pattern),
-                Tender.line_items.any(LineItem.designation.ilike(search_pattern))
-            )
-        )
+        search_raw = search.strip()
+        search_pattern = f"%{search_raw.lower()}%"
+        search_conditions = [
+            Tender.title.ilike(search_pattern),
+            Tender.reference.ilike(search_pattern),
+            Tender.execution_location.ilike(search_pattern),
+            Tender.buyer.has(Buyer.name.ilike(search_pattern)),
+            Tender.line_items.any(LineItem.designation.ilike(search_pattern))
+        ]
+        # Support direct portal ID lookup (e.g. "410796" or "#410796")
+        clean_id_str = search_raw.lstrip('#').strip()
+        if clean_id_str.isdigit():
+            search_conditions.append(Tender.portal_id == int(clean_id_str))
+
+        stmt = stmt.where(or_(*search_conditions))
     else:
         # Pre-filter candidates by sector keywords so the cascade scoring evaluates
         # genuine sector opportunities rather than arbitrary unrelated rows (food, fuel, cleaning).
