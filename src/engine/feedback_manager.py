@@ -78,14 +78,14 @@ def normalize_profile_key(profile_identifier: str) -> str:
     """Canonicalizes profile identifiers (slugs, file names, or display titles) to standard profile slugs"""
     if not profile_identifier:
         return "it_hardware"
-    lowered = profile_identifier.lower().strip()
-    if "software" in lowered or "logiciel" in lowered or "data" in lowered:
+    norm = strip_accents(profile_identifier).strip()
+    if "software" in norm or "logiciel" in norm or "data" in norm:
         return "software_data"
-    if "cctv" in lowered or "secur" in lowered or "video" in lowered:
+    if "cctv" in norm or "secur" in norm or "video" in norm:
         return "cctv_security"
-    if "hardware" in lowered or "materiel" in lowered or "reseau" in lowered or "network" in lowered:
+    if "hardware" in norm or "materiel" in norm or "reseau" in norm or "network" in norm or "informatique" in norm:
         return "it_hardware"
-    return lowered.replace(" ", "_")
+    return norm.replace(" ", "_")
 
 class AlignmentFeedbackManager:
     """
