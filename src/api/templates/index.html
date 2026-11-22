@@ -1739,23 +1739,60 @@
 
                                         <td class="py-3.5 px-3 whitespace-nowrap">
 
-                                            <span :class="{
+                                            <div class="flex flex-col items-start gap-1">
+                                                <span :class="{
 
-                                                'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.decision_verdict === 'GO' || (item.match_score >= 80 && item.decision_verdict !== 'CLÔTURÉ' && item.decision_verdict !== 'ANNULÉ'),
+                                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.decision_verdict === 'GO' || (item.match_score >= 80 && item.decision_verdict !== 'CLÔTURÉ' && item.decision_verdict !== 'ANNULÉ'),
 
-                                                'bg-amber-500/10 text-amber-400 border-amber-500/30': item.decision_verdict === 'CONSIDER' || (item.match_score >= 50 && item.match_score < 80 && item.decision_verdict !== 'CLÔTURÉ'),
+                                                    'bg-amber-500/10 text-amber-400 border-amber-500/30': item.decision_verdict === 'CONSIDER' || (item.match_score >= 50 && item.match_score < 80 && item.decision_verdict !== 'CLÔTURÉ'),
 
-                                                'bg-purple-500/10 text-purple-300 border-purple-500/30': item.decision_verdict === 'CLÔTURÉ',
+                                                    'bg-purple-500/10 text-purple-300 border-purple-500/30': item.decision_verdict === 'CLÔTURÉ',
 
-                                                'bg-rose-500/10 text-rose-400 border-rose-500/30': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
+                                                    'bg-rose-500/10 text-rose-400 border-rose-500/30': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
 
-                                            }" class="px-2 py-0.5 rounded-full font-bold border inline-flex items-center gap-1 text-[11px]">
+                                                }" class="px-2 py-0.5 rounded-full font-bold border inline-flex items-center gap-1 text-[11px]">
 
-                                                <span x-text="item.decision_verdict === 'GO' ? '🎯' : (item.decision_verdict === 'CONSIDER' ? '⚠️' : (item.decision_verdict === 'CLÔTURÉ' ? '⏳' : '❌'))"></span>
+                                                    <span x-text="item.decision_verdict === 'GO' ? '🎯' : (item.decision_verdict === 'CONSIDER' ? '⚠️' : (item.decision_verdict === 'CLÔTURÉ' ? '⏳' : '❌'))"></span>
 
-                                                <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
+                                                    <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
 
-                                            </span>
+                                                </span>
+
+                                                <!-- User Alignment Feedback Action Pill -->
+                                                <div @click.stop class="inline-flex items-center">
+                                                    <template x-if="item.alignment_feedback === 'aligned'">
+                                                        <button @click="toggleAlignment(item)"
+                                                                title="Confirmé aligné avec le secteur. Cliquer pour réinitialiser."
+                                                                class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all inline-flex items-center gap-1">
+                                                            <span>✅ Aligné</span>
+                                                            <span class="text-[8px] opacity-70">✕</span>
+                                                        </button>
+                                                    </template>
+                                                    <template x-if="item.alignment_feedback === 'misaligned'">
+                                                        <button @click="toggleAlignment(item)"
+                                                                title="Signalé hors secteur. Cliquer pour réinitialiser."
+                                                                class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 transition-all inline-flex items-center gap-1">
+                                                            <span>❌ Hors secteur</span>
+                                                            <span class="text-[8px] opacity-70">✕</span>
+                                                        </button>
+                                                    </template>
+                                                    <template x-if="!item.alignment_feedback">
+                                                        <div class="inline-flex items-center gap-1 text-[10px]">
+                                                            <button @click="submitAlignment(item, true)"
+                                                                    title="Confirmer que cette consultation correspond au secteur actif (+15% boost & apprentissage IA)"
+                                                                    class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-emerald-950 text-slate-400 hover:text-emerald-300 border border-slate-800 hover:border-emerald-500/30 transition-colors inline-flex items-center gap-0.5">
+                                                                <span>👍</span>
+                                                                <span>Aligné ?</span>
+                                                            </button>
+                                                            <button @click="submitAlignment(item, false)"
+                                                                    title="Signaler hors secteur / faux positif"
+                                                                    class="p-0.5 px-1 rounded bg-slate-900 hover:bg-rose-950 text-slate-500 hover:text-rose-300 border border-slate-800 hover:border-rose-500/30 transition-colors inline-flex items-center">
+                                                                <span>👎</span>
+                                                            </button>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
 
                                         </td>
 
@@ -1875,23 +1912,60 @@
 
                                 <div class="flex justify-between items-start gap-2 mb-3">
 
-                                    <span :class="{
+                                    <div class="flex flex-col gap-1 items-start">
+                                        <span :class="{
 
-                                        'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.decision_verdict === 'GO' || (item.match_score >= 80 && item.decision_verdict !== 'CLÔTURÉ' && item.decision_verdict !== 'ANNULÉ'),
+                                            'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.decision_verdict === 'GO' || (item.match_score >= 80 && item.decision_verdict !== 'CLÔTURÉ' && item.decision_verdict !== 'ANNULÉ'),
 
-                                        'bg-amber-500/10 text-amber-400 border-amber-500/30': item.decision_verdict === 'CONSIDER' || (item.match_score >= 50 && item.match_score < 80 && item.decision_verdict !== 'CLÔTURÉ'),
+                                            'bg-amber-500/10 text-amber-400 border-amber-500/30': item.decision_verdict === 'CONSIDER' || (item.match_score >= 50 && item.match_score < 80 && item.decision_verdict !== 'CLÔTURÉ'),
 
-                                        'bg-purple-500/10 text-purple-300 border-purple-500/30': item.decision_verdict === 'CLÔTURÉ',
+                                            'bg-purple-500/10 text-purple-300 border-purple-500/30': item.decision_verdict === 'CLÔTURÉ',
 
-                                        'bg-rose-500/10 text-rose-400 border-rose-500/30': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
+                                            'bg-rose-500/10 text-rose-400 border-rose-500/30': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
 
-                                    }" class="px-2 py-0.5 rounded-full font-bold border text-[11px] inline-flex items-center gap-1">
+                                        }" class="px-2 py-0.5 rounded-full font-bold border text-[11px] inline-flex items-center gap-1">
 
-                                        <span x-text="item.decision_verdict === 'GO' ? '🎯' : (item.decision_verdict === 'CONSIDER' ? '⚠️' : (item.decision_verdict === 'CLÔTURÉ' ? '⏳' : '❌'))"></span>
+                                            <span x-text="item.decision_verdict === 'GO' ? '🎯' : (item.decision_verdict === 'CONSIDER' ? '⚠️' : (item.decision_verdict === 'CLÔTURÉ' ? '⏳' : '❌'))"></span>
 
-                                        <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
+                                            <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
 
-                                    </span>
+                                        </span>
+
+                                        <!-- Alignment badge / Quick vote in cards -->
+                                        <div @click.stop class="inline-flex items-center">
+                                            <template x-if="item.alignment_feedback === 'aligned'">
+                                                <button @click="toggleAlignment(item)"
+                                                        title="Confirmé aligné avec le profil. Cliquer pour réinitialiser."
+                                                        class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all inline-flex items-center gap-1">
+                                                    <span>✅ Aligné</span>
+                                                    <span class="text-[8px] opacity-70">✕</span>
+                                                </button>
+                                            </template>
+                                            <template x-if="item.alignment_feedback === 'misaligned'">
+                                                <button @click="toggleAlignment(item)"
+                                                        title="Signalé hors secteur. Cliquer pour réinitialiser."
+                                                        class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 transition-all inline-flex items-center gap-1">
+                                                    <span>❌ Hors secteur</span>
+                                                    <span class="text-[8px] opacity-70">✕</span>
+                                                </button>
+                                            </template>
+                                            <template x-if="!item.alignment_feedback">
+                                                <div class="inline-flex items-center gap-1 text-[10px]">
+                                                    <button @click="submitAlignment(item, true)"
+                                                            title="Confirmer que cette consultation correspond au secteur actif (+15% boost & apprentissage IA)"
+                                                            class="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-emerald-950 text-slate-400 hover:text-emerald-300 border border-slate-800 hover:border-emerald-500/30 transition-colors inline-flex items-center gap-0.5">
+                                                        <span>👍</span>
+                                                        <span>Aligné ?</span>
+                                                    </button>
+                                                    <button @click="submitAlignment(item, false)"
+                                                            title="Signaler hors secteur / faux positif"
+                                                            class="p-0.5 px-1 rounded bg-slate-950 hover:bg-rose-950 text-slate-500 hover:text-rose-300 border border-slate-800 hover:border-rose-500/30 transition-colors inline-flex items-center">
+                                                        <span>👎</span>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
 
                                     <span class="font-mono text-[11px] text-slate-500 group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></span>
 
@@ -5902,7 +5976,86 @@
 
                 <div class="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
 
-                    
+                    <!-- Sector Alignment & Active Learning Feedback Bar -->
+                    <div class="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 shadow-sm border"
+                                 :class="{
+                                     'bg-emerald-500/15 border-emerald-500/30 text-emerald-400': activeTender?.alignment_feedback === 'aligned',
+                                     'bg-rose-500/15 border-rose-500/30 text-rose-400': activeTender?.alignment_feedback === 'misaligned',
+                                     'bg-slate-900 border-slate-800 text-slate-400': !activeTender?.alignment_feedback
+                                 }">
+                                <span x-text="activeTender?.alignment_feedback === 'aligned' ? '✅' : (activeTender?.alignment_feedback === 'misaligned' ? '❌' : '🎯')"></span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-white">Alignement Secteur :</span>
+                                    <span class="text-[11px] font-mono text-emerald-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800" x-text="getProfileLabel(selectedProfile)"></span>
+                                </div>
+                                <div class="text-[11px] mt-0.5">
+                                    <span x-show="activeTender?.alignment_feedback === 'aligned'" class="text-emerald-300 font-medium flex items-center gap-1">
+                                        <span>Confirmé aligné par l'équipe</span>
+                                        <span class="text-slate-500">&bull;</span>
+                                        <span class="text-emerald-400 font-mono">+15% Score & Apprentissage IA actif</span>
+                                    </span>
+                                    <span x-show="activeTender?.alignment_feedback === 'misaligned'" class="text-rose-300 font-medium flex items-center gap-1">
+                                        <span>Signalé hors secteur (Faux positif)</span>
+                                        <span class="text-slate-500">&bull;</span>
+                                        <span class="text-rose-400 font-mono">Score plafonné à 20% NO-GO</span>
+                                    </span>
+                                    <span x-show="!activeTender?.alignment_feedback" class="text-slate-400">
+                                        Cette consultation correspond-elle à votre activité ? Votre validation améliore le modèle IA.
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            <!-- When confirmed aligned -->
+                            <template x-if="activeTender?.alignment_feedback === 'aligned'">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-flex items-center gap-1.5 shadow-sm">
+                                        <span>✅ Confirmé Aligné</span>
+                                    </span>
+                                    <button @click="toggleAlignment(activeTender)"
+                                            title="Réinitialiser le vote d'alignement"
+                                            class="px-2.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors">
+                                        <span>Réinitialiser</span>
+                                    </button>
+                                </div>
+                            </template>
+
+                            <!-- When marked misaligned -->
+                            <template x-if="activeTender?.alignment_feedback === 'misaligned'">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 inline-flex items-center gap-1.5 shadow-sm">
+                                        <span>❌ Hors Secteur</span>
+                                    </span>
+                                    <button @click="toggleAlignment(activeTender)"
+                                            title="Réinitialiser le vote d'alignement"
+                                            class="px-2.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors">
+                                        <span>Réinitialiser</span>
+                                    </button>
+                                </div>
+                            </template>
+
+                            <!-- When unconfirmed -->
+                            <template x-if="!activeTender?.alignment_feedback">
+                                <div class="flex items-center gap-2">
+                                    <button @click="submitAlignment(activeTender, true)"
+                                            title="Valider que cette consultation est pertinente pour ce secteur (+15% boost & apprentissage IA)"
+                                            class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 inline-flex items-center gap-1.5">
+                                        <span>👍 Confirmer Aligné (+15%)</span>
+                                    </button>
+                                    <button @click="submitAlignment(activeTender, false)"
+                                            title="Signaler comme hors secteur / non pertinent (Faux positif)"
+                                            class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-rose-950 text-slate-300 hover:text-rose-300 border border-slate-800 hover:border-rose-500/40 transition-all active:scale-95 inline-flex items-center gap-1.5">
+                                        <span>👎 Hors Secteur</span>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
 
                     <!-- Decision & Alignment Analysis Card -->
 
@@ -7055,6 +7208,93 @@
 
                     this.toasts = this.toasts.filter(t => t.id !== id);
 
+                },
+
+                getProfileLabel(profileKey) {
+                    const labels = {
+                        'it_hardware': 'Matériel Informatique & Réseaux',
+                        'cctv_security': 'Vidéosurveillance & Sécurité',
+                        'software_data': 'Logiciel & Données'
+                    };
+                    return labels[profileKey] || profileKey || 'Secteur Actif';
+                },
+
+                async submitAlignment(target, isAligned, notes = '') {
+                    if (!target || !target.portal_id) return;
+                    const portalId = target.portal_id;
+                    const profile = this.selectedProfile;
+                    try {
+                        const res = await fetch('/api/feed/feedback', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                portal_id: portalId,
+                                profile_name: profile,
+                                is_aligned: isAligned,
+                                user_notes: notes
+                            })
+                        });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.detail || 'Erreur enregistrement');
+                        }
+                        const data = await res.json();
+                        
+                        target.alignment_feedback = isAligned ? 'aligned' : 'misaligned';
+                        if (isAligned) {
+                            target.match_score = Math.min(100, Math.max(88, Math.round((target.match_score || 70) + 15)));
+                            target.decision_verdict = 'GO';
+                            this.showToast('✅ Consultation confirmée alignée (+15% boost & apprentissage IA)', 'success');
+                        } else {
+                            target.match_score = Math.min(20, Math.round(target.match_score || 50));
+                            target.decision_verdict = 'NO-GO';
+                            this.showToast('❌ Consultation classée hors secteur (Score ajusté en NO-GO)', 'info');
+                        }
+
+                        // Sync with activeTender if updating from feed list
+                        if (this.activeTender && this.activeTender.portal_id === portalId) {
+                            this.activeTender.alignment_feedback = target.alignment_feedback;
+                            this.activeTender.match_score = target.match_score;
+                            this.activeTender.decision_verdict = target.decision_verdict;
+                        }
+
+                        // Sync with item in items array if updating from activeTender modal
+                        const feedItem = this.items.find(i => i.portal_id === portalId);
+                        if (feedItem && feedItem !== target) {
+                            feedItem.alignment_feedback = target.alignment_feedback;
+                            feedItem.match_score = target.match_score;
+                            feedItem.decision_verdict = target.decision_verdict;
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur validation secteur: ' + (e.message || e), 'error');
+                    }
+                },
+
+                async toggleAlignment(target) {
+                    if (!target || !target.portal_id) return;
+                    const portalId = target.portal_id;
+                    const profile = this.selectedProfile;
+                    try {
+                        const res = await fetch(`/api/feed/feedback/${portalId}?profile_name=${encodeURIComponent(profile)}`, {
+                            method: 'DELETE'
+                        });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.detail || 'Erreur réinitialisation');
+                        }
+                        
+                        target.alignment_feedback = null;
+                        if (this.activeTender && this.activeTender.portal_id === portalId) {
+                            this.activeTender.alignment_feedback = null;
+                        }
+                        const feedItem = this.items.find(i => i.portal_id === portalId);
+                        if (feedItem && feedItem !== target) {
+                            feedItem.alignment_feedback = null;
+                        }
+                        this.showToast('Statut alignement réinitialisé', 'info');
+                    } catch (e) {
+                        this.showToast('Erreur réinitialisation: ' + (e.message || e), 'error');
+                    }
                 },
 
 

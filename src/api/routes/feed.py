@@ -13,9 +13,10 @@ from src.models.tender import Tender, Buyer, LineItem
 from src.models.profile import CompanyProfile, ProfileMatch, UserTenderAction
 from src.profiles.loader import load_profile, load_all_profiles
 from src.profiles.schema import CompanyProfileSchema
-from src.engine.scoring_cascade import ScoringCascadeEngine
+from src.engine.scoring_cascade import ScoringCascadeEngine, invalidate_tender_cache
 from src.engine.pricing_helper import PricingHelper
 from src.engine.pipeline_manager import pipeline_manager
+from src.engine.feedback_manager import feedback_manager
 from src.engine.cancellation_tracker import (
     is_cancellation_notice,
     extract_target_cancelled_reference,
@@ -26,7 +27,9 @@ from src.api.schemas import (
     TenderDetailResponse, 
     LineItemSchema, 
     UserActionRequest, 
-    UserActionResponse
+    UserActionResponse,
+    AlignmentFeedbackRequest,
+    AlignmentFeedbackResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +84,14 @@ def extract_profile_candidate_keywords(profile: CompanyProfileSchema) -> List[st
                 w_clean = w.strip(" ,.'-")
                 if len(w_clean) >= 4 and w_clean not in stopwords:
                     keywords.add(w_clean)
+
+    # Active Learning: Incorporate top human-confirmed domain keywords for this profile
+    profile_name = getattr(profile, "profile_name", "")
+    if profile_name:
+        learned_words = feedback_manager.get_learned_terms(profile_name)
+        for lw in learned_words[:25]:
+            if lw not in stopwords and len(lw) >= 3:
+                keywords.add(lw)
 
     return [k for k in keywords if len(k) >= 3]
 
@@ -269,7 +280,8 @@ async def get_tender_feed(
                 match_score=overall_score,
                 decision_verdict=decision_verdict,
                 line_item_count=len(t.line_items),
-                portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}"
+                portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}",
+                alignment_feedback=cascade_res.alignment_feedback
             )
         )
 
@@ -404,6 +416,7 @@ async def get_tender_detail(
         red_flags=cascade_res.red_flags,
         llm_reasoning=cascade_res.llm_reasoning,
         line_item_evaluations=cascade_res.line_item_matches,
+        alignment_feedback=cascade_res.alignment_feedback,
         line_items=[
             LineItemSchema(
                 item_order=i.item_order,
@@ -607,3 +620,92 @@ async def remove_from_pipeline(
     """Removes a tender from the pipeline tracking"""
     await pipeline_manager.remove_item(portal_id, session=session)
     return {"success": True, "message": f"Dossier #{portal_id} retiré du suivi."}
+
+@router.post("/feed/feedback", response_model=AlignmentFeedbackResponse)
+async def submit_alignment_feedback(
+    req: AlignmentFeedbackRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Records domain expert alignment feedback on whether an avis fits a business sector/profile.
+    - Boosts verified tenders (+15% score, floor 88% GO)
+    - Demotes false positive misalignments (caps at 20%, NO-GO)
+    - Automatically mines vocabulary to train the active learning model for future searches
+    """
+    stmt = (
+        select(Tender)
+        .options(selectinload(Tender.line_items), selectinload(Tender.buyer))
+        .where(Tender.portal_id == req.portal_id)
+    )
+    res = await session.execute(stmt)
+    tender = res.scalar_one_or_none()
+
+    title = tender.title if tender else ""
+    line_items_text = " ".join(item.designation for item in tender.line_items) if tender else ""
+
+    feedback_entry = feedback_manager.record_feedback(
+        portal_id=req.portal_id,
+        profile_name=req.profile_name,
+        is_aligned=req.is_aligned,
+        user_notes=req.user_notes,
+        tender_title=title,
+        line_items_text=line_items_text
+    )
+
+    # Invalidate scoring cache so the new score recalculates with the feedback
+    invalidate_tender_cache(req.portal_id, req.profile_name)
+
+    # Re-evaluate score immediately
+    profile = load_profile(req.profile_name)
+    scoring_engine = ScoringCascadeEngine()
+
+    tender_dict = {
+        "portal_id": req.portal_id,
+        "title": title,
+        "reference": tender.reference if tender else f"#{req.portal_id}",
+        "status": tender.status if tender else "active",
+        "prestation_type": tender.prestation_type if tender else "",
+        "execution_location": tender.execution_location if tender else "Maroc",
+        "line_items": [
+            {
+                "item_order": i.item_order,
+                "designation": i.designation,
+                "technical_specs": i.technical_specs,
+                "unit": i.unit,
+                "quantity": float(i.quantity),
+                "tva_rate": float(i.tva_rate or 20.0),
+                "warranty_required": i.warranty_required
+            }
+            for i in (tender.line_items if tender else [])
+        ]
+    }
+    eval_res = await scoring_engine.evaluate_tender(tender_dict, profile)
+    stats = feedback_manager.get_profile_stats(req.profile_name)
+
+    return AlignmentFeedbackResponse(
+        success=True,
+        portal_id=req.portal_id,
+        profile_name=req.profile_name,
+        alignment_feedback="aligned" if req.is_aligned else "misaligned",
+        updated_score=eval_res.overall_score,
+        updated_verdict=eval_res.decision_recommendation,
+        message="Alignement confirmé (+15% score bonifié). Modèle enrichi !" if req.is_aligned else "Avis marqué hors secteur (score neutralisé).",
+        learned_terms_count=stats["learned_terms_count"]
+    )
+
+@router.delete("/feed/feedback/{portal_id}")
+async def delete_alignment_feedback(
+    portal_id: int,
+    profile_name: str = Query(..., description="Profile name to reset feedback for")
+):
+    """Resets human feedback for a tender back to neutral AI evaluation"""
+    success = feedback_manager.delete_feedback(portal_id, profile_name)
+    invalidate_tender_cache(portal_id, profile_name)
+    return {"success": success, "portal_id": portal_id, "profile_name": profile_name}
+
+@router.get("/feed/feedback/stats")
+async def get_feedback_learning_stats(
+    profile_name: str = Query("it_hardware", description="Profile name")
+):
+    """Returns RLHF alignment statistics and learned vocabulary for the profile"""
+    return feedback_manager.get_profile_stats(profile_name)

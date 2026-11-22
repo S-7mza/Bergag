@@ -7,6 +7,7 @@ from src.engine.lexical_matcher import LexicalMatcher
 from src.engine.line_item_matcher import LineItemMatcher
 from src.engine.llm_judge import LLMJudge
 from src.engine.cancellation_tracker import is_cancellation_notice, extract_target_cancelled_reference
+from src.engine.feedback_manager import feedback_manager
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,20 @@ class CascadeEvaluationResult:
     line_item_matches: List[Dict[str, Any]]
     red_flags: List[str]
     llm_reasoning: str
+    alignment_feedback: Optional[str] = None # 'aligned', 'misaligned', or None
+    learned_exemplar_bonus: float = 0.0
 
 # In-memory evaluation cache: (portal_id, profile_name) -> (passed_lexical, veto_reason, lexical_score, coverage_score, item_evals, unmatched_items)
 _STAGE23_CACHE: Dict[Tuple[int, str], Tuple[bool, Optional[str], float, float, List[Dict[str, Any]], List[str]]] = {}
+
+def invalidate_tender_cache(portal_id: int, profile_name: Optional[str] = None):
+    """Invalidates cached scoring results when feedback or tender data changes"""
+    keys_to_delete = [
+        k for k in _STAGE23_CACHE.keys() 
+        if k[0] == portal_id and (profile_name is None or k[1] == profile_name)
+    ]
+    for k in keys_to_delete:
+        del _STAGE23_CACHE[k]
 
 class ScoringCascadeEngine:
     """
@@ -160,6 +172,38 @@ class ScoringCascadeEngine:
             if unmatched_items:
                 red_flags.append(f"Articles non couverts : {', '.join(unmatched_items[:3])}")
 
+        # --- Stage 5: Domain Expert Reinforcement (RLHF) & Active Learning Adjustment ---
+        feedback = feedback_manager.get_feedback(portal_id, profile.profile_name) if portal_id else None
+        feedback_status = None
+        learned_bonus = 0.0
+
+        if feedback is not None:
+            if feedback.get("is_aligned"):
+                feedback_status = "aligned"
+                if not is_cancelled and not is_expired:
+                    overall_score = max(88.0, min(100.0, round(overall_score + 15.0, 1)))
+                    verdict = "GO"
+                    reasoning = f"✅ Alignement confirmé par l'expert ({feedback.get('user_name', 'Analyste')}) : score bonifié (+15%)."
+            else:
+                feedback_status = "misaligned"
+                overall_score = min(20.0, overall_score)
+                verdict = "NO-GO"
+                reasoning = f"❌ Signalé hors secteur par l'expert ({feedback.get('user_name', 'Analyste')}) : Faux positif exclu."
+                red_flags.append("Signalé hors secteur par l'analyste métier.")
+        else:
+            # Active Learning vocabulary adjustment for unreviewed tenders
+            full_tender_text = f"{tender_data.get('title', '')} {tender_data.get('prestation_type', '')}"
+            learned_delta, matched_terms = feedback_manager.calculate_active_learning_adjustment(full_tender_text, profile.profile_name)
+            if learned_delta != 0.0 and not is_cancelled and not is_expired:
+                overall_score = min(100.0, max(0.0, round(overall_score + learned_delta, 1)))
+                learned_bonus = learned_delta
+                if overall_score >= 80.0 and verdict not in ("CLÔTURÉ", "ANNULÉ") and not is_urgent:
+                    verdict = "GO"
+                elif overall_score >= 50.0 and verdict == "NO-GO":
+                    verdict = "CONSIDER"
+                if matched_terms:
+                    reasoning += f" • 🧠 Modèle calibré par retours d'expérience (+{learned_delta}% sur: {', '.join(matched_terms[:3])})"
+
         return CascadeEvaluationResult(
             overall_score=overall_score,
             decision_recommendation=verdict,
@@ -168,5 +212,7 @@ class ScoringCascadeEngine:
             feasibility_score=feasibility_score,
             line_item_matches=item_evals,
             red_flags=red_flags,
-            llm_reasoning=reasoning
+            llm_reasoning=reasoning,
+            alignment_feedback=feedback_status,
+            learned_exemplar_bonus=learned_bonus
         )

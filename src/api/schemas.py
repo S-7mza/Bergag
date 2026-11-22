@@ -25,6 +25,7 @@ class TenderFeedItem(BaseModel):
     decision_verdict: str = "PENDING"
     line_item_count: int = 0
     portal_url: str
+    alignment_feedback: Optional[str] = None # 'aligned', 'misaligned', or None
 
 class TenderDetailResponse(BaseModel):
     portal_id: int
@@ -47,6 +48,23 @@ class TenderDetailResponse(BaseModel):
     red_flags: List[str] = []
     llm_reasoning: Optional[str] = None
     line_item_evaluations: List[Dict[str, Any]] = []
+    alignment_feedback: Optional[str] = None # 'aligned', 'misaligned', or None
+
+class AlignmentFeedbackRequest(BaseModel):
+    portal_id: int
+    profile_name: str
+    is_aligned: bool
+    user_notes: Optional[str] = None
+
+class AlignmentFeedbackResponse(BaseModel):
+    success: bool
+    portal_id: int
+    profile_name: str
+    alignment_feedback: str
+    updated_score: float
+    updated_verdict: str
+    message: str
+    learned_terms_count: int
 
 class UserActionRequest(BaseModel):
     profile_id: Optional[str] = "00000000-0000-0000-0000-000000000000"
