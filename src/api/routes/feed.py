@@ -42,7 +42,7 @@ async def get_available_profiles():
 
 @router.get("/feed", response_model=List[TenderFeedItem])
 async def get_tender_feed(
-    profile_name: str = Query("cctv_security", description="Profile configuration to score against"),
+    profile_name: str = Query("it_hardware", description="Profile configuration to score against"),
     min_score: float = Query(0.0, description="Minimum overall alignment score (0-100)"),
     search: Optional[str] = Query(None, description="Search keyword in title or buyer"),
     region: Optional[str] = Query(None, description="Filter by location/region"),
@@ -158,9 +158,10 @@ async def get_tender_feed(
 @router.get("/tenders/{portal_id}", response_model=TenderDetailResponse)
 async def get_tender_detail(
     portal_id: int,
+    profile_name: str = Query("it_hardware", description="Profile configuration to score against"),
     session: AsyncSession = Depends(get_db_session)
 ):
-    """Returns full details, specifications, and line items for a tender"""
+    """Returns full details, specifications, line items, and real-time decision scoring for a tender"""
     stmt = (
         select(Tender)
         .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
@@ -171,6 +172,42 @@ async def get_tender_detail(
 
     if not t:
         raise HTTPException(status_code=404, detail=f"Tender #{portal_id} not found")
+
+    tender_dict = {
+        "portal_id": t.portal_id,
+        "reference": t.reference,
+        "title": t.title,
+        "buyer_name": t.buyer.official_name if t.buyer else "Inconnu",
+        "execution_location": t.execution_location,
+        "main_category": t.main_category,
+        "prestation_type": t.prestation_type,
+        "published_at": t.published_at.isoformat(),
+        "deadline_at": t.deadline_at.isoformat(),
+        "status": t.status,
+        "line_items": [
+            {
+                "item_order": item.item_order,
+                "designation": item.designation,
+                "technical_specs": item.technical_specs,
+                "unit": item.unit,
+                "quantity": float(item.quantity),
+                "tva_rate": float(item.tva_rate or 20.0),
+                "warranty_required": item.warranty_required
+            }
+            for item in t.line_items
+        ]
+    }
+
+    try:
+        profile = load_profile(profile_name)
+    except FileNotFoundError:
+        try:
+            profile = load_profile("it_hardware")
+        except FileNotFoundError:
+            profile = load_all_profiles()[0]
+
+    scoring_engine = ScoringCascadeEngine()
+    cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
     return TenderDetailResponse(
         portal_id=t.portal_id,
@@ -185,6 +222,12 @@ async def get_tender_detail(
         status=t.status,
         attachment_available=t.attachment_available,
         attachment_url=t.attachment_url,
+        match_score=cascade_res.overall_score,
+        decision_verdict=cascade_res.decision_recommendation,
+        coverage_score=cascade_res.coverage_score,
+        red_flags=cascade_res.red_flags,
+        llm_reasoning=cascade_res.llm_reasoning,
+        line_item_evaluations=cascade_res.line_item_matches,
         line_items=[
             LineItemSchema(
                 item_order=i.item_order,

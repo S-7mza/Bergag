@@ -1,0 +1,159 @@
+version: "1.0"
+tenant_id: "it-hardware-morocco"
+profile_name: "Matériel Informatique, Bureautique & Réseaux"
+contact_email: "contact@it-example.ma"
+
+macro_filters:
+  categories:
+    - "Fournitures"
+    - "Services"
+    - "Travaux"
+  prestation_types:
+    - "Achat de matériel technique, de logiciels et de matériel informatique"
+    - "Entretien et maintenance des équipements informatique"
+    - "Entretien et maintenance de matériel informatique"
+    - "Achat de matériel et fourniture de bureau"
+    - "Réseaux et télécommunications"
+    - "Fournitures informatiques"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Fès-Meknès"
+      - "Marrakech-Safi"
+      - "Tanger-Tétouan-Al Hoceïma"
+    max_travel_distance_km: 600
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "computers-workstations"
+    label: "Ordinateurs de Bureau & Portables"
+    weight: 1.0
+    synonyms_fr:
+      - "ordinateur de bureau"
+      - "ordinateur portable"
+      - "pc de bureau"
+      - "pc portable"
+      - "ordinateur"
+      - "laptop"
+      - "unité centrale"
+      - "station de travail"
+      - "écran"
+      - "moniteur"
+      - "clavier"
+      - "souris"
+      - "dell"
+      - "lenovo"
+      - "hp"
+    synonyms_ar:
+      - "حاسوب مكتبي"
+      - "حاسوب محمول"
+      - "شاشة"
+    technical_keywords:
+      - "i5"
+      - "i7"
+      - "ssd"
+      - "ram"
+      - "16 go"
+      - "32 go"
+      - "windows 11 pro"
+      - "full hd"
+      - "hdmi"
+
+  - id: "printers-copiers-toners"
+    label: "Imprimantes, Photocopieurs & Consommables"
+    weight: 1.0
+    synonyms_fr:
+      - "imprimante"
+      - "imprimante multifonction"
+      - "photocopieur"
+      - "toner"
+      - "cartouche d'encre"
+      - "consommables informatiques"
+      - "scanner"
+      - "traceur"
+      - "laserjet"
+    synonyms_ar:
+      - "طابعة"
+      - "طابعة متعددة الوظائف"
+      - "حبر"
+    technical_keywords:
+      - "laser"
+      - "monochrome"
+      - "couleur"
+      - "recto-verso"
+      - "wifi"
+      - "ethernet"
+      - "ppm"
+
+  - id: "servers-networking-ups"
+    label: "Serveurs, Réseau & Onduleurs"
+    weight: 1.0
+    synonyms_fr:
+      - "serveur"
+      - "switch"
+      - "routeur"
+      - "armoire informatique"
+      - "baie de brassage"
+      - "onduleur"
+      - "câble réseau"
+      - "rj45"
+      - "cat6"
+      - "cat6a"
+    synonyms_ar:
+      - "خادم"
+      - "موزع شبكة"
+      - "كابل شبكة"
+    technical_keywords:
+      - "rack"
+      - "gigabit"
+      - "poe"
+      - "va"
+      - "apc"
+      - "cisco"
+
+  - id: "it-maintenance-services"
+    label: "Maintenance, Réparation & Support Informatique"
+    weight: 0.9
+    synonyms_fr:
+      - "maintenance informatique"
+      - "réparation pc"
+      - "entretien matériel informatique"
+      - "infogérance"
+      - "assistance technique"
+      - "nettoyage matériel informatique"
+      - "réinstallation système"
+      - "matériel informatique"
+      - "reparation pc bureau"
+    synonyms_ar:
+      - "صيانة المعدات المعلوماتية"
+      - "إصلاح الحواسيب"
+    technical_keywords:
+      - "antivirus"
+      - "formatage"
+      - "sauvegarde"
+      - "mise à jour"
+      - "disque dur"
+      - "barrette de ram"
+
+negative_constraints:
+  keywords:
+    - "gardiennage"
+    - "nettoyage des locaux"
+    - "traiteur"
+    - "restauration"
+    - "travaux de maçonnerie"
+    - "peinture"
+    - "plomberie"
+    - "carburant"
+    - "pneumatique"
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

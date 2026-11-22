@@ -6,6 +6,7 @@ contact_email: "contact@security-example.ma"
 macro_filters:
   categories:
     - "Fournitures"
+    - "Services"
     - "Travaux"
   prestation_types:
     - "Travaux d'installation de matériels divers"

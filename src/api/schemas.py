@@ -41,6 +41,12 @@ class TenderDetailResponse(BaseModel):
     attachment_url: Optional[str] = None
     line_items: List[LineItemSchema]
     portal_url: str
+    match_score: float = 0.0
+    decision_verdict: str = "PENDING"
+    coverage_score: float = 0.0
+    red_flags: List[str] = []
+    llm_reasoning: Optional[str] = None
+    line_item_evaluations: List[Dict[str, Any]] = []
 
 class UserActionRequest(BaseModel):
     profile_id: Optional[str] = "00000000-0000-0000-0000-000000000000"

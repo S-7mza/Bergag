@@ -1,10 +1,19 @@
 import re
-from typing import Tuple, List
+import unicodedata
+from typing import Tuple, List, Optional
 from src.profiles.schema import CompanyProfileSchema
 
+def strip_accents(text: str) -> str:
+    """Normalizes text by removing diacritics / accents (e.g. matériel -> materiel)"""
+    if not text:
+        return ""
+    nfkd = unicodedata.normalize('NFKD', text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
+
 def tokenize(text: str) -> set[str]:
-    """Extracts lowercase alphanumeric word tokens"""
-    tokens = re.findall(r'\b[a-zA-Z0-9_\u0600-\u06FF]{3,}\b', text.lower())
+    """Extracts lowercase normalized alphanumeric word tokens"""
+    norm = strip_accents(text)
+    tokens = re.findall(r'\b[a-zA-Z0-9_\u0600-\u06FF]{3,}\b', norm)
     return set(tokens)
 
 class LexicalMatcher:
@@ -12,23 +21,28 @@ class LexicalMatcher:
     Stage 2: Lexical Keyword & Negative Constraints Filter.
     1. Checks for negative keyword exclusions (Instant Veto).
     2. Computes weighted lexical match score against profile catalog synonyms & tech keywords.
+    Normalizes accents to ensure robust matching across Moroccan tender titles and descriptions.
     """
     @staticmethod
-    def evaluate(tender_text: str, profile: CompanyProfileSchema) -> Tuple[bool, str | None, float]:
+    def evaluate(tender_text: str, profile: CompanyProfileSchema) -> Tuple[bool, Optional[str], float]:
         """
         Returns:
             (passed: bool, veto_reason: Optional[str], score: float 0.0 to 100.0)
         """
-        lower_text = tender_text.lower()
+        if not tender_text:
+            return True, None, 0.0
+
+        norm_tender = strip_accents(tender_text)
+        tokens = tokenize(tender_text)
 
         # 1. Negative Keyword Gate (Instant Veto)
         for neg_word in profile.negative_constraints.keywords:
-            pattern = rf'\b{re.escape(neg_word.lower())}\b'
-            if re.search(pattern, lower_text):
-                return False, f"Vetoed by negative constraint keyword: '{neg_word}'", 0.0
+            neg_norm = strip_accents(neg_word)
+            pattern = rf'\b{re.escape(neg_norm)}\b'
+            if re.search(pattern, norm_tender):
+                return False, f"Veto par mot-clé négatif exclu : '{neg_word}'", 0.0
 
         # 2. Positive Lexical & Synonym Scoring
-        tokens = tokenize(tender_text)
         total_weight = 0.0
         matched_weight = 0.0
 
@@ -39,16 +53,24 @@ class LexicalMatcher:
             # Collect all positive triggers for this SKU
             triggers = set(item.synonyms_fr + item.synonyms_ar + item.technical_keywords)
             
-            # Check if any trigger matches
             matched = False
             for trigger in triggers:
-                trig_lower = trigger.lower()
-                if " " in trig_lower:
-                    if trig_lower in lower_text:
+                trig_norm = strip_accents(trigger).strip()
+                if not trig_norm:
+                    continue
+
+                if " " in trig_norm:
+                    # Direct substring match
+                    if trig_norm in norm_tender:
+                        matched = True
+                        break
+                    # Multi-word token subset match (e.g. 'reparation pc' in 'reparation de pc bureau')
+                    trig_words = [w for w in trig_norm.split() if len(w) > 2]
+                    if trig_words and all(w in tokens or w in norm_tender for w in trig_words):
                         matched = True
                         break
                 else:
-                    if trig_lower in tokens or trig_lower in lower_text:
+                    if trig_norm in tokens or trig_norm in norm_tender:
                         matched = True
                         break
 
@@ -60,4 +82,3 @@ class LexicalMatcher:
 
         lexical_score = min(100.0, (matched_weight / total_weight) * 100.0)
         return True, None, round(lexical_score, 2)
-

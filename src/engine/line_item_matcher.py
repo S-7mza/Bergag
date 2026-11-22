@@ -1,6 +1,14 @@
 import re
+import unicodedata
 from typing import Tuple, List, Dict, Any
 from src.profiles.schema import CompanyProfileSchema
+
+def strip_accents(text: str) -> str:
+    """Normalizes text by removing diacritics / accents"""
+    if not text:
+        return ""
+    nfkd = unicodedata.normalize('NFKD', text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
 class LineItemMatcher:
     """
@@ -8,6 +16,7 @@ class LineItemMatcher:
     Decomposes each individual article requested by the public buyer and determines:
     1. Can the company actually supply this specific item?
     2. What percentage of the overall consultation can the company deliver?
+    Normalizes accents to ensure robust matching across Moroccan designations and specs.
     """
     @staticmethod
     def match_line_items(
@@ -21,7 +30,6 @@ class LineItemMatcher:
              unmatched_designations: list[str])
         """
         if not line_items:
-            # If no line items present in HTML, coverage is 0.0
             return 0.0, [], []
 
         item_evaluations = []
@@ -30,8 +38,8 @@ class LineItemMatcher:
 
         for item in line_items:
             desig = item.get("designation", "")
-            specs = item.get("technical_specs", "")
-            full_item_text = f"{desig} {specs}".lower()
+            specs = item.get("technical_specs", "") or ""
+            full_item_text = strip_accents(f"{desig} {specs}")
 
             best_catalog_match = None
             highest_score = 0.0
@@ -40,9 +48,16 @@ class LineItemMatcher:
                 triggers = set(cat_sku.synonyms_fr + cat_sku.synonyms_ar + cat_sku.technical_keywords)
                 hits = 0
                 for trigger in triggers:
-                    trig_lower = trigger.lower()
-                    if trig_lower in full_item_text:
+                    trig_norm = strip_accents(trigger).strip()
+                    if not trig_norm:
+                        continue
+
+                    if trig_norm in full_item_text:
                         hits += 1
+                    elif " " in trig_norm:
+                        trig_words = [w for w in trig_norm.split() if len(w) > 2]
+                        if trig_words and all(w in full_item_text for w in trig_words):
+                            hits += 1
 
                 if hits > 0:
                     score = min(1.0, 0.4 + (hits * 0.2)) * cat_sku.weight
@@ -69,4 +84,3 @@ class LineItemMatcher:
         total_items = len(line_items)
         coverage_ratio = (matched_count / total_items) * 100.0 if total_items > 0 else 0.0
         return round(coverage_ratio, 2), item_evaluations, unmatched_items
-
