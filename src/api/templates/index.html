@@ -1394,21 +1394,28 @@
 
                         <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs w-full md:w-auto">
 
-                            <button @click="minScore = 0; fetchFeed()" :class="minScore === 0 ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
+                            <button @click="minScore = 0; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 0 && alignmentFilter === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
 
                                 Tous (<span x-text="feedStats.total || items.length"></span>)
 
                             </button>
 
-                            <button @click="minScore = 50; fetchFeed()" :class="minScore === 50 ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
+                            <button @click="minScore = 50; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 50 && alignmentFilter === 'all' ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
 
                                 ⚠️ &ge; 50% <span x-show="feedStats.ge50 > 0" class="ml-1 text-[11px] opacity-80" x-text="'(' + feedStats.ge50 + ')'"></span>
 
                             </button>
 
-                            <button @click="minScore = 80; fetchFeed()" :class="minScore === 80 ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
+                            <button @click="minScore = 80; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 80 && alignmentFilter === 'all' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
 
                                 🎯 &ge; 80% (GO) <span x-show="feedStats.ge80 > 0" class="ml-1 text-[11px] opacity-80" x-text="'(' + feedStats.ge80 + ')'"></span>
+
+                            </button>
+
+                            <button @click="alignmentFilter = (alignmentFilter === 'aligned' ? 'all' : 'aligned'); minScore = 0; fetchFeed()" :class="alignmentFilter === 'aligned' ? 'bg-teal-500/25 text-teal-300 font-bold border border-teal-500/40 shadow-sm ring-1 ring-teal-500/30' : 'text-slate-400 hover:text-teal-300'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial flex items-center justify-center gap-1.5">
+
+                                <span>✅ Confirmés Alignés</span>
+                                <span x-show="feedStats.aligned > 0" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-teal-500/30 text-teal-200 font-bold" x-text="feedStats.aligned"></span>
 
                             </button>
 
@@ -1480,7 +1487,7 @@
 
                     <!-- Faceted Filters Bar -->
 
-                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-2 border-t border-slate-800/80 text-xs">
 
                         
 
@@ -1528,13 +1535,15 @@
 
                             <select x-model="selectedCategory" @change="fetchFeed()" class="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
 
-                                <option value="all">Toutes les prestations</option>
+                                <option value="all">Toutes les catégories</option>
 
-                                <option value="Fournitures">Fournitures</option>
+                                <option value="both">⚡ Matériel & Services (Les deux)</option>
 
-                                <option value="Services">Services</option>
+                                <option value="Fournitures">🖥️ Matériel seul (Fournitures)</option>
 
-                                <option value="Travaux">Travaux</option>
+                                <option value="Services">🛠️ Services seuls</option>
+
+                                <option value="Travaux">🏗️ Travaux</option>
 
                             </select>
 
@@ -1557,6 +1566,28 @@
                                 <option value="closed">⏳ Clôturés uniquement</option>
 
                                 <option value="cancelled">🚫 Annulés uniquement</option>
+
+                            </select>
+
+                        </div>
+
+
+
+                        <!-- Filter: Alignement Métier (Mes avis confirmés) -->
+
+                        <div>
+
+                            <label class="text-[10px] text-slate-500 font-semibold block mb-1">Alignement Métier</label>
+
+                            <select x-model="alignmentFilter" @change="fetchFeed()" class="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
+
+                                <option value="all">Tous les avis</option>
+
+                                <option value="aligned">✅ Confirmés Alignés (Mes avis retenus)</option>
+
+                                <option value="unreviewed">⏳ Non encore évalués</option>
+
+                                <option value="misaligned">❌ Rejetés / Hors secteur</option>
 
                             </select>
 
@@ -1602,6 +1633,33 @@
                     </div>
 
 
+
+                    <!-- Quick Nature / Prestation Filter Pills (Matériel vs Services vs Les Deux) -->
+                    <div class="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/50">
+                        <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1 mr-1">
+                            <span>📦</span> Nature Marché :
+                        </span>
+                        <button type="button" @click="setCategory('both')"
+                                :class="selectedCategory === 'both' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold shadow-sm ring-1 ring-emerald-500/50' : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'"
+                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1">
+                            <span>⚡</span> <span>Matériel & Services (Les deux)</span>
+                        </button>
+                        <button type="button" @click="setCategory('Fournitures')"
+                                :class="(selectedCategory === 'Fournitures' || selectedCategory === 'materiel') ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 font-bold shadow-sm ring-1 ring-sky-500/50' : 'bg-slate-950 text-slate-400 hover:text-sky-300 border-slate-800'"
+                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1">
+                            <span>🖥️</span> <span>Matériel seul</span>
+                        </button>
+                        <button type="button" @click="setCategory('Services')"
+                                :class="(selectedCategory === 'Services' || selectedCategory === 'service') ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 font-bold shadow-sm ring-1 ring-purple-500/50' : 'bg-slate-950 text-slate-400 hover:text-purple-300 border-slate-800'"
+                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1">
+                            <span>🛠️</span> <span>Services seuls</span>
+                        </button>
+                        <button type="button" @click="setCategory('all')"
+                                :class="selectedCategory === 'all' ? 'bg-slate-800 text-slate-200 border-slate-700 font-semibold' : 'bg-slate-950 text-slate-500 hover:text-slate-300 border-slate-800'"
+                                class="px-2 py-1 rounded-lg text-[11px] border transition-all active:scale-95">
+                            Tout
+                        </button>
+                    </div>
 
                     <!-- Quick Deadline / Clôture Filter Pills -->
                     <div class="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/50">
@@ -1812,7 +1870,13 @@
 
                                                 <span class="bg-slate-800 text-slate-200 border border-slate-700/60 px-1.5 py-0.5 rounded font-mono text-[10px] font-semibold" x-text="item.line_item_count + ' articles au devis'"></span>
 
-                                                <span class="truncate max-w-[200px]" x-text="'• ' + item.main_category"></span>
+                                                <span :class="{
+                                                    'bg-sky-500/10 text-sky-400 border-sky-500/30': item.main_category === 'Fournitures',
+                                                    'bg-purple-500/10 text-purple-300 border-purple-500/30': item.main_category === 'Services',
+                                                    'bg-amber-500/10 text-amber-400 border-amber-500/30': item.main_category === 'Travaux'
+                                                }" class="px-1.5 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 shrink-0">
+                                                    <span x-text="item.main_category === 'Fournitures' ? '🖥️ Matériel' : (item.main_category === 'Services' ? '🛠️ Services' : '🏗️ ' + item.main_category)"></span>
+                                                </span>
 
                                             </div>
 
@@ -1980,6 +2044,18 @@
 
 
                                 <div class="space-y-1.5 text-xs text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800/80 mb-4 font-mono">
+
+                                    <div class="flex justify-between items-center">
+
+                                        <span class="text-slate-500">Nature :</span>
+
+                                        <span :class="{
+                                            'text-sky-300': item.main_category === 'Fournitures',
+                                            'text-purple-300': item.main_category === 'Services',
+                                            'text-amber-300': item.main_category === 'Travaux'
+                                        }" class="font-bold text-xs" x-text="item.main_category === 'Fournitures' ? '🖥️ Matériel' : (item.main_category === 'Services' ? '🛠️ Services' : item.main_category)"></span>
+
+                                    </div>
 
                                     <div class="flex justify-between">
 
@@ -6774,9 +6850,11 @@
 
                 minScore: 0,
 
-                feedStats: { total: 0, ge80: 0, ge50: 0 },
+                feedStats: { total: 0, ge80: 0, ge50: 0, aligned: 0 },
 
                 statusFilter: 'all',
+
+                alignmentFilter: 'all',
 
 
 
@@ -7463,6 +7541,7 @@
                         if (isAligned) {
                             target.match_score = Math.min(100, Math.max(88, Math.round((target.match_score || 70) + 15)));
                             target.decision_verdict = 'GO';
+                            this.feedStats.aligned = (this.feedStats.aligned || 0) + 1;
                             this.showToast('✅ Consultation confirmée alignée (+15% boost & apprentissage IA)', 'success');
                         } else {
                             target.match_score = Math.min(20, Math.round(target.match_score || 50));
@@ -7510,6 +7589,11 @@
                         if (feedItem && feedItem !== target) {
                             feedItem.alignment_feedback = null;
                         }
+                        if (this.alignmentFilter === 'aligned') {
+                            this.fetchFeed();
+                        } else {
+                            this.feedStats.aligned = Math.max(0, (this.feedStats.aligned || 1) - 1);
+                        }
                         this.showToast('Statut alignement réinitialisé', 'info');
                     } catch (e) {
                         this.showToast('Erreur réinitialisation: ' + (e.message || e), 'error');
@@ -7536,7 +7620,19 @@
 
                     if (this.selectedRegion !== 'all') chips.push({ key: 'region', label: 'Région: ' + this.selectedRegion });
 
-                    if (this.selectedCategory !== 'all') chips.push({ key: 'category', label: 'Prestation: ' + this.selectedCategory });
+                    if (this.selectedCategory && this.selectedCategory !== 'all') {
+                        let catLabel = 'Catégorie: ' + this.selectedCategory;
+                        if (this.selectedCategory === 'both') {
+                            catLabel = 'Nature: ⚡ Matériel & Services (Les deux)';
+                        } else if (this.selectedCategory === 'Fournitures' || this.selectedCategory === 'materiel') {
+                            catLabel = 'Nature: 🖥️ Matériel seul';
+                        } else if (this.selectedCategory === 'Services' || this.selectedCategory === 'service') {
+                            catLabel = 'Nature: 🛠️ Services seuls';
+                        } else if (this.selectedCategory === 'Travaux') {
+                            catLabel = 'Nature: 🏗️ Travaux';
+                        }
+                        chips.push({ key: 'category', label: catLabel });
+                    }
 
                     if (this.selectedUrgency !== 'all') {
                         const urgencyLabels = {
@@ -7565,6 +7661,12 @@
 
                     if (this.statusFilter === 'cancelled') chips.push({ key: 'statusFilter', label: '🚫 Annulés uniquement' });
 
+                    if (this.alignmentFilter === 'aligned') chips.push({ key: 'alignmentFilter', label: '✅ Confirmés Alignés' });
+
+                    if (this.alignmentFilter === 'misaligned') chips.push({ key: 'alignmentFilter', label: '❌ Rejetés' });
+
+                    if (this.alignmentFilter === 'unreviewed') chips.push({ key: 'alignmentFilter', label: '⏳ Non évalués' });
+
                     return chips;
 
                 },
@@ -7586,6 +7688,8 @@
 
 
                     if (key === 'statusFilter') this.statusFilter = 'all';
+
+                    if (key === 'alignmentFilter') this.alignmentFilter = 'all';
 
                     this.fetchFeed();
 
@@ -7821,6 +7925,8 @@
 
                         if (this.statusFilter && this.statusFilter !== 'all') url += `&status_filter=${encodeURIComponent(this.statusFilter)}`;
 
+                        if (this.alignmentFilter && this.alignmentFilter !== 'all') url += `&alignment_filter=${encodeURIComponent(this.alignmentFilter)}`;
+
                         
 
                         const res = await fetch(url);
@@ -7830,6 +7936,8 @@
                         const ge80Header = res.headers.get('x-count-ge-80');
 
                         const ge50Header = res.headers.get('x-count-ge-50');
+
+                        const alignedHeader = res.headers.get('x-count-aligned');
 
                         this.items = await res.json();
 
@@ -7851,6 +7959,8 @@
 
                             this.feedStats.ge50 = parseInt(ge50Header || '0', 10);
 
+                            this.feedStats.aligned = parseInt(alignedHeader || '0', 10);
+
                         } else {
 
                             this.feedStats.total = this.items.length;
@@ -7871,6 +7981,11 @@
 
 
 
+                setCategory(cat) {
+                    this.selectedCategory = cat;
+                    this.fetchFeed();
+                },
+
                 setUrgency(val) {
                     this.selectedUrgency = val;
                     this.fetchFeed();
@@ -7887,6 +8002,8 @@
                     this.selectedCategory = 'all';
 
                     this.selectedUrgency = 'all';
+
+                    this.alignmentFilter = 'all';
 
                     this.sortBy = 'score_desc';
 

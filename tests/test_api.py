@@ -491,6 +491,90 @@ def test_feed_status_filter_open_eliminates_closed(client):
         app.dependency_overrides.pop(get_db_session, None)
 
 
+def test_feed_alignment_filter(client):
+    """Verifies that alignment_filter=aligned returns only human-confirmed aligned tenders and sets X-Count-Aligned header"""
+    from unittest.mock import AsyncMock, MagicMock
+    from datetime import datetime, timezone, timedelta
+    from src.models.tender import Tender, Buyer
+    from src.engine.feedback_manager import feedback_manager
+
+    now = datetime.now(timezone.utc)
+    t_aligned = Tender(
+        portal_id=777001,
+        source_type="bdc",
+        reference="BC/777/001",
+        compound_natural_key="buyer:ref:2026-c",
+        buyer_id=uuid.uuid4(),
+        title="Fourniture d ordinateurs et materiel informatique",
+        main_category="Fournitures",
+        published_at=now - timedelta(days=1),
+        deadline_at=now + timedelta(days=5),
+        status="active"
+    )
+    t_aligned.buyer = Buyer(slug="buyer-c", official_name="Commune C", buyer_type="commune")
+    t_aligned.line_items = []
+
+    t_neutral = Tender(
+        portal_id=777002,
+        source_type="bdc",
+        reference="BC/777/002",
+        compound_natural_key="buyer:ref:2026-d",
+        buyer_id=uuid.uuid4(),
+        title="Acquisition d equipements bureautiques",
+        main_category="Fournitures",
+        published_at=now - timedelta(days=2),
+        deadline_at=now + timedelta(days=4),
+        status="active"
+    )
+    t_neutral.buyer = Buyer(slug="buyer-d", official_name="Commune D", buyer_type="commune")
+    t_neutral.line_items = []
+
+    mock_res = MagicMock()
+    mock_res.scalars.return_value.all.return_value = [t_aligned, t_neutral]
+
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_res
+
+    from src.database.session import get_db_session
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    try:
+        # Record feedback for 777001
+        feedback_manager.record_feedback(
+            portal_id=777001,
+            profile_name="it_hardware",
+            is_aligned=True,
+            tender_title=t_aligned.title
+        )
+
+        assert 777001 in feedback_manager.get_aligned_portal_ids("it_hardware")
+
+        # 1. Query with alignment_filter=all -> Both returned, header shows x-count-aligned == 1
+        res_all = client.get("/api/feed?profile_name=it_hardware&alignment_filter=all")
+        assert res_all.status_code == 200
+        assert res_all.headers.get("x-count-aligned") == "1"
+
+        # 2. Query with alignment_filter=aligned -> Only 777001 returned
+        res_aligned = client.get("/api/feed?profile_name=it_hardware&alignment_filter=aligned")
+        assert res_aligned.status_code == 200
+        items_aligned = res_aligned.json()
+        assert len(items_aligned) == 1
+        assert items_aligned[0]["portal_id"] == 777001
+        assert items_aligned[0]["alignment_feedback"] == "aligned"
+        assert res_aligned.headers.get("x-count-aligned") == "1"
+
+        # 3. Query with alignment_filter=unreviewed -> Only 777002 returned
+        res_unreviewed = client.get("/api/feed?profile_name=it_hardware&alignment_filter=unreviewed")
+        assert res_unreviewed.status_code == 200
+        items_unreviewed = res_unreviewed.json()
+        assert len(items_unreviewed) == 1
+        assert items_unreviewed[0]["portal_id"] == 777002
+    finally:
+        feedback_manager.delete_feedback(777001, "it_hardware")
+        app.dependency_overrides.pop(get_db_session, None)
+
+
+
 
 
 

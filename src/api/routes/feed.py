@@ -110,6 +110,7 @@ async def get_tender_feed(
     category: Optional[str] = Query(None, description="Filter by category (Fournitures, Services, etc.)"),
     urgency: Optional[str] = Query(None, description="Urgency / Deadline filter ('1d', '2d', '3d', '4d', '1w', '2w', '1m', 'urgent_24h', 'urgent_48h')"),
     status_filter: Optional[str] = Query("all", description="Status filter: 'all', 'open' (eliminate closed), 'closed'"),
+    alignment_filter: Optional[str] = Query("all", description="Filter by expert alignment: 'all', 'aligned' (confirmés alignés), 'misaligned', 'unreviewed')"),
     exclude_closed: bool = Query(False, description="Whether to eliminate closed/expired offers"),
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, deadline_asc, items_desc, id_desc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
@@ -157,17 +158,24 @@ async def get_tender_feed(
         # Pre-filter candidates by sector keywords so the cascade scoring evaluates
         # genuine sector opportunities rather than arbitrary unrelated rows (food, fuel, cleaning).
         candidate_kws = extract_profile_candidate_keywords(profile)
+        aligned_ids = list(feedback_manager.get_aligned_portal_ids(profile_name))
+
         if candidate_kws:
             title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws[:40]]
             prestation_conditions = [Tender.prestation_type.ilike(f"%{kw}%") for kw in candidate_kws[:40]]
             line_conditions = [LineItem.designation.ilike(f"%{kw}%") for kw in candidate_kws[:15]]
-            stmt = stmt.where(
-                or_(
-                    *title_conditions,
-                    *prestation_conditions,
-                    Tender.line_items.any(or_(*line_conditions))
-                )
-            )
+            match_conditions = [
+                *title_conditions,
+                *prestation_conditions,
+                Tender.line_items.any(or_(*line_conditions))
+            ]
+            # Ensure tenders confirmed as aligned by the user are ALWAYS included in candidates
+            if aligned_ids:
+                match_conditions.append(Tender.portal_id.in_(aligned_ids))
+
+            stmt = stmt.where(or_(*match_conditions))
+        elif aligned_ids:
+            stmt = stmt.where(Tender.portal_id.in_(aligned_ids))
 
         # Disjoint prestation categories (transport, engins, citernes, gardiennage) never match tech profiles
         disjoint_prestations = ["transport", "engin", "citerne", "gardiennage", "denree", "denrée"]
@@ -185,7 +193,21 @@ async def get_tender_feed(
         stmt = stmt.where(Tender.execution_location.ilike(f"%{region}%"))
 
     if category and category != "all":
-        stmt = stmt.where(Tender.main_category.ilike(f"%{category}%"))
+        cat_clean = category.lower().strip()
+        if cat_clean in ("both", "materiel_services", "fournitures_services", "materiel_service", "all_tech"):
+            # Include both Fournitures (Matériel) and Services, while excluding Travaux/Civil works
+            stmt = stmt.where(Tender.main_category.in_(["Fournitures", "Services"]))
+        elif cat_clean in ("fournitures", "materiel", "matériel"):
+            # Matériel / Fournitures alone
+            stmt = stmt.where(or_(Tender.main_category.ilike("%Fourniture%"), Tender.main_category.ilike("%materiel%")))
+        elif cat_clean in ("services", "service"):
+            # Services alone
+            stmt = stmt.where(Tender.main_category.ilike("%Service%"))
+        elif cat_clean in ("travaux", "travail"):
+            # Travaux alone
+            stmt = stmt.where(Tender.main_category.ilike("%Travaux%"))
+        else:
+            stmt = stmt.where(Tender.main_category.ilike(f"%{category}%"))
 
     now = datetime.now(timezone.utc)
     is_open_only = (status_filter == "open" or exclude_closed)
@@ -323,14 +345,24 @@ async def get_tender_feed(
     total_candidates = len(scored_items)
     count_ge_80 = sum(1 for item in scored_items if item.match_score >= 80.0)
     count_ge_50 = sum(1 for item in scored_items if item.match_score >= 50.0)
+    count_aligned = sum(1 for item in scored_items if item.alignment_feedback == "aligned")
 
     # Set response metadata headers for frontend badges
     response.headers["X-Total-Count"] = str(total_candidates)
     response.headers["X-Count-Ge-80"] = str(count_ge_80)
     response.headers["X-Count-Ge-50"] = str(count_ge_50)
+    response.headers["X-Count-Aligned"] = str(count_aligned)
 
-    # Filter by effective minimum score
-    feed_items = [item for item in scored_items if item.match_score >= effective_min_score]
+    # Filter by expert alignment or minimum score
+    if alignment_filter == "aligned":
+        feed_items = [item for item in scored_items if item.alignment_feedback == "aligned"]
+    elif alignment_filter == "misaligned":
+        feed_items = [item for item in scored_items if item.alignment_feedback == "misaligned"]
+    elif alignment_filter == "unreviewed":
+        feed_items = [item for item in scored_items if not item.alignment_feedback and item.match_score >= effective_min_score]
+    else:
+        # Default 'all': filter by effective minimum score
+        feed_items = [item for item in scored_items if item.match_score >= effective_min_score]
 
     # Sorting
     if sort_by == "deadline_asc":

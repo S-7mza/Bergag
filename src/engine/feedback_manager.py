@@ -217,6 +217,22 @@ class AlignmentFeedbackManager:
         canonical_profile = normalize_profile_key(profile_name)
         return self._feedbacks.get((portal_id, canonical_profile))
 
+    def get_aligned_portal_ids(self, profile_name: Optional[str] = None) -> Set[int]:
+        """Returns the set of portal_ids confirmed as aligned for this profile (or all profiles if None)"""
+        canonical_profile = normalize_profile_key(profile_name) if profile_name else None
+        return {
+            pid for (pid, p), v in self._feedbacks.items()
+            if (canonical_profile is None or p == canonical_profile) and v.get("is_aligned")
+        }
+
+    def get_misaligned_portal_ids(self, profile_name: Optional[str] = None) -> Set[int]:
+        """Returns the set of portal_ids rejected as misaligned for this profile"""
+        canonical_profile = normalize_profile_key(profile_name) if profile_name else None
+        return {
+            pid for (pid, p), v in self._feedbacks.items()
+            if (canonical_profile is None or p == canonical_profile) and not v.get("is_aligned")
+        }
+
     def get_learned_terms(self, profile_name: str) -> List[str]:
         """Returns all terms learned from confirmed aligned tenders for this profile"""
         canonical_profile = normalize_profile_key(profile_name)
