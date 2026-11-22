@@ -94,8 +94,8 @@ class ScoringCascadeEngine:
         )
 
         weights = profile.scoring_weights
-        has_geo_issue = any("régions" in r.lower() for r in hard_reasons)
-        feasibility_score = 50.0 if has_geo_issue else 100.0
+        has_geo_issue = any("région" in r.lower() or "territoire" in r.lower() for r in hard_reasons)
+        feasibility_score = 40.0 if has_geo_issue else 100.0
 
         # Technical Alignment Score (based on actual products, specifications, and keywords)
         tech_alignment_score = (

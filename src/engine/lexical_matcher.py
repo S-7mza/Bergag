@@ -37,8 +37,11 @@ class LexicalMatcher:
 
         # 1. Negative Keyword Gate (Instant Veto)
         for neg_word in profile.negative_constraints.keywords:
-            neg_norm = strip_accents(neg_word)
-            pattern = rf'\b{re.escape(neg_norm)}\b'
+            neg_norm = strip_accents(neg_word).strip()
+            if not neg_norm:
+                continue
+            # Match singular, plural (s/x), and feminine forms (e/es) so "photocopieur" matches "photocopieurs"
+            pattern = rf'\b{re.escape(neg_norm)}(?:s|x|es|e)?\b'
             if re.search(pattern, norm_tender):
                 return False, f"Veto par mot-clé négatif exclu : '{neg_word}'", 0.0
 
@@ -60,17 +63,20 @@ class LexicalMatcher:
                     continue
 
                 if " " in trig_norm:
-                    # Direct substring match
-                    if trig_norm in norm_tender:
+                    pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
+                    if re.search(pattern, norm_tender):
                         matched = True
                         break
-                    # Multi-word token subset match (e.g. 'reparation pc' in 'reparation de pc bureau')
+                    # Multi-word token subset match with word boundaries
                     trig_words = [w for w in trig_norm.split() if len(w) > 2]
-                    if trig_words and all(w in tokens or w in norm_tender for w in trig_words):
+                    if trig_words and all(w in tokens or re.search(rf'\b{re.escape(w)}(?:s|x)?\b', norm_tender) for w in trig_words):
                         matched = True
                         break
                 else:
-                    if trig_norm in tokens or trig_norm in norm_tender:
+                    # Single word / acronym: MUST match on exact word boundaries, never raw substring
+                    # e.g. "api" must match word "API", NOT inside "papier"
+                    pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
+                    if trig_norm in tokens or re.search(pattern, norm_tender):
                         matched = True
                         break
 

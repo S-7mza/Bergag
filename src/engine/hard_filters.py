@@ -46,15 +46,20 @@ def evaluate_hard_filters(tender_data: dict, profile: CompanyProfileSchema) -> T
 
     # 3. Geographic Coverage Filter
     geo = profile.macro_filters.geographic_coverage
-    if geo.get("mode") == "regional":
-        preferred_regions = [r.lower() for r in geo.get("preferred_regions", [])]
-        exec_loc = (tender_data.get("execution_location") or "").lower()
-        if preferred_regions and exec_loc:
-            matched_geo = any(pref in exec_loc for pref in preferred_regions)
-            if not matched_geo and "national" not in exec_loc:
+    preferred_regions = [r.lower() for r in geo.get("preferred_regions", [])]
+    exec_loc = (tender_data.get("execution_location") or "").lower()
+    if preferred_regions and exec_loc:
+        matched_geo = any(pref in exec_loc for pref in preferred_regions) or "national" in exec_loc
+        if not matched_geo:
+            if geo.get("mode") == "regional":
                 reasons.append(
                     f"Lieu d'exécution '{tender_data.get('execution_location')}' "
                     f"en dehors des régions cibles: {geo.get('preferred_regions')}."
+                )
+            else:
+                reasons.append(
+                    f"Lieu d'exécution '{tender_data.get('execution_location')}' "
+                    f"hors territoire prioritaire ({', '.join(geo.get('preferred_regions', []))})."
                 )
 
     # 4. Main Category Filter

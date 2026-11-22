@@ -52,11 +52,21 @@ class LineItemMatcher:
                     if not trig_norm:
                         continue
 
-                    if trig_norm in full_item_text:
-                        hits += 1
-                    elif " " in trig_norm:
-                        trig_words = [w for w in trig_norm.split() if len(w) > 2]
-                        if trig_words and all(w in full_item_text for w in trig_words):
+                    if " " in trig_norm:
+                        # Multi-word phrase match (e.g. 'application web')
+                        pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
+                        if re.search(pattern, full_item_text):
+                            hits += 1
+                        else:
+                            # Token subset with word boundaries
+                            trig_words = [w for w in trig_norm.split() if len(w) > 2]
+                            if trig_words and all(re.search(rf'\b{re.escape(w)}(?:s|x)?\b', full_item_text) for w in trig_words):
+                                hits += 1
+                    else:
+                        # Single word / acronym: MUST match on exact word boundaries!
+                        # Prevents short acronyms like "api" from falsely matching inside "papier", "sql" in "desquels", etc.
+                        pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
+                        if re.search(pattern, full_item_text):
                             hits += 1
 
                 if hits > 0:

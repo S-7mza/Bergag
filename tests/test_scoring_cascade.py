@@ -82,3 +82,77 @@ async def test_negative_keyword_veto():
     assert result.decision_recommendation == "NO-GO"
     assert result.overall_score == 0.0
     assert "veto" in result.llm_reasoning.lower()
+
+
+@pytest.mark.asyncio
+async def test_plural_negative_keyword_veto_and_no_substring_api_false_positive():
+    """
+    Guarantees:
+    1. 'ACHAT DES PHOTOCOPIEURS' is vetoed by 'photocopieur' (plural handled).
+    2. 'bac d'alimentation papier' never triggers 'API' in software profile.
+    3. Total score is 0.0 NO-GO for software profile.
+    """
+    software_profile = load_profile("software_data")
+    engine = ScoringCascadeEngine()
+
+    tender = {
+        "portal_id": 410796,
+        "title": "ACHAT DES PHOTOCOPIEURS AU PROFIT DE LA SECREATARIAT DE LA PRISON LOCALE D AZROU",
+        "main_category": "Fournitures",
+        "prestation_type": "Achat de matériel technique, de logiciels et de matériel informatique",
+        "execution_location": "IFRANE",
+        "status": "active",
+        "deadline_at": "2026-12-01T14:00:00+01:00",
+        "line_items": [
+            {
+                "item_order": 1,
+                "designation": "Copieur multifonction couleur",
+                "technical_specs": "bac d alimentation papier memoire 8Go disque dur SSD",
+                "quantity": 2,
+                "unit": "u"
+            }
+        ]
+    }
+
+    result = await engine.evaluate_tender(tender, software_profile)
+
+    assert result.decision_recommendation == "NO-GO"
+    assert result.overall_score == 0.0
+    assert result.coverage_score == 0.0
+    assert any("photocopieur" in r.lower() for r in result.red_flags)
+
+
+@pytest.mark.asyncio
+async def test_non_preferred_territory_flagged():
+    """
+    When an offer is in a non-preferred territory (e.g. IFRANE while preferred are Casablanca/Rabat),
+    it must be flagged as non-priority territory with reduced proximity score.
+    """
+    from src.engine.line_item_matcher import LineItemMatcher
+    software_profile = load_profile("software_data")
+    engine = ScoringCascadeEngine()
+
+    tender = {
+        "portal_id": 999998,
+        "title": "Développement d'une application web et portail sur mesure",
+        "main_category": "Services",
+        "prestation_type": "Études, conseil et formation",
+        "execution_location": "IFRANE",
+        "status": "active",
+        "deadline_at": "2026-12-01T14:00:00+01:00",
+        "line_items": [
+            {
+                "item_order": 1,
+                "designation": "Application web et portail sur mesure Python React",
+                "technical_specs": "Développement logiciel avec API REST",
+                "quantity": 1,
+                "unit": "lot"
+            }
+        ]
+    }
+
+    result = await engine.evaluate_tender(tender, software_profile)
+    # Feasibility proximity score is reduced because Ifrane is outside Casablanca/Rabat
+    assert result.feasibility_score < 100.0
+    assert any("territoire" in r.lower() or "régions" in r.lower() for r in result.red_flags)
+

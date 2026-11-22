@@ -472,7 +472,7 @@
 
                             </div>
 
-                            <div class="font-bold text-slate-200 truncate" x-text="item.title"></div>
+                            <div class="font-bold text-slate-100 text-sm truncate" :title="item.title" x-text="item.title"></div>
 
                             <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
 
@@ -1122,7 +1122,7 @@
 
                                             <span class="font-mono text-slate-400 truncate max-w-[100px]" x-text="item.reference"></span>
 
-                                            <span class="text-slate-200 truncate max-w-sm" x-text="item.title"></span>
+                                            <span class="text-slate-100 font-medium text-xs sm:text-sm truncate max-w-sm" :title="item.title" x-text="item.title"></span>
 
                                         </div>
 
@@ -1701,7 +1701,7 @@
 
                                     <th class="py-3 px-4">ID & Réf</th>
 
-                                    <th class="py-3 px-4">Objet de la Consultation</th>
+                                    <th class="py-3 px-4 min-w-[340px]">Objet de la Consultation</th>
 
                                     <th class="py-3 px-4">Acheteur Public & Lieu</th>
 
@@ -1753,13 +1753,13 @@
 
                                         </td>
 
-                                        <td class="py-3.5 px-4">
+                                        <td class="py-4 px-4 min-w-[340px] max-w-2xl">
 
-                                            <div class="font-medium text-slate-100 group-hover:text-white line-clamp-2 max-w-lg text-xs leading-relaxed" x-text="item.title"></div>
+                                            <div class="font-bold text-white group-hover:text-emerald-300 line-clamp-3 text-base leading-snug tracking-tight" :title="item.title" x-text="item.title"></div>
 
-                                            <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
+                                            <div class="text-xs text-slate-400 mt-2 flex items-center gap-2 flex-wrap">
 
-                                                <span class="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono" x-text="item.line_item_count + ' articles au devis'"></span>
+                                                <span class="bg-slate-800 text-slate-200 border border-slate-700/60 px-2 py-0.5 rounded font-mono text-[11px] font-semibold" x-text="item.line_item_count + ' articles au devis'"></span>
 
                                                 <span x-text="'&bull; ' + item.main_category"></span>
 
@@ -1881,7 +1881,7 @@
 
 
 
-                                <h3 class="font-bold text-slate-100 group-hover:text-white text-sm leading-snug line-clamp-2 mb-2" :title="item.title" x-text="item.title"></h3>
+                                <h3 class="font-bold text-white group-hover:text-emerald-300 text-base leading-snug line-clamp-3 mb-2.5" :title="item.title" x-text="item.title"></h3>
 
                                 <p class="text-xs text-slate-400 mb-3 truncate" x-text="item.buyer_name"></p>
 
@@ -2099,7 +2099,7 @@
 
                                     </div>
 
-                                    <h4 class="text-sm font-bold text-white line-clamp-2 hover:text-emerald-400 cursor-pointer" @click="openModal(item.portal_id)" x-text="item.title"></h4>
+                                    <h4 class="text-base font-bold text-white line-clamp-3 leading-snug hover:text-emerald-300 cursor-pointer" @click="openModal(item.portal_id)" :title="item.title" x-text="item.title"></h4>
 
                                     <div class="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
 
@@ -5789,7 +5789,10 @@
 
                         </div>
 
-                        <h3 class="text-base font-bold text-white leading-snug max-w-2xl" x-text="activeTender?.title"></h3>
+                        <div class="mt-2.5">
+                            <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20 inline-block mb-1.5">Objet de la Consultation</span>
+                            <h3 class="text-lg sm:text-xl font-bold text-white leading-snug max-w-3xl" x-text="activeTender?.title"></h3>
+                        </div>
 
                     </div>
 
@@ -7136,7 +7139,7 @@
 
                     try {
 
-                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=200`;
+                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=2500`;
 
                         if (this.searchQuery) url += `&search=${encodeURIComponent(this.searchQuery)}`;
 

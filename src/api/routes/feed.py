@@ -98,7 +98,7 @@ async def get_tender_feed(
     exclude_closed: bool = Query(False, description="Whether to eliminate closed/expired offers"),
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, deadline_asc, items_desc, id_desc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
-    limit: int = Query(200, ge=1, le=500),
+    limit: int = Query(2500, ge=1, le=5000),
     session: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -204,8 +204,9 @@ async def get_tender_feed(
             Tender.deadline_at <= (now + timedelta(days=days_limit))
         )
 
-    # Fetch candidate pool (up to 500 candidate tenders)
-    stmt = stmt.order_by(Tender.deadline_at.asc()).limit(500)
+    # Fetch candidate pool (sized to evaluate all active tenders in DB, up to 5000)
+    pool_limit = max(limit, 3000)
+    stmt = stmt.order_by(Tender.deadline_at.asc()).limit(pool_limit)
 
     res = await session.execute(stmt)
     tenders = res.scalars().all()
