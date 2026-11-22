@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html lang="fr" class="h-full bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950">
+<html lang="fr" class="dark h-full bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950">
 
 <head>
 
@@ -27,6 +27,24 @@
     
 
     <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        select {
+            color-scheme: dark;
+        }
+
+        select option {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
+
+        select option:checked,
+        select option:hover {
+            background-color: #1e293b !important;
+            color: #38bdf8 !important;
+        }
 
         [x-cloak] { display: none !important; }
 
@@ -160,14 +178,10 @@
 
                         <span class="text-slate-500 mr-2 text-[11px]">Secteur :</span>
 
-                        <select x-model="selectedProfile" @change="fetchFeed()" class="bg-transparent text-white text-xs font-semibold focus:ring-0 outline-none cursor-pointer">
-
-                            <option value="it_hardware">🖥️ Matériel Informatique & Réseaux</option>
-
-                            <option value="cctv_security">📹 Vidéosurveillance & Sécurité</option>
-
-                            <option value="software_data">💻 Logiciel & Données</option>
-
+                        <select x-model="selectedProfile" @change="fetchFeed()" class="bg-slate-950 text-white text-xs font-semibold focus:ring-0 outline-none cursor-pointer">
+                            <option class="bg-slate-900 text-slate-100 py-1" value="it_hardware">🖥️ Matériel Informatique & Réseaux</option>
+                            <option class="bg-slate-900 text-slate-100 py-1" value="cctv_security">📹 Vidéosurveillance & Sécurité</option>
+                            <option class="bg-slate-900 text-slate-100 py-1" value="software_data">💻 Logiciel & Données</option>
                         </select>
 
                     </div>
