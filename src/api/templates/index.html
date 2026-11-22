@@ -117,7 +117,7 @@
                 <nav class="flex items-center gap-1.5 text-xs font-semibold">
                     <button @click="activeModule = 'feed'" :class="activeModule === 'feed' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
                         <span>🎯</span> Opportunités BDC & AO
-                        <span class="px-1.5 py-0.2 bg-slate-950 text-slate-400 text-[10px] rounded-full font-mono" x-text="items.length"></span>
+                        <span class="px-1.5 py-0.2 bg-slate-950 text-slate-400 text-[10px] rounded-full font-mono" x-text="feedStats.total || items.length"></span>
                     </button>
 
                     <button @click="activeModule = 'market_radar'; fetchMarketRadar()" :class="activeModule === 'market_radar' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
@@ -690,13 +690,13 @@
                         <!-- Score Threshold Segmented Controls -->
                         <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs w-full md:w-auto">
                             <button @click="minScore = 0; fetchFeed()" :class="minScore === 0 ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
-                                Tous (<span x-text="items.length"></span>)
+                                Tous (<span x-text="feedStats.total || items.length"></span>)
                             </button>
                             <button @click="minScore = 50; fetchFeed()" :class="minScore === 50 ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
-                                ⚠️ &ge; 50%
+                                ⚠️ &ge; 50% <span x-show="feedStats.ge50 > 0" class="ml-1 text-[11px] opacity-80" x-text="'(' + feedStats.ge50 + ')'"></span>
                             </button>
                             <button @click="minScore = 80; fetchFeed()" :class="minScore === 80 ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
-                                🎯 &ge; 80% (GO)
+                                🎯 &ge; 80% (GO) <span x-show="feedStats.ge80 > 0" class="ml-1 text-[11px] opacity-80" x-text="'(' + feedStats.ge80 + ')'"></span>
                             </button>
                         </div>
 
@@ -3111,6 +3111,7 @@
                 viewMode: window.innerWidth < 768 ? 'cards' : 'table',
                 selectedProfile: 'it_hardware',
                 minScore: 0,
+                feedStats: { total: 0, ge80: 0, ge50: 0 },
                 searchQuery: '',
                 selectedRegion: 'all',
                 selectedCategory: 'all',
@@ -3506,15 +3507,25 @@
                 async fetchFeed() {
                     this.loading = true;
                     try {
-                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}`;
+                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=200`;
                         if (this.searchQuery) url += `&search=${encodeURIComponent(this.searchQuery)}`;
                         if (this.selectedRegion !== 'all') url += `&region=${encodeURIComponent(this.selectedRegion)}`;
                         if (this.selectedCategory !== 'all') url += `&category=${encodeURIComponent(this.selectedCategory)}`;
                         if (this.selectedUrgency !== 'all') url += `&urgency=${encodeURIComponent(this.selectedUrgency)}`;
                         
                         const res = await fetch(url);
+                        const totalHeader = res.headers.get('x-total-count');
+                        const ge80Header = res.headers.get('x-count-ge-80');
+                        const ge50Header = res.headers.get('x-count-ge-50');
                         this.items = await res.json();
                         this.selectedIndex = 0;
+                        if (totalHeader !== null) {
+                            this.feedStats.total = parseInt(totalHeader, 10);
+                            this.feedStats.ge80 = parseInt(ge80Header || '0', 10);
+                            this.feedStats.ge50 = parseInt(ge50Header || '0', 10);
+                        } else {
+                            this.feedStats.total = this.items.length;
+                        }
                     } catch (e) {
                         console.error('Error fetching feed:', e);
                     } finally {

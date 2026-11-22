@@ -5,13 +5,14 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from src.database.session import get_db_session
 from src.models.tender import Tender, Buyer, LineItem
 from src.models.profile import CompanyProfile, ProfileMatch, UserTenderAction
 from src.profiles.loader import load_profile, load_all_profiles
+from src.profiles.schema import CompanyProfileSchema
 from src.engine.scoring_cascade import ScoringCascadeEngine
 from src.engine.pricing_helper import PricingHelper
 from src.engine.pipeline_manager import pipeline_manager
@@ -40,17 +41,57 @@ async def get_available_profiles():
         for p in profiles
     ]
 
+def extract_profile_candidate_keywords(profile: CompanyProfileSchema) -> List[str]:
+    """
+    Extracts high-signal root keywords from profile catalog and prestation types
+    to filter candidate tenders from PostgreSQL before scoring.
+    """
+    stopwords = {
+        "pour", "dans", "avec", "sans", "sous", "vers", "chez", "tout", "tous", "toute", "toutes",
+        "achat", "achats", "fourniture", "fournitures", "acquisition", "travaux", "service", "services",
+        "autre", "autres", "divers", "diverses", "prestation", "prestations", "materiel", "matériel",
+        "equipement", "équipement", "equipements", "équipements", "lot", "lots", "d'un", "d'une",
+        "des", "les", "une", "par", "sur", "marche", "marché"
+    }
+    keywords = set()
+    for cat in getattr(profile, "catalog", []):
+        for phrase in getattr(cat, "synonyms_fr", []):
+            cleaned = phrase.strip().lower()
+            if len(cleaned) >= 3 and cleaned not in stopwords:
+                keywords.add(cleaned)
+                for w in cleaned.split():
+                    w_clean = w.strip(" ,.'-")
+                    if len(w_clean) >= 3 and w_clean not in stopwords:
+                        keywords.add(w_clean)
+        for kw in getattr(cat, "technical_keywords", []):
+            kw_clean = kw.strip().lower()
+            if len(kw_clean) >= 3 and kw_clean not in stopwords:
+                keywords.add(kw_clean)
+
+    # Prestation types
+    macro_filters = getattr(profile, "macro_filters", None)
+    if macro_filters:
+        for pt in getattr(macro_filters, "prestation_types", []):
+            for w in pt.lower().split():
+                w_clean = w.strip(" ,.'-")
+                if len(w_clean) >= 4 and w_clean not in stopwords:
+                    keywords.add(w_clean)
+
+    return [k for k in keywords if len(k) >= 3]
+
+
 @router.get("/feed", response_model=List[TenderFeedItem])
 async def get_tender_feed(
+    response: Response,
     profile_name: str = Query("it_hardware", description="Profile configuration to score against"),
     min_score: float = Query(0.0, description="Minimum overall alignment score (0-100)"),
-    search: Optional[str] = Query(None, description="Search keyword in title or buyer"),
+    search: Optional[str] = Query(None, description="Search keyword in title, reference, or line items"),
     region: Optional[str] = Query(None, description="Filter by location/region"),
     category: Optional[str] = Query(None, description="Filter by category (Fournitures, Services, etc.)"),
     urgency: Optional[str] = Query(None, description="Urgency filter (urgent_24h, urgent_48h)"),
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, deadline_asc, items_desc, id_desc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
-    limit: int = Query(60, ge=1, le=200),
+    limit: int = Query(200, ge=1, le=500),
     session: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -67,18 +108,37 @@ async def get_tender_feed(
     # RBAC Enforcement: Viewers only see curated high-confidence opportunities (>=75% GO)
     effective_min_score = max(min_score, 75.0) if role == "viewer" else min_score
 
-    # Query active tenders
+    # Build candidate selection query
     stmt = (
         select(Tender)
         .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
         .where(Tender.status == "active")
-        .order_by(Tender.deadline_at.asc())
-        .limit(limit)
     )
 
-    if search:
-        search_pattern = f"%{search.lower()}%"
-        stmt = stmt.where(Tender.title.ilike(search_pattern))
+    if search and search.strip():
+        search_pattern = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                Tender.title.ilike(search_pattern),
+                Tender.reference.ilike(search_pattern),
+                Tender.line_items.any(LineItem.designation.ilike(search_pattern))
+            )
+        )
+    else:
+        # Pre-filter candidates by sector keywords so the cascade scoring evaluates
+        # genuine sector opportunities rather than arbitrary unrelated rows (food, fuel, cleaning).
+        candidate_kws = extract_profile_candidate_keywords(profile)
+        if candidate_kws:
+            title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws]
+            prestation_conditions = [Tender.prestation_type.ilike(f"%{kw}%") for kw in candidate_kws]
+            line_conditions = [LineItem.designation.ilike(f"%{kw}%") for kw in candidate_kws[:30]]
+            stmt = stmt.where(
+                or_(
+                    *title_conditions,
+                    *prestation_conditions,
+                    Tender.line_items.any(or_(*line_conditions))
+                )
+            )
 
     if region and region != "all":
         stmt = stmt.where(Tender.execution_location.ilike(f"%{region}%"))
@@ -92,10 +152,14 @@ async def get_tender_feed(
     elif urgency == "urgent_48h":
         stmt = stmt.where(Tender.deadline_at <= (now + timedelta(hours=48)))
 
+    # Fetch candidate pool (up to 500 candidate tenders)
+    stmt = stmt.order_by(Tender.deadline_at.asc()).limit(500)
+
     res = await session.execute(stmt)
     tenders = res.scalars().all()
 
-    feed_items = []
+    # Score all candidates against profile
+    scored_items: List[TenderFeedItem] = []
     for t in tenders:
         tender_dict = {
             "portal_id": t.portal_id,
@@ -121,27 +185,38 @@ async def get_tender_feed(
             ]
         }
 
-        # Score on the fly
         cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
-        if cascade_res.overall_score >= effective_min_score:
-            feed_items.append(
-                TenderFeedItem(
-                    portal_id=t.portal_id,
-                    reference=t.reference,
-                    title=t.title,
-                    buyer_name=t.buyer.official_name if t.buyer else "Acheteur Inconnu",
-                    execution_location=t.execution_location or "Maroc (National)",
-                    main_category=t.main_category,
-                    published_at=t.published_at.strftime("%d/%m/%Y %H:%M"),
-                    deadline_at=t.deadline_at.strftime("%d/%m/%Y %H:%M"),
-                    status=t.status,
-                    match_score=cascade_res.overall_score,
-                    decision_verdict=cascade_res.decision_recommendation,
-                    line_item_count=len(t.line_items),
-                    portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}"
-                )
+        scored_items.append(
+            TenderFeedItem(
+                portal_id=t.portal_id,
+                reference=t.reference,
+                title=t.title,
+                buyer_name=t.buyer.official_name if t.buyer else "Acheteur Inconnu",
+                execution_location=t.execution_location or "Maroc (National)",
+                main_category=t.main_category,
+                published_at=t.published_at.strftime("%d/%m/%Y %H:%M"),
+                deadline_at=t.deadline_at.strftime("%d/%m/%Y %H:%M"),
+                status=t.status,
+                match_score=cascade_res.overall_score,
+                decision_verdict=cascade_res.decision_recommendation,
+                line_item_count=len(t.line_items),
+                portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}"
             )
+        )
+
+    # Compute comprehensive sector statistics across all scored candidate items
+    total_candidates = len(scored_items)
+    count_ge_80 = sum(1 for item in scored_items if item.match_score >= 80.0)
+    count_ge_50 = sum(1 for item in scored_items if item.match_score >= 50.0)
+
+    # Set response metadata headers for frontend badges
+    response.headers["X-Total-Count"] = str(total_candidates)
+    response.headers["X-Count-Ge-80"] = str(count_ge_80)
+    response.headers["X-Count-Ge-50"] = str(count_ge_50)
+
+    # Filter by effective minimum score
+    feed_items = [item for item in scored_items if item.match_score >= effective_min_score]
 
     # Sorting
     if sort_by == "deadline_asc":
@@ -153,7 +228,7 @@ async def get_tender_feed(
     else:  # "score_desc"
         feed_items.sort(key=lambda x: x.match_score, reverse=True)
 
-    return feed_items
+    return feed_items[:limit]
 
 @router.get("/tenders/{portal_id}", response_model=TenderDetailResponse)
 async def get_tender_detail(
