@@ -1703,25 +1703,25 @@
 
                 <div x-show="!loading && viewMode === 'table'" class="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
 
-                    <div class="overflow-x-auto">
+                    <div class="w-full overflow-hidden">
 
-                        <table class="w-full text-left border-collapse text-xs">
+                        <table class="w-full table-fixed text-left border-collapse text-xs">
 
                             <thead>
 
                                 <tr class="bg-slate-950/80 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
 
-                                    <th class="py-3 px-4">Score & Décision</th>
+                                    <th class="py-3 px-3 w-[14%]">Score & Décision</th>
 
-                                    <th class="py-3 px-4">ID & Réf</th>
+                                    <th class="py-3 px-2 w-[10%]">ID & Réf</th>
 
-                                    <th class="py-3 px-4 min-w-[340px]">Objet de la Consultation</th>
+                                    <th class="py-3 px-3 w-[40%]">Objet de la Consultation</th>
 
-                                    <th class="py-3 px-4">Acheteur Public & Lieu</th>
+                                    <th class="py-3 px-3 w-[18%]">Acheteur Public & Lieu</th>
 
-                                    <th class="py-3 px-4">Compte à Rebours (48h BDC)</th>
+                                    <th class="py-3 px-2 w-[9%] text-center">Échéance</th>
 
-                                    <th class="py-3 px-4 text-right">Actions</th>
+                                    <th class="py-3 px-3 w-[9%] text-right">Actions</th>
 
                                 </tr>
 
@@ -1729,7 +1729,7 @@
 
                             <tbody class="divide-y divide-slate-800/70">
 
-                                <template x-for="(item, idx) in items" :key="item.portal_id">
+                                <template x-for="(item, idx) in visibleItems" :key="item.portal_id">
 
                                     <tr class="hover:bg-slate-800/40 transition-colors cursor-pointer group"
 
@@ -1737,7 +1737,7 @@
 
                                         @click="openModal(item.portal_id)">
 
-                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                        <td class="py-3.5 px-3 whitespace-nowrap">
 
                                             <span :class="{
 
@@ -1749,7 +1749,7 @@
 
                                                 'bg-rose-500/10 text-rose-400 border-rose-500/30': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
 
-                                            }" class="px-2.5 py-1 rounded-full font-bold border inline-flex items-center gap-1.5 text-[11px]">
+                                            }" class="px-2 py-0.5 rounded-full font-bold border inline-flex items-center gap-1 text-[11px]">
 
                                                 <span x-text="item.decision_verdict === 'GO' ? '🎯' : (item.decision_verdict === 'CONSIDER' ? '⚠️' : (item.decision_verdict === 'CLÔTURÉ' ? '⏳' : '❌'))"></span>
 
@@ -1759,43 +1759,43 @@
 
                                         </td>
 
-                                        <td class="py-3.5 px-4 whitespace-nowrap font-mono text-slate-400">
+                                        <td class="py-3.5 px-2 font-mono text-slate-400">
 
                                             <div class="font-bold text-white text-xs group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></div>
 
-                                            <div class="text-[11px] text-slate-400 truncate max-w-[120px]" x-text="item.reference"></div>
+                                            <div class="text-[11px] text-slate-400 truncate" :title="item.reference" x-text="item.reference"></div>
 
                                         </td>
 
-                                        <td class="py-4 px-4 min-w-[340px] max-w-2xl">
+                                        <td class="py-3.5 px-3">
 
-                                            <div class="font-bold text-white group-hover:text-emerald-300 line-clamp-3 text-base leading-snug tracking-tight" :title="item.title" x-text="item.title"></div>
+                                            <div class="font-bold text-white group-hover:text-emerald-300 line-clamp-2 text-sm leading-snug tracking-tight" :title="item.title" x-text="item.title"></div>
 
-                                            <div class="text-xs text-slate-400 mt-2 flex items-center gap-2 flex-wrap">
+                                            <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
 
-                                                <span class="bg-slate-800 text-slate-200 border border-slate-700/60 px-2 py-0.5 rounded font-mono text-[11px] font-semibold" x-text="item.line_item_count + ' articles au devis'"></span>
+                                                <span class="bg-slate-800 text-slate-200 border border-slate-700/60 px-1.5 py-0.5 rounded font-mono text-[10px] font-semibold" x-text="item.line_item_count + ' articles au devis'"></span>
 
-                                                <span x-text="'&bull; ' + item.main_category"></span>
+                                                <span class="truncate max-w-[200px]" x-text="'• ' + item.main_category"></span>
 
                                             </div>
 
                                         </td>
 
-                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                        <td class="py-3.5 px-3">
 
-                                            <div class="font-semibold text-slate-200 truncate max-w-xs" x-text="item.buyer_name"></div>
+                                            <div class="font-semibold text-slate-200 text-xs truncate" :title="item.buyer_name" x-text="item.buyer_name"></div>
 
-                                            <div class="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                            <div class="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate" :title="item.execution_location">
 
-                                                <span>📍</span> <span x-text="item.execution_location"></span>
+                                                <span>📍</span> <span class="truncate" x-text="item.execution_location"></span>
 
                                             </div>
 
                                         </td>
 
-                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                        <td class="py-3.5 px-2 whitespace-nowrap text-center">
 
-                                            <div class="font-mono text-xs font-bold flex items-center gap-1.5"
+                                            <div class="font-mono text-xs font-bold flex items-center justify-center gap-1"
 
                                                  :class="getCountdownUrgencyClass(item.deadline_at)">
 
@@ -1803,31 +1803,35 @@
 
                                             </div>
 
-                                            <div class="text-[10px] text-slate-500 font-mono mt-0.5" x-text="item.deadline_at"></div>
+                                            <div class="text-[10px] text-slate-500 font-mono mt-0.5 truncate" :title="item.deadline_at" x-text="item.deadline_at"></div>
 
                                         </td>
 
-                                        <td class="py-3.5 px-4 whitespace-nowrap text-right space-x-1.5" @click.stop>
+                                        <td class="py-3.5 px-3 whitespace-nowrap text-right" @click.stop>
 
-                                            <button @click="openModal(item.portal_id)" 
+                                            <div class="flex items-center justify-end gap-1.5">
 
-                                                    title="Ouvrir la Fiche 60s interactive : chiffrage, couverture catalogue & arbitrage"
+                                                <button @click="openModal(item.portal_id)" 
 
-                                                    class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 inline-flex items-center gap-1.5">
+                                                        title="Ouvrir la Fiche 60s interactive : chiffrage, couverture catalogue & arbitrage"
 
-                                                <span>⚡</span> <span>Fiche 60s</span>
+                                                        class="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 inline-flex items-center gap-1 shrink-0">
 
-                                            </button>
+                                                    <span>⚡</span> <span>Fiche</span>
 
-                                            <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
+                                                </button>
 
-                                               title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
+                                                <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
 
-                                               class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-lg text-xs transition-colors border border-slate-700/60 inline-flex items-center gap-1">
+                                                   title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
 
-                                                <span>🏛️</span> <span>Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
+                                                   class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-lg text-xs transition-colors border border-slate-700/60 inline-flex items-center justify-center shrink-0">
 
-                                            </a>
+                                                    <span class="text-sm">🏛️</span>
+
+                                                </a>
+
+                                            </div>
 
                                         </td>
 
@@ -1861,7 +1865,7 @@
 
                 <div x-show="!loading && viewMode === 'cards'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
-                    <template x-for="item in items" :key="item.portal_id">
+                    <template x-for="item in visibleItems" :key="item.portal_id">
 
                         <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl hover:border-slate-700 transition-all flex flex-col justify-between cursor-pointer group"
 
@@ -1964,6 +1968,70 @@
                 </div>
 
 
+
+            
+
+                <!-- INFINITE SCROLL SENTINEL & PROGRESS STATUS -->
+
+                <div x-show="!loading && items.length > 0" class="pt-4 pb-8">
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-lg">
+
+                        <div class="flex items-center gap-2.5 text-xs text-slate-300">
+
+                            <span x-show="displayLimit < items.length" class="relative flex h-2.5 w-2.5">
+
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+
+                                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+
+                            </span>
+
+                            <span x-show="displayLimit >= items.length" class="text-emerald-400 text-sm">✓</span>
+
+                            <span>
+
+                                Affichage de <strong class="text-white font-mono" x-text="visibleItems.length"></strong> sur <strong class="text-emerald-400 font-mono" x-text="items.length"></strong> consultations
+
+                            </span>
+
+                            <span x-show="displayLimit < items.length" class="text-slate-500 hidden sm:inline">(défilement continu vers le bas)</span>
+
+                        </div>
+
+                        <div class="flex items-center gap-2">
+
+                            <button x-show="displayLimit < items.length" 
+
+                                    @click="loadMoreItems()" 
+
+                                    class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors">
+
+                                +50 suivants
+
+                            </button>
+
+                            <button x-show="displayLimit < items.length" 
+
+                                    @click="displayLimit = items.length" 
+
+                                    class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold rounded-lg transition-colors">
+
+                                Tout afficher (<span x-text="items.length"></span>)
+
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <!-- Invisible scroll trigger sentinel observed by IntersectionObserver -->
+
+                    <div id="feed-sentinel" class="h-4 w-full"></div>
+
+                </div>
 
             </div>
 
@@ -6348,6 +6416,12 @@
 
                 items: [],
 
+                displayLimit: 50,
+
+                loadingMore: false,
+
+                _sentinelObserver: null,
+
                 teamUsers: [],
 
                 pipelineItems: [],
@@ -6810,6 +6884,22 @@
 
 
 
+                    // Passive window scroll listener fallback for infinite scrolling
+
+                    window.addEventListener('scroll', () => {
+
+                        if (this.activeModule !== 'feed' || this.displayLimit >= this.items.length || this.loadingMore) return;
+
+                        if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 450)) {
+
+                            this.loadMoreItems();
+
+                        }
+
+                    }, { passive: true });
+
+
+
                     this.fetchFeed();
 
                     this.fetchPipeline();
@@ -6821,6 +6911,70 @@
                     this.runActiveAudit();
 
                     this.startHeartbeatPolling();
+
+                },
+
+
+
+                loadMoreItems() {
+
+                    if (this.displayLimit >= this.items.length || this.loadingMore) return;
+
+                    this.loadingMore = true;
+
+                    requestAnimationFrame(() => {
+
+                        this.displayLimit = Math.min(this.items.length, this.displayLimit + 50);
+
+                        this.loadingMore = false;
+
+                    });
+
+                },
+
+
+
+                setupSentinelObserver() {
+
+                    if (this._sentinelObserver) {
+
+                        this._sentinelObserver.disconnect();
+
+                        this._sentinelObserver = null;
+
+                    }
+
+                    const sentinel = document.getElementById('feed-sentinel');
+
+                    if (!sentinel) return;
+
+
+
+                    this._sentinelObserver = new IntersectionObserver((entries) => {
+
+                        entries.forEach(entry => {
+
+                            if (entry.isIntersecting && this.displayLimit < this.items.length && !this.loadingMore) {
+
+                                this.loadMoreItems();
+
+                            }
+
+                        });
+
+                    }, {
+
+                        root: null,
+
+                        rootMargin: '350px',
+
+                        threshold: 0.01
+
+                    });
+
+
+
+                    this._sentinelObserver.observe(sentinel);
 
                 },
 
@@ -6887,6 +7041,14 @@
                 removeToast(id) {
 
                     this.toasts = this.toasts.filter(t => t.id !== id);
+
+                },
+
+
+
+                get visibleItems() {
+
+                    return this.items.slice(0, this.displayLimit);
 
                 },
 
@@ -7053,7 +7215,17 @@
 
                         e.preventDefault();
 
-                        if (this.selectedIndex < this.items.length - 1) this.selectedIndex++;
+                        if (this.selectedIndex < this.items.length - 1) {
+
+                            this.selectedIndex++;
+
+                            if (this.selectedIndex >= this.displayLimit) {
+
+                                this.displayLimit = Math.min(this.items.length, this.displayLimit + 50);
+
+                            }
+
+                        }
 
                     } else if (e.key === 'k' || e.key === 'ArrowUp') {
 
@@ -7179,7 +7351,15 @@
 
                         this.items = await res.json();
 
+                        this.displayLimit = 50;
+
                         this.selectedIndex = 0;
+
+                        this.$nextTick(() => {
+
+                            this.setupSentinelObserver();
+
+                        });
 
                         if (totalHeader !== null) {
 
