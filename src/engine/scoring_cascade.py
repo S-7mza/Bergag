@@ -80,6 +80,21 @@ class ScoringCascadeEngine:
                 llm_reasoning=f"Disqualified at Stage 1 (Hard Gate): Tender is officially cancelled ('Annulé'){target_msg}."
             )
 
+        # Incompatible prestation family (e.g. transport, engins, travaux, alimentation) dropped immediately at Stage 1
+        is_incompatible_prestation = any("incompatible" in r.lower() for r in hard_reasons)
+        if is_incompatible_prestation:
+            prestation_msg = next((r for r in hard_reasons if "incompatible" in r.lower()), "Prestation hors secteur")
+            return CascadeEvaluationResult(
+                overall_score=0.0,
+                decision_recommendation="NO-GO",
+                coverage_score=0.0,
+                lexical_score=0.0,
+                feasibility_score=0.0,
+                line_item_matches=[],
+                red_flags=hard_reasons,
+                llm_reasoning=f"Disqualifié au Stage 1 (Hard Gate / Veto Prestation) : {prestation_msg}"
+            )
+
         # --- Stages 2 & 3: Lexical Matching & BOM Catalog Coverage (with in-memory cache) ---
         line_items = tender_data.get("line_items", [])
         portal_id = tender_data.get("portal_id")

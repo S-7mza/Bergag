@@ -54,13 +54,8 @@ def extract_profile_candidate_keywords(profile: CompanyProfileSchema) -> List[st
     Extracts high-signal root keywords from profile catalog and prestation types
     to filter candidate tenders from PostgreSQL before scoring.
     """
-    stopwords = {
-        "pour", "dans", "avec", "sans", "sous", "vers", "chez", "tout", "tous", "toute", "toutes",
-        "achat", "achats", "fourniture", "fournitures", "acquisition", "travaux", "service", "services",
-        "autre", "autres", "divers", "diverses", "prestation", "prestations", "materiel", "matériel",
-        "equipement", "équipement", "equipements", "équipements", "lot", "lots", "d'un", "d'une",
-        "des", "les", "une", "par", "sur", "marche", "marché"
-    }
+    from src.engine.feedback_manager import STOPWORDS as EXTENDED_STOPWORDS
+    stopwords = set(EXTENDED_STOPWORDS)
     keywords = set()
     for cat in getattr(profile, "catalog", []):
         for phrase in getattr(cat, "synonyms_fr", []):
@@ -90,8 +85,10 @@ def extract_profile_candidate_keywords(profile: CompanyProfileSchema) -> List[st
     if profile_name:
         learned_words = feedback_manager.get_learned_terms(profile_name)
         for lw in learned_words[:25]:
-            if lw not in stopwords and len(lw) >= 3:
+            if lw not in stopwords and len(lw) >= 4:
                 keywords.add(lw)
+
+    return [k for k in keywords if len(k) >= 3]
 
     return [k for k in keywords if len(k) >= 3]
 
@@ -164,6 +161,18 @@ async def get_tender_feed(
                     Tender.line_items.any(or_(*line_conditions))
                 )
             )
+
+        # Disjoint prestation categories (transport, engins, citernes, gardiennage) never match tech profiles
+        disjoint_prestations = ["transport", "engin", "citerne", "gardiennage", "denree", "denrée"]
+        for dp in disjoint_prestations:
+            stmt = stmt.where(~Tender.prestation_type.ilike(f"%{dp}%"))
+
+        # Explicit negative keywords SQL exclusion
+        neg_kws = getattr(profile.negative_constraints, "keywords", [])
+        if neg_kws:
+            for nkw in neg_kws[:15]:
+                if len(nkw) >= 4:
+                    stmt = stmt.where(~Tender.title.ilike(f"%{nkw}%"))
 
     if region and region != "all":
         stmt = stmt.where(Tender.execution_location.ilike(f"%{region}%"))

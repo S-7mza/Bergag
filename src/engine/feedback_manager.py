@@ -10,14 +10,53 @@ logger = logging.getLogger(__name__)
 
 STORAGE_FILE = Path("data/alignment_feedback_ledger.json")
 
-# Common French/Arabic procurement stopwords to avoid learning trivial noise
+# Comprehensive procurement, administrative, and geographic stopwords to avoid learning noisy non-domain words
 STOPWORDS = {
+    # Grammar & prepositions
     "pour", "dans", "avec", "sans", "sous", "vers", "chez", "tout", "tous", "toute", "toutes",
-    "achat", "achats", "fourniture", "fournitures", "acquisition", "travaux", "service", "services",
-    "autre", "autres", "divers", "diverses", "prestation", "prestations", "materiel", "matériel",
-    "equipement", "équipement", "equipements", "équipements", "lot", "lots", "d'un", "d'une",
-    "des", "les", "une", "par", "sur", "marche", "marché", "projet", "mise", "place", "travail",
-    "centre", "direction", "region", "région", "ville", "maroc", "annee", "année", "date", "numero"
+    "autre", "autres", "divers", "diverses", "selon", "suite", "afin", "plus", "moins", "tres", "très",
+    "meme", "même", "d'un", "d'une", "des", "les", "une", "par", "sur",
+
+    # Procurement & transactional terminology
+    "achat", "achats", "fourniture", "fournitures", "acquisition", "acquisitions",
+    "travaux", "service", "services", "travail", "prestation", "prestations",
+    "materiel", "matériel", "equipement", "équipement", "equipements", "équipements",
+    "lot", "lots", "marche", "marché", "marches", "marchés", "projet", "projets",
+    "appel", "appels", "offre", "offres", "devis", "bordereau", "cahier", "charges",
+    "prescriptions", "cautionnement", "provisoire", "definitif", "ouverture", "plis",
+    "soumissionnaire", "concurrent", "concurrents", "titulaire", "compte", "profit",
+    "benefice", "bénéfice", "cadre", "avenant", "ordre", "bureau", "seance", "séance",
+    "commission", "delai", "délai", "delais", "dépôt", "depot", "execution", "exécution",
+    "lieu", "lieux", "montant", "montants", "prix", "unitaire", "total", "estimation",
+    "caution", "garantie", "piece", "pièces", "pieces", "dossier", "dossiers",
+    "reglement", "règlement", "consultation", "consultations", "avis", "mise", "place",
+    "objet", "reference", "référence", "code", "article", "articles", "annee", "année",
+    "date", "numero",
+
+    # Public institutions & Moroccan administrative entities (NEVER learn buyer types as sector keywords!)
+    "commune", "communes", "communal", "communale", "communales", "communaux",
+    "province", "provinces", "provincial", "provinciale", "provinciaux",
+    "prefecture", "prefectures", "prefectoral", "prefectorale",
+    "wilaya", "wilayas", "ministere", "ministère", "ministeres", "ministères",
+    "direction", "directions", "delegation", "délégation", "delegations",
+    "conseil", "conseils", "institut", "instituts", "centre", "centres",
+    "royaume", "maroc", "marocain", "marocaine", "marocains", "marocaines",
+    "societe", "société", "societes", "sociétés", "agence", "agences",
+    "academie", "académie", "académies", "fondation", "fondations",
+    "office", "offices", "etablissement", "établissement", "etablissements",
+    "autorite", "autorité", "administration", "administrations", "pachalik",
+    "cercle", "cercles", "caidat", "tribunal", "tribunaux", "cour",
+    "hopital", "hôpital", "hopitaux", "universite", "université", "faculte", "faculté",
+    "ecole", "école", "ecoles", "chambre", "secretariat", "secrétariat",
+
+    # Geographic locations & cities
+    "ville", "region", "région", "rabat", "casablanca", "marrakech", "fes", "fès",
+    "tanger", "agadir", "oujda", "kenitra", "kénitra", "tetouan", "tétouan",
+    "sale", "salé", "meknes", "meknès", "temara", "témara", "safi", "el jadida",
+    "jadida", "nador", "beni mellal", "berrechid", "khemisset", "khémisset",
+    "settat", "berkane", "taourirt", "taza", "errachidia", "taroudant", "guelmim",
+    "khenifra", "khénifra", "ouarzazate", "al haouz", "haouz", "benslimane",
+    "tiflet", "dakhla", "laayoune", "laâyoune", "ifrane", "azrou"
 }
 
 def strip_accents(text: str) -> str:
@@ -100,22 +139,25 @@ class AlignmentFeedbackManager:
             logger.warning(f"[FeedbackManager] Could not save feedback ledger: {e}")
 
     def _rebuild_vocabulary_cache(self):
-        """Rebuilds the learned vocabulary sets per profile for active learning"""
+        """Rebuilds the learned vocabulary sets per profile for active learning, pruning any stopwords"""
         self._aligned_terms_cache.clear()
         self._rejected_terms_cache.clear()
         
         for (pid, p_name), data in self._feedbacks.items():
             terms = set(data.get("learned_terms", []))
-            if not terms:
+            # Cleanse against current STOPWORDS
+            clean_terms = {t for t in terms if t not in STOPWORDS and len(t) >= 4 and not t.isdigit()}
+            data["learned_terms"] = list(clean_terms)
+            if not clean_terms:
                 continue
             if data.get("is_aligned"):
                 if p_name not in self._aligned_terms_cache:
                     self._aligned_terms_cache[p_name] = set()
-                self._aligned_terms_cache[p_name].update(terms)
+                self._aligned_terms_cache[p_name].update(clean_terms)
             else:
                 if p_name not in self._rejected_terms_cache:
                     self._rejected_terms_cache[p_name] = set()
-                self._rejected_terms_cache[p_name].update(terms)
+                self._rejected_terms_cache[p_name].update(clean_terms)
 
     def record_feedback(
         self,

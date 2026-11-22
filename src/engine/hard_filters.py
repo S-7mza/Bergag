@@ -72,5 +72,22 @@ def evaluate_hard_filters(tender_data: dict, profile: CompanyProfileSchema) -> T
                 f"(profil: {profile.macro_filters.categories})."
             )
 
+    # 5. Prestation Type Filter (eliminate fundamentally disjoint public procurement categories)
+    allowed_prestations = [p.lower() for p in (getattr(profile.macro_filters, "prestation_types", None) or [])]
+    tender_prestation = (tender_data.get("prestation_type") or "").lower()
+    if allowed_prestations and tender_prestation:
+        # Check for explicitly disjoint Moroccan procurement prestation families
+        disjoint_indicators = [
+            "transport", "engin", "engins", "citerne", "citernes", "vehicule", "véhicule",
+            "carburant", "gasoil", "lubrifiant", "alimentation", "denree", "denrée",
+            "gardiennage", "securite des locaux", "nettoyage", "jardinage", "espaces verts",
+            "construction", "voirie", "assainissement", "plomberie", "peinture", "maconnerie"
+        ]
+        if any(ind in tender_prestation for ind in disjoint_indicators):
+            reasons.append(
+                f"Prestation '{tender_data.get('prestation_type')}' incompatible avec le profil "
+                f"({', '.join(profile.macro_filters.prestation_types[:2])})."
+            )
+
     is_eligible = len(reasons) == 0
     return is_eligible, reasons
