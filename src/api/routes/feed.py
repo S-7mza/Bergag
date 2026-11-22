@@ -1,7 +1,10 @@
 import uuid
 import io
 import csv
+import zipfile
+import mimetypes
 import logging
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
@@ -17,6 +20,8 @@ from src.engine.scoring_cascade import ScoringCascadeEngine, invalidate_tender_c
 from src.engine.pricing_helper import PricingHelper
 from src.engine.pipeline_manager import pipeline_manager
 from src.engine.feedback_manager import feedback_manager
+from src.scraper.client import PortalHttpClient
+from src.scraper.detail_spider import DetailSpider
 from src.engine.cancellation_tracker import (
     is_cancellation_notice,
     extract_target_cancelled_reference,
@@ -582,6 +587,215 @@ async def export_bordereau_csv(
         content=csv_content.encode("utf-8"),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+@router.get("/tenders/{portal_id}/attachment/download")
+async def download_tender_attachment(
+    portal_id: int,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Direct 1-click download of the complete consultation archive (.ZIP containing CPS, Bordereau, etc.).
+    Bypasses TGR portal authentication and WAF challenges using server-side proxying and local caching.
+    """
+    stmt = select(Tender).where(Tender.portal_id == portal_id)
+    res = await session.execute(stmt)
+    t = res.scalar_one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail=f"Consultation #{portal_id} introuvable.")
+
+    cache_dir = Path("data/attachments")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"tender_{portal_id}.zip"
+
+    # 1. Return from disk cache if already present
+    if cache_file.exists() and cache_file.stat().st_size > 0:
+        zip_bytes = cache_file.read_bytes()
+    else:
+        # 2. Check if attachment_url is known; if not, discover it live via DetailSpider
+        attachment_url = t.attachment_url
+        if not attachment_url:
+            client = PortalHttpClient()
+            try:
+                spider = DetailSpider(client)
+                _, detail_data = await spider.fetch_detail(portal_id)
+                attachment_url = detail_data.get("attachment_url")
+                if attachment_url:
+                    t.attachment_available = True
+                    t.attachment_url = attachment_url
+                    await session.commit()
+            except Exception as e:
+                logger.warning(f"Failed to auto-discover attachment URL for tender #{portal_id}: {e}")
+            finally:
+                await client.close()
+
+        if not attachment_url:
+            raise HTTPException(
+                status_code=404,
+                detail="Aucune pièce jointe (CPS / Avis) n'a été déposée par l'acheteur public pour cette consultation."
+            )
+
+        # 3. Stream binary directly through PortalHttpClient with active WAF session
+        client = PortalHttpClient()
+        try:
+            zip_bytes = await client.download_binary(attachment_url)
+            cache_file.write_bytes(zip_bytes)
+        except Exception as e:
+            logger.error(f"Error downloading attachment for tender #{portal_id} from portal: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Échec de téléchargement du dossier depuis le portail TGR: {e}"
+            )
+        finally:
+            await client.close()
+
+    clean_ref = t.reference.replace('/', '-').replace(' ', '_')
+    filename = f"Dossier_CPS_BDC_{portal_id}_{clean_ref}.zip"
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+@router.get("/tenders/{portal_id}/attachment/files")
+async def get_tender_attachment_files(
+    portal_id: int,
+    session: AsyncSession = Depends(get_db_session)
+) -> Dict[str, Any]:
+    """
+    Inspects the consultation archive and lists all documents (CPS PDF, Bordereau, Avis d'achat).
+    Allows direct inspection without requiring the user to extract or decompress files locally.
+    """
+    stmt = select(Tender).where(Tender.portal_id == portal_id)
+    res = await session.execute(stmt)
+    t = res.scalar_one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail=f"Consultation #{portal_id} introuvable.")
+
+    cache_dir = Path("data/attachments")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"tender_{portal_id}.zip"
+
+    if not cache_file.exists() or cache_file.stat().st_size == 0:
+        if not t.attachment_url and not t.attachment_available:
+            return {
+                "portal_id": portal_id,
+                "available": False,
+                "message": "Aucune pièce jointe disponible pour cette consultation.",
+                "files": []
+            }
+        # Pre-fetch and cache archive
+        client = PortalHttpClient()
+        try:
+            attachment_url = t.attachment_url
+            if not attachment_url:
+                spider = DetailSpider(client)
+                _, detail_data = await spider.fetch_detail(portal_id)
+                attachment_url = detail_data.get("attachment_url")
+                if attachment_url:
+                    t.attachment_available = True
+                    t.attachment_url = attachment_url
+                    await session.commit()
+            if attachment_url:
+                zip_bytes = await client.download_binary(attachment_url)
+                cache_file.write_bytes(zip_bytes)
+        except Exception as e:
+            logger.warning(f"Could not fetch attachment archive for #{portal_id}: {e}")
+            return {
+                "portal_id": portal_id,
+                "available": False,
+                "message": f"Dossier non téléchargeable: {e}",
+                "files": []
+            }
+        finally:
+            await client.close()
+
+    if not cache_file.exists() or cache_file.stat().st_size == 0:
+        return {
+            "portal_id": portal_id,
+            "available": False,
+            "message": "Archive vide ou introuvable.",
+            "files": []
+        }
+
+    files_list = []
+    try:
+        with zipfile.ZipFile(cache_file, 'r') as zf:
+            for member in zf.namelist():
+                info = zf.getinfo(member)
+                if info.is_dir() or member.startswith("__MACOSX") or member.endswith(".DS_Store"):
+                    continue
+                base_name = member.split('/')[-1]
+                ext = base_name.split('.')[-1].lower() if '.' in base_name else ""
+                is_cps = any(k in base_name.lower() for k in ["cps", "cahier", "prescriptions", "specifications"])
+                files_list.append({
+                    "filename": base_name,
+                    "raw_path": member,
+                    "extension": ext,
+                    "size_bytes": info.file_size,
+                    "size_formatted": f"{round(info.file_size / 1024, 1)} Ko" if info.file_size < 1048576 else f"{round(info.file_size / (1024 * 1024), 2)} Mo",
+                    "is_cps": is_cps,
+                    "direct_url": f"/api/tenders/{portal_id}/attachment/file?path={member}&inline=true",
+                    "download_url": f"/api/tenders/{portal_id}/attachment/file?path={member}&inline=false"
+                })
+    except Exception as e:
+        logger.error(f"Error reading archive {cache_file}: {e}")
+
+    return {
+        "portal_id": portal_id,
+        "available": True,
+        "archive_size": cache_file.stat().st_size,
+        "archive_size_formatted": f"{round(cache_file.stat().st_size / 1024, 1)} Ko",
+        "archive_download_url": f"/api/tenders/{portal_id}/attachment/download",
+        "portal_direct_url": f"https://www.marchespublics.gov.ma{t.attachment_url}" if t.attachment_url else None,
+        "file_count": len(files_list),
+        "files": files_list
+    }
+
+@router.get("/tenders/{portal_id}/attachment/file")
+async def stream_tender_attachment_single_file(
+    portal_id: int,
+    path: str = Query(..., description="Internal path of the document inside the ZIP archive"),
+    inline: bool = Query(True, description="Whether to view file in browser (inline) or download as attachment"),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Extracts and streams a single file (e.g. CPS PDF) directly from the archive.
+    Enables viewing the official signed CPS PDF directly inside the browser in 1 click!
+    """
+    cache_dir = Path("data/attachments")
+    cache_file = cache_dir / f"tender_{portal_id}.zip"
+
+    # If not cached, trigger archive download first
+    if not cache_file.exists():
+        await download_tender_attachment(portal_id=portal_id, session=session)
+
+    if not cache_file.exists():
+        raise HTTPException(status_code=404, detail="Archive de consultation introuvable.")
+
+    try:
+        with zipfile.ZipFile(cache_file, 'r') as zf:
+            matching_names = [n for n in zf.namelist() if n == path or n.endswith(path) or path.endswith(n)]
+            if not matching_names:
+                raise HTTPException(status_code=404, detail=f"Fichier '{path}' introuvable dans l'archive.")
+            target_name = matching_names[0]
+            file_bytes = zf.read(target_name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Fichier '{path}' introuvable.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur d'extraction du document: {e}")
+
+    filename = path.split('/')[-1]
+    mime_type, _ = mimetypes.guess_type(filename)
+    if not mime_type:
+        mime_type = "application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream"
+
+    disposition_type = "inline" if inline else "attachment"
+    return Response(
+        content=file_bytes,
+        media_type=mime_type,
+        headers={"Content-Disposition": f'{disposition_type}; filename="{filename}"'}
     )
 
 @router.get("/pipeline")

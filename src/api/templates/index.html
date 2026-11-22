@@ -2023,14 +2023,17 @@
 
                                 </button>
 
+                                <template x-if="item.attachment_available">
+                                    <a :href="'/api/tenders/' + item.portal_id + '/attachment/download'" download
+                                       title="Télécharger directement le CPS & pièces jointes (.ZIP)"
+                                       class="px-2.5 py-2 bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold rounded-xl transition-colors border border-indigo-500/30 flex items-center gap-1">
+                                        <span>📦</span> <span class="hidden md:inline">CPS</span>
+                                    </a>
+                                </template>
                                 <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
-
                                    title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
-
                                    class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl transition-colors border border-slate-700/60 flex items-center gap-1">
-
                                     <span>🏛️</span> <span>Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
-
                                 </a>
 
                             </div>
@@ -6223,6 +6226,63 @@
 
 
 
+                    <!-- Official Attachment & CPS Documents Card -->
+                    <div x-show="activeTender?.attachment_available" class="bg-gradient-to-r from-slate-900 to-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 space-y-3 shadow-lg">
+                        <div class="flex flex-wrap justify-between items-center gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="text-xl">📁</span>
+                                <div>
+                                    <h4 class="font-bold text-white text-xs flex items-center gap-2">
+                                        Dossier d'Achat & Pièces Jointes Officielles (CPS)
+                                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">
+                                            Accès Direct • Sans Login TGR
+                                        </span>
+                                    </h4>
+                                    <p class="text-[11px] text-slate-400">
+                                        Téléchargez directement les documents officiels déposés par l'acheteur sans authentification sur le portail TGR.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <a :href="'/api/tenders/' + activeTender?.portal_id + '/attachment/download'" 
+                                   download
+                                   class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/20 flex items-center gap-1.5">
+                                    <span>📦</span> Télécharger Dossier (.ZIP)
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Extracted documents inside archive -->
+                        <template x-if="attachmentFilesData && attachmentFilesData.files && attachmentFilesData.files.length > 0">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
+                                <template x-for="file in attachmentFilesData.files" :key="file.raw_path">
+                                    <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2 hover:border-slate-700 transition-colors">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="text-lg" x-text="file.extension === 'pdf' ? '📄' : (file.extension === 'docx' || file.extension === 'doc' ? '📝' : '📎')"></span>
+                                            <div class="truncate">
+                                                <p class="text-xs font-bold text-slate-200 truncate" :title="file.filename" x-text="file.filename"></p>
+                                                <p class="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                                    <span x-text="file.size_formatted"></span>
+                                                    <template x-if="file.is_cps">
+                                                        <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold text-[9px] border border-indigo-500/30">CPS</span>
+                                                    </template>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1 flex-shrink-0">
+                                            <a :href="file.direct_url" target="_blank" title="Consulter dans le navigateur" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs transition-colors border border-slate-700">
+                                                👁️
+                                            </a>
+                                            <a :href="file.download_url" download title="Télécharger ce document" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded-lg text-xs transition-colors border border-slate-700">
+                                                ⬇️
+                                            </a>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
                     <!-- Line Items Table -->
 
                     <div>
@@ -6237,13 +6297,21 @@
 
                             
 
-                            <!-- One-Click Export to Official Bordereau des Prix CSV -->
-
-                            <a :href="'/api/tenders/' + activeTender?.portal_id + '/export-bordereau'" target="_blank" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded-lg text-[11px] font-semibold border border-slate-700/80 transition-colors flex items-center gap-1.5">
+                            <div class="flex items-center gap-2">
+                                <template x-if="activeTender?.attachment_available">
+                                    <a :href="'/api/tenders/' + activeTender?.portal_id + '/attachment/download'" 
+                                       download
+                                       title="Télécharger l'archive officielle CPS (.ZIP)"
+                                       class="px-3 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 rounded-lg text-[11px] font-semibold border border-indigo-500/30 transition-colors flex items-center gap-1.5">
+                                        <span>📦</span> Dossier CPS (.ZIP)
+                                    </a>
+                                </template>
+                                <!-- One-Click Export to Official Bordereau des Prix CSV -->
+                                <a :href="'/api/tenders/' + activeTender?.portal_id + '/export-bordereau'" target="_blank" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded-lg text-[11px] font-semibold border border-slate-700/80 transition-colors flex items-center gap-1.5">
 
                                 <span>📥</span> Télécharger Bordereau Excel (CSV)
-
                             </a>
+                        </div>
 
                         </div>
 
@@ -6336,7 +6404,13 @@
 
 
                     <div class="flex items-center gap-2 ml-auto">
-
+                        <template x-if="activeTender?.attachment_available">
+                            <a :href="'/api/tenders/' + activeTender?.portal_id + '/attachment/download'" download
+                               title="Télécharger directement l'archive complète des pièces jointes (.ZIP)"
+                               class="px-3.5 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
+                                <span>📦</span> <span>Dossier CPS (.ZIP)</span>
+                            </a>
+                        </template>
                         <a :href="activeTender?.portal_url" target="_blank" rel="noopener noreferrer" 
 
                            title="Accéder au portail officiel marchespublics.gov.ma pour déposer votre offre ou consulter les pièces signées"
@@ -6686,6 +6760,7 @@
                 activeTender: null,
 
                 pricingData: null,
+                attachmentFilesData: null,
 
                 targetMarginPct: 30,
 
@@ -7783,6 +7858,15 @@
 
                             this.recalculatePricing();
 
+                        }
+
+                        // Fetch official attachment files (CPS, Bordereau, etc.)
+                        this.attachmentFilesData = null;
+                        if (this.activeTender?.attachment_available) {
+                            fetch(`/api/tenders/${portalId}/attachment/files`)
+                                .then(r => r.ok ? r.json() : null)
+                                .then(d => { if (d && d.available) this.attachmentFilesData = d; })
+                                .catch(() => {});
                         }
 
 

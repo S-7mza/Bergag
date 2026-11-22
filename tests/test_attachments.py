@@ -57,3 +57,84 @@ def test_corrupt_zip_handling():
     assert result.file_count == 0
     assert result.combined_text == ""
 
+
+def test_api_attachment_endpoints():
+    from fastapi.testclient import TestClient
+    from unittest.mock import AsyncMock, patch, MagicMock
+    from src.api.main import app
+    from src.database.session import get_db_session
+    from src.models.tender import Tender, Buyer
+    from datetime import datetime, timezone
+    import zipfile
+
+    client = TestClient(app)
+
+    # Prepare a test zip in data/attachments/tender_777888.zip
+    cache_dir = Path("data/attachments")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    test_zip_path = cache_dir / "tender_777888.zip"
+    
+    with zipfile.ZipFile(test_zip_path, "w") as zf:
+        zf.writestr("dossier/CPS_Prescriptions_Techniques.pdf", b"%PDF-1.4 dummy CPS content")
+        zf.writestr("dossier/Avis_d_achat_officiel.pdf", b"%PDF-1.4 dummy Avis content")
+
+    try:
+        mock_tender = Tender(
+            portal_id=777888,
+            source_type="bdc",
+            reference="77/TEST/2026",
+            compound_natural_key="buyer:77-test-2026:2026",
+            buyer_id=uuid.uuid4() if 'uuid' in dir() else __import__('uuid').uuid4(),
+            title="Prestation informatique et développement",
+            main_category="Services",
+            published_at=datetime.now(timezone.utc),
+            deadline_at=datetime.now(timezone.utc),
+            status="active",
+            attachment_available=True,
+            attachment_url="/bdc/entreprise/consultation/download/777888/9999"
+        )
+        mock_tender.buyer = Buyer(slug="buyer-test", official_name="Commune Test")
+        mock_tender.line_items = []
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_tender
+        mock_session.execute.return_value = mock_result
+
+        async def override_db():
+            yield mock_session
+
+        app.dependency_overrides[get_db_session] = override_db
+
+        # 1. Test /api/tenders/{portal_id}/attachment/files
+        res_files = client.get("/api/tenders/777888/attachment/files")
+        assert res_files.status_code == 200
+        data = res_files.json()
+        assert data["available"] is True
+        assert data["portal_id"] == 777888
+        assert data["file_count"] == 2
+        cps_doc = next((f for f in data["files"] if f["is_cps"]), None)
+        assert cps_doc is not None
+        assert "CPS" in cps_doc["filename"]
+        assert "direct_url" in cps_doc
+
+        # 2. Test /api/tenders/{portal_id}/attachment/download (ZIP archive)
+        res_zip = client.get("/api/tenders/777888/attachment/download")
+        assert res_zip.status_code == 200
+        assert res_zip.headers["content-type"] == "application/zip"
+        assert "Dossier_CPS_BDC_777888" in res_zip.headers["content-disposition"]
+        assert len(res_zip.content) > 0
+
+        # 3. Test /api/tenders/{portal_id}/attachment/file (Single PDF stream)
+        res_pdf = client.get(f"/api/tenders/777888/attachment/file?path={cps_doc['raw_path']}&inline=true")
+        assert res_pdf.status_code == 200
+        assert res_pdf.headers["content-type"] == "application/pdf"
+        assert "inline" in res_pdf.headers["content-disposition"]
+        assert b"%PDF-1.4 dummy CPS content" in res_pdf.content
+
+    finally:
+        app.dependency_overrides.pop(get_db_session, None)
+        if test_zip_path.exists():
+            test_zip_path.unlink()
+
+
