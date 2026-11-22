@@ -1,0 +1,146 @@
+version: "1.0"
+tenant_id: "medical-pharma-morocco"
+profile_name: "Équipements Médicaux, Consommables & Pharmacie"
+icon: "🏥"
+description: "Dispositifs médicaux, réactifs de laboratoire, médicaments, mobilier hospitalier et consommables de santé"
+contact_email: "medical@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Fournitures"
+    - "Services"
+  prestation_types:
+    - "Achat de matériel médical et biomédical"
+    - "Achat de médicaments et produits pharmaceutiques"
+    - "Achat de consommables médicaux et pansements"
+    - "Achat de réactifs et produits de laboratoire"
+    - "Maintenance et réparation des équipements médicaux"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Fès-Meknès"
+      - "Marrakech-Safi"
+    max_travel_distance_km: 800
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "equipements-biomedicaux"
+    label: "Équipements Biomédicaux & Imagerie"
+    weight: 3.0
+    synonyms_fr:
+      - "matériel médical"
+      - "materiel medical"
+      - "échographe"
+      - "echographe"
+      - "monitoring"
+      - "moniteur multiparamétrique"
+      - "électrocardiographe"
+      - "ecg"
+      - "défibrillateur"
+      - "respirateur"
+      - "bistouri électrique"
+      - "lampe scialytique"
+      - "table d'opération"
+      - "autoclave"
+      - "stérilisateur"
+    synonyms_ar:
+      - "تجهيزات طبية"
+      - "تخطيط القلب"
+      - "جهاز الفحص بالصدى"
+    technical_keywords:
+      - "ce medical"
+      - "fda"
+      - "classe ii"
+      - "classe iia"
+      - "stérilisation"
+
+  - id: "consommables-pansements"
+    label: "Consommables Médicaux, Pansements & Seringues"
+    weight: 2.5
+    synonyms_fr:
+      - "consommable médical"
+      - "pansement"
+      - "compresse"
+      - "gants d'examen"
+      - "gants chirurgicaux"
+      - "seringue"
+      - "aiguille"
+      - "cathéter"
+      - "perfusion"
+      - "sonde"
+      - "fil de suture"
+      - "sparadrap"
+      - "bétadine"
+      - "antiseptique"
+    synonyms_ar:
+      - "مستلزمات طبية"
+      - "ضمادات"
+      - "حقن"
+      - "قفازات طبية"
+    technical_keywords:
+      - "stérile"
+      - "latex"
+      - "sans poudre"
+      - "usage unique"
+
+  - id: "medicaments-pharma"
+    label: "Médicaments, Solutés & Produits Pharmaceutiques"
+    weight: 2.5
+    synonyms_fr:
+      - "médicament"
+      - "medicament"
+      - "produit pharmaceutique"
+      - "soluté"
+      - "sérum"
+      - "antibiotique"
+      - "antalgique"
+      - "anesthésique"
+      - "dci"
+    synonyms_ar:
+      - "أدوية"
+      - "منتجات صيدلانية"
+    technical_keywords:
+      - "amm"
+      - "injectable"
+      - "voie orale"
+      - "perfusion"
+
+  - id: "mobilier-hospitalier"
+    label: "Mobilier Hospitalier & Lits Médicalisés"
+    weight: 2.0
+    synonyms_fr:
+      - "lit médicalisé"
+      - "lit d'hospitalisation"
+      - "brancard"
+      - "fauteuil roulant"
+      - "chariot de soins"
+      - "paravent"
+      - "pied à perfusion"
+      - "table d'examen"
+    synonyms_ar:
+      - "أسرة طبية"
+      - "كراسي متحركة"
+    technical_keywords:
+      - "hauteur variable"
+      - "inox"
+      - "freins centralisés"
+
+negative_constraints:
+  keywords:
+    - "ordinateurs de bureau seuls"
+    - "logiciel erp"
+    - "travaux de terrassement"
+    - "gardiennage physique"
+    - "camion benne"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

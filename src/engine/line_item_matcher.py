@@ -82,6 +82,13 @@ class LineItemMatcher:
                         best_catalog_match = cat_sku.id
 
             is_matched = highest_score >= 0.50
+            matched_weight = 1.0
+            if best_catalog_match:
+                for cat in profile.catalog:
+                    if cat.id == best_catalog_match:
+                        matched_weight = cat.weight
+                        break
+
             if is_matched:
                 matched_count += 1
             else:
@@ -94,9 +101,15 @@ class LineItemMatcher:
                 "unit": item.get("unit"),
                 "is_matched": is_matched,
                 "matched_catalog_sku": best_catalog_match,
+                "matched_weight": matched_weight,
                 "confidence_score": round(highest_score * 100, 1)
             })
 
         total_items = len(line_items)
-        coverage_ratio = (matched_count / total_items) * 100.0 if total_items > 0 else 0.0
+        if total_items > 0:
+            total_weight = sum(ev.get("matched_weight", 1.0) for ev in item_evaluations)
+            matched_weight_sum = sum(ev.get("matched_weight", 1.0) for ev in item_evaluations if ev.get("is_matched"))
+            coverage_ratio = (matched_weight_sum / total_weight) * 100.0 if total_weight > 0 else 0.0
+        else:
+            coverage_ratio = 0.0
         return round(coverage_ratio, 2), item_evaluations, unmatched_items

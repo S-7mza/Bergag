@@ -1,0 +1,132 @@
+version: "1.0"
+tenant_id: "etudes-conseil-morocco"
+profile_name: "Études, Conseil, Audit & Formation Professionnelle"
+icon: "📊"
+description: "Études d'impact, schémas directeurs, audits stratégiques, formation continue et assistance à maîtrise d'ouvrage (AMO)"
+contact_email: "conseil@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Services"
+  prestation_types:
+    - "Études générales, techniques et économiques"
+    - "Conseil et assistance technique (AMO)"
+    - "Audit organisationnel, financier et technique"
+    - "Formation continue et renforcement des capacités"
+    - "Ingénierie et expertises spécialisées"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Tanger-Tétouan-Al Hoceïma"
+      - "Marrakech-Safi"
+    max_travel_distance_km: 800
+  financial_bands:
+    min_amount_mad: 10000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "etudes-strategiques-schemas"
+    label: "Études Stratégiques, Schémas Directeurs & Faisabilité"
+    weight: 3.0
+    synonyms_fr:
+      - "étude"
+      - "etude"
+      - "études"
+      - "etudes"
+      - "schéma directeur"
+      - "faisabilité"
+      - "diagnostic"
+      - "étude d'impact"
+      - "plan de développement"
+      - "cadrage"
+      - "évaluation"
+    synonyms_ar:
+      - "دراسات استراتيجية"
+      - "دراسات الجدوى"
+      - "مخطط توجيهي"
+    technical_keywords:
+      - "méthodologie"
+      - "ivr"
+      - "livrables"
+      - "recommandations"
+      - "benchmarking"
+
+  - id: "conseil-amo-assistance"
+    label: "Conseil, Assistance à Maîtrise d'Ouvrage (AMO)"
+    weight: 3.0
+    synonyms_fr:
+      - "conseil"
+      - "assistance à maîtrise d'ouvrage"
+      - "amo"
+      - "assistance technique"
+      - "accompagnement"
+      - "pilotage"
+      - "gestion de projet"
+      - "pmo"
+    synonyms_ar:
+      - "المساعدة التقنية"
+      - "مواكبة المشاريع"
+    technical_keywords:
+      - "cahier des charges"
+      - "pmp"
+      - "prince2"
+      - "suivi opérationnel"
+
+  - id: "audit-organisation-finance"
+    label: "Audit Organisationnel, Comptable & Financier"
+    weight: 2.5
+    synonyms_fr:
+      - "audit"
+      - "audits"
+      - "audit organisationnel"
+      - "audit financier"
+      - "audit comptable"
+      - "contrôle de gestion"
+      - "revue des processus"
+      - "cartographie des risques"
+    synonyms_ar:
+      - "تدقيق الحسابات"
+      - "افتحاص تنظيمي"
+    technical_keywords:
+      - "conformité"
+      - "commissariat"
+      - "procédures internes"
+
+  - id: "formation-continue-personnel"
+    label: "Formation Continue & Renforcement des Compétences"
+    weight: 2.5
+    synonyms_fr:
+      - "formation"
+      - "formations"
+      - "session de formation"
+      - "renforcement des capacités"
+      - "séminaire de formation"
+      - "animation d'ateliers"
+      - "pédagogie"
+      - "coaching"
+    synonyms_ar:
+      - "تكوين مستمر"
+      - "تأهيل الأطر"
+      - "ورشات تدريبية"
+    technical_keywords:
+      - "support de formation"
+      - "attestation"
+      - "évaluation à chaud"
+
+negative_constraints:
+  keywords:
+    - "achat de véhicules"
+    - "travaux de plomberie"
+    - "fourniture de ciment"
+    - "gardiennage physique"
+    - "nettoyage des sols"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.40
+  semantic_similarity: 0.35
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

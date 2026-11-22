@@ -1,0 +1,121 @@
+version: "1.0"
+tenant_id: "bureau-mobilier-morocco"
+profile_name: "Fournitures de Bureau, Papeterie & Mobilier"
+icon: "📑"
+description: "Papeterie, consommables de bureau, mobilier administratif, fauteuils, armoires et rayonnages"
+contact_email: "bureau@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Fournitures"
+  prestation_types:
+    - "Achat de fournitures de bureau et papeterie"
+    - "Achat de matériel et mobilier de bureau"
+    - "Achat de registres et imprimés administratifs"
+    - "Aménagement de bureaux et archivage"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Fès-Meknès"
+      - "Marrakech-Safi"
+    max_travel_distance_km: 700
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "papeterie-consommables-bureau"
+    label: "Papeterie, Ramettes A4/A3, Classeurs & Stylos"
+    weight: 3.0
+    synonyms_fr:
+      - "papeterie"
+      - "fourniture de bureau"
+      - "ramette de papier"
+      - "papier a4"
+      - "papier a3"
+      - "classeur"
+      - "chemise"
+      - "sous-chemise"
+      - "registre"
+      - "stylo"
+      - "cahier"
+      - "enveloppe"
+      - "bloc-notes"
+      - "agrafeuse"
+      - "perforateur"
+    synonyms_ar:
+      - "أدوات مكتبية"
+      - "ورق طباعة"
+      - "سجلات إدارية"
+      - "ملفات"
+    technical_keywords:
+      - "80g"
+      - "extra blanc"
+      - "500 feuilles"
+      - "levier"
+
+  - id: "mobilier-bureaux-fauteuils"
+    label: "Mobilier de Bureau, Bureaux & Fauteuils Ergonomiques"
+    weight: 3.0
+    synonyms_fr:
+      - "mobilier de bureau"
+      - "bureau"
+      - "bureaux"
+      - "fauteuil"
+      - "fauteuil de bureau"
+      - "fauteuil ergonomique"
+      - "chaise"
+      - "chaises visiteurs"
+      - "table de réunion"
+      - "banque d'accueil"
+    synonyms_ar:
+      - "أثاث المكاتب"
+      - "مكاتب"
+      - "كراسي دوارة"
+      - "طاولات الاجتماعات"
+    technical_keywords:
+      - "synchrone"
+      - "accoudoirs réglables"
+      - "cuir"
+      - "résille"
+      - "mélaminé"
+
+  - id: "armoires-rayonnages-archivage"
+    label: "Armoires Métalliques, Rayonnages & Caissons"
+    weight: 2.5
+    synonyms_fr:
+      - "armoire"
+      - "armoire métallique"
+      - "rayonnage"
+      - "rayonnage d'archives"
+      - "caisson"
+      - "caisson mobile"
+      - "bibliothèque"
+      - "meuble à rideaux"
+      - "vestiaire"
+    synonyms_ar:
+      - "خزائن حديدية"
+      - "رفوف الأرشيف"
+    technical_keywords:
+      - "rideaux pvc"
+      - "monobloc"
+      - "tôle d'acier"
+      - "serrure centrale"
+
+negative_constraints:
+  keywords:
+    - "développement web"
+    - "travaux de terrassement"
+    - "béton armé"
+    - "camion benne"
+    - "médicament"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

@@ -74,18 +74,38 @@ def extract_tokens(text: str) -> Set[str]:
     words = re.findall(r'\b[a-zA-Z0-9_\u0600-\u06FF]{4,}\b', norm)
     return {w for w in words if w not in STOPWORDS and not w.isdigit()}
 
+SECTOR_KEYWORDS_MAP = {
+    "it_hardware": ["hardware", "materiel", "reseau", "network", "informatique", "bureautique"],
+    "software_data": ["software", "logiciel", "data", "web", "cloud", "ia", "application", "progiciel"],
+    "cctv_security": ["cctv", "securite", "surveillance", "camera", "controle_acces", "video"],
+    "btp_construction": ["btp", "construction", "travaux_publics", "genie_civil", "vrd", "renovation", "batiment", "maconnerie"],
+    "electricite_fluides": ["electricite", "climatisation", "fluides", "energie", "solaire", "plomberie"],
+    "medical_pharma": ["medical", "pharma", "sante", "hopital", "medicament", "laboratoire", "biomedical"],
+    "transport_vehicules": ["transport", "vehicule", "engin", "carburant", "automobile", "camion", "mecanique"],
+    "nettoyage_gardiennage": ["nettoyage", "gardiennage", "hygiene", "espaces_verts", "proprete", "securite_physique"],
+    "bureau_mobilier": ["mobilier", "papeterie", "fournitures_bureau", "bureau"],
+    "etudes_conseil": ["etudes", "conseil", "audit", "formation", "ingenierie", "amo"],
+    "communication_event": ["communication", "evenementiel", "impression", "audiovisuel", "affichage", "publicite"]
+}
+
 def normalize_profile_key(profile_identifier: str) -> str:
     """Canonicalizes profile identifiers (slugs, file names, or display titles) to standard profile slugs"""
     if not profile_identifier:
         return "it_hardware"
-    norm = strip_accents(profile_identifier).strip()
-    if "software" in norm or "logiciel" in norm or "data" in norm:
-        return "software_data"
-    if "cctv" in norm or "secur" in norm or "video" in norm:
-        return "cctv_security"
-    if "hardware" in norm or "materiel" in norm or "reseau" in norm or "network" in norm or "informatique" in norm:
-        return "it_hardware"
-    return norm.replace(" ", "_")
+    norm = strip_accents(profile_identifier).strip().lower()
+
+    # 1. Direct match on recognized slug
+    clean_slug = re.sub(r'[^a-z0-9_]', '_', norm).strip('_')
+    if clean_slug in SECTOR_KEYWORDS_MAP:
+        return clean_slug
+
+    # 2. Check keyword/alias mapping
+    for slug, keywords in SECTOR_KEYWORDS_MAP.items():
+        if slug in norm or any(kw in norm for kw in keywords):
+            return slug
+
+    # 3. For any custom profile created by user, use its sanitized slug
+    return clean_slug or "custom_sector"
 
 class AlignmentFeedbackManager:
     """

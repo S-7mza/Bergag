@@ -1,0 +1,158 @@
+version: "1.0"
+tenant_id: "electricite-fluides-morocco"
+profile_name: "Électricité, Climatisation, Énergie & Fluides"
+icon: "⚡"
+description: "Éclairage public, câblage électrique, climatisation, énergie solaire, transformateurs et fluides"
+contact_email: "electricite@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Fournitures"
+    - "Travaux"
+    - "Services"
+  prestation_types:
+    - "Électricité et éclairage public"
+    - "Climatisation, chauffage et ventilation"
+    - "Installations électriques et groupes électrogènes"
+    - "Énergie solaire et photovoltaïque"
+    - "Maintenance des équipements électriques"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Fès-Meknès"
+      - "Marrakech-Safi"
+      - "Tanger-Tétouan-Al Hoceïma"
+    max_travel_distance_km: 700
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "eclairage-public-led"
+    label: "Éclairage Public, Luminaires LED & Candélabres"
+    weight: 3.0
+    synonyms_fr:
+      - "éclairage public"
+      - "eclairage public"
+      - "luminaire"
+      - "luminaire led"
+      - "candélabre"
+      - "candelabre"
+      - "mât d'éclairage"
+      - "projecteur led"
+      - "lampe led"
+      - "bras d'éclairage"
+      - "foyer lumineux"
+    synonyms_ar:
+      - "الإنارة العمومية"
+      - "مصابيح ليد"
+      - "أعمدة الإنارة"
+    technical_keywords:
+      - "led"
+      - "100w"
+      - "150w"
+      - "ip66"
+      - "ik08"
+      - "ballast"
+      - "cellule photoélectrique"
+
+  - id: "cablage-armoires-tableaux"
+    label: "Câblage Électrique, Armoires & Tableaux Basse Tension"
+    weight: 2.5
+    synonyms_fr:
+      - "câble électrique"
+      - "cable electrique"
+      - "câblage"
+      - "tableau électrique"
+      - "armoire électrique"
+      - "disjoncteur"
+      - "différentiel"
+      - "contacteur"
+      - "relais"
+      - "fusible"
+      - "goulotte"
+      - "chemin de câble"
+    synonyms_ar:
+      - "أسلاك كهربائية"
+      - "لوحة كهربائية"
+      - "قاطع تيار"
+    technical_keywords:
+      - "u1000 r2v"
+      - "h07vu"
+      - "schneider"
+      - "legrand"
+      - "abb"
+      - "tétrapolaire"
+      - "triphasé"
+
+  - id: "climatisation-ventilation"
+    label: "Climatisation Split, VRV & Ventilation Mécanique"
+    weight: 2.5
+    synonyms_fr:
+      - "climatiseur"
+      - "climatisation"
+      - "split"
+      - "multisplit"
+      - "ventilation"
+      - "centrale de traitement d'air"
+      - "cta"
+      - "vmc"
+      - "extracteur d'air"
+      - "pompe à chaleur"
+    synonyms_ar:
+      - "مكيف هواء"
+      - "تبريد"
+      - "تهوية"
+    technical_keywords:
+      - "inverter"
+      - "btu"
+      - "12000 btu"
+      - "18000 btu"
+      - "24000 btu"
+      - "r410a"
+      - "r32"
+      - "carrier"
+      - "daikin"
+      - "lg"
+
+  - id: "solaire-groupes-electrogenes"
+    label: "Solaire Photovoltaïque & Groupes Électrogènes"
+    weight: 2.5
+    synonyms_fr:
+      - "panneau solaire"
+      - "photovoltaïque"
+      - "onduleur solaire"
+      - "batterie solaire"
+      - "groupe électrogène"
+      - "groupe electrogene"
+      - "poste de transformation"
+      - "transformateur"
+    synonyms_ar:
+      - "طاقة شمسية"
+      - "مولد كهربائي"
+      - "محول"
+    technical_keywords:
+      - "kva"
+      - "monocristallin"
+      - "mppt"
+      - "diesel"
+      - "insonorisé"
+
+negative_constraints:
+  keywords:
+    - "développement logiciel"
+    - "application mobile"
+    - "denrées alimentaires"
+    - "gardiennage physique"
+    - "nettoyage des locaux"
+    - "médicament"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

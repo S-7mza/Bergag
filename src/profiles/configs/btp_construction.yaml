@@ -1,0 +1,192 @@
+version: "1.0"
+tenant_id: "btp-construction-morocco"
+profile_name: "BTP, Construction, Génie Civil & Aménagement"
+icon: "🏗️"
+description: "Travaux publics, gros œuvre, voirie, assainissement, maçonnerie et réhabilitation de bâtiments"
+contact_email: "btp@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Travaux"
+    - "Services"
+    - "Fournitures"
+  prestation_types:
+    - "Travaux de construction et d'aménagement"
+    - "Travaux de gros œuvre et maçonnerie"
+    - "Travaux de voirie et assainissement (VRD)"
+    - "Génie civil et ouvrages d'art"
+    - "Aménagement extérieur et paysager"
+    - "Travaux de réhabilitation et rénovation"
+    - "Travaux d'étanchéité, peinture et plâtrerie"
+    - "Travaux de menuiserie et vitrerie"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Marrakech-Safi"
+      - "Tanger-Tétouan-Al Hoceïma"
+      - "Fès-Meknès"
+      - "Souss-Massa"
+    max_travel_distance_km: 800
+  financial_bands:
+    min_amount_mad: 10000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "gros-oeuvre-maconnerie"
+    label: "Gros Œuvre, Maçonnerie & Béton Armé"
+    weight: 3.0
+    synonyms_fr:
+      - "gros oeuvre"
+      - "gros œuvre"
+      - "maçonnerie"
+      - "maconnerie"
+      - "béton armé"
+      - "beton arme"
+      - "fondation"
+      - "dalle"
+      - "poteau"
+      - "poutre"
+      - "semelle"
+      - "agglos"
+      - "briques"
+      - "chape"
+    synonyms_ar:
+      - "أشغال البناء"
+      - "الخرسانة المسلحة"
+      - "بناء"
+    technical_keywords:
+      - "ciment"
+      - "dosage"
+      - "acier fe500"
+      - "b25"
+      - "mortier"
+      - "coffrage"
+
+  - id: "vrd-voirie-assainissement"
+    label: "VRD, Voirie, Assainissement & Canalisations"
+    weight: 2.5
+    synonyms_fr:
+      - "vrd"
+      - "voirie"
+      - "assainissement"
+      - "terrassement"
+      - "canalisation"
+      - "canalisations"
+      - "buse"
+      - "buses"
+      - "dalot"
+      - "regard"
+      - "enrobé"
+      - "bordure"
+      - "trottoir"
+      - "chaussée"
+      - "piste"
+    synonyms_ar:
+      - "تهيئة الطرق"
+      - "التطهير السائل"
+      - "قنوات"
+    technical_keywords:
+      - "gmf"
+      - "gbb"
+      - "eb"
+      - "pvc assainissement"
+      - "pehd"
+      - "compactage"
+      - "tranchée"
+
+  - id: "revetements-etancheite-peinture"
+    label: "Revêtements de Sol, Étanchéité & Peinture"
+    weight: 2.0
+    synonyms_fr:
+      - "revêtement"
+      - "revetement"
+      - "carrelage"
+      - "faïence"
+      - "faience"
+      - "marbre"
+      - "étanchéité"
+      - "etancheite"
+      - "peinture"
+      - "enduit"
+      - "badigeon"
+      - "plâtrerie"
+      - "platrerie"
+      - "faux plafond"
+    synonyms_ar:
+      - "صباغة"
+      - "عزل"
+      - "ترميم"
+    technical_keywords:
+      - "peinture vinyle"
+      - "bicouche"
+      - "mono couche"
+      - "étanchéité multicouche"
+      - "feutre bitumé"
+
+  - id: "menuiserie-ferronnerie"
+    label: "Menuiserie Bois, Aluminium & Ferronnerie"
+    weight: 2.0
+    synonyms_fr:
+      - "menuiserie"
+      - "menuiserie aluminium"
+      - "menuiserie bois"
+      - "menuiserie métallique"
+      - "porte"
+      - "portes"
+      - "fenêtre"
+      - "fenetre"
+      - "fenêtres"
+      - "rideau métallique"
+      - "grille de protection"
+      - "vitrerie"
+      - "garde-corps"
+    synonyms_ar:
+      - "نجارة خشبية"
+      - "نجارة ألمنيوم"
+      - "حدادة"
+    technical_keywords:
+      - "double vitrage"
+      - "profilé alu"
+      - "serrure de sécurité"
+
+  - id: "plomberie-sanitaire"
+    label: "Plomberie Sanitaire & Évacuations"
+    weight: 1.5
+    synonyms_fr:
+      - "plomberie"
+      - "sanitaire"
+      - "robinetterie"
+      - "lavabo"
+      - "wc"
+      - "cuvette"
+      - "tuyauterie"
+      - "chauffe-eau"
+      - "évacuation"
+    synonyms_ar:
+      - "ترصيص صحي"
+      - "مرافق صحية"
+    technical_keywords:
+      - "ppr"
+      - "cuivre"
+      - "multicouche"
+
+negative_constraints:
+  keywords:
+    - "matériel informatique"
+    - "ordinateur portable"
+    - "serveur informatique"
+    - "développement web"
+    - "médicament"
+    - "produits pharmaceutiques"
+    - "gardiennage physique"
+    - "denrées alimentaires"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

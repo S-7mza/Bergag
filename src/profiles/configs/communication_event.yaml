@@ -1,0 +1,149 @@
+version: "1.0"
+tenant_id: "communication-event-morocco"
+profile_name: "Communication, Événementiel, Impression & Audiovisuel"
+icon: "📢"
+description: "Organisation d'événements, stands, impression grand format, campagnes de communication et production audiovisuelle"
+contact_email: "communication@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Services"
+    - "Fournitures"
+  prestation_types:
+    - "Campagnes de communication et publicité"
+    - "Organisation d'événements, foires et séminaires"
+    - "Travaux d'impression, édition et sérigraphie"
+    - "Production audiovisuelle, films et spots"
+    - "Fourniture d'articles promotionnels et goodies"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Marrakech-Safi"
+      - "Tanger-Tétouan-Al Hoceïma"
+    max_travel_distance_km: 700
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "evenementiel-stands-seminaires"
+    label: "Organisation d'Événements, Stands & Séminaires"
+    weight: 3.0
+    synonyms_fr:
+      - "événementiel"
+      - "evenementiel"
+      - "événement"
+      - "evenement"
+      - "organisation d'événement"
+      - "séminaire"
+      - "seminaire"
+      - "stand"
+      - "stands"
+      - "foire"
+      - "colloque"
+      - "conférence"
+      - "inauguration"
+      - "traiteur événementiel"
+      - "pause-café"
+    synonyms_ar:
+      - "تنظيم التظاهرات"
+      - "معارض"
+      - "ندوات ومؤتمرات"
+    technical_keywords:
+      - "aménagement de stand"
+      - "scénographie"
+      - "sonorisation"
+      - "vidéoprojecteur"
+      - "écran led"
+
+  - id: "impression-edition-signaletique"
+    label: "Impression Offset/Numérique, Banderoles & Signalétique"
+    weight: 3.0
+    synonyms_fr:
+      - "impression"
+      - "imprimerie"
+      - "affiche"
+      - "affiches"
+      - "brochure"
+      - "dépliant"
+      - "flyer"
+      - "banderole"
+      - "roll-up"
+      - "bâche"
+      - "kakemono"
+      - "signalétique"
+      - "panneau d'affichage"
+    synonyms_ar:
+      - "طباعة ونشر"
+      - "ملصقات إشهارية"
+      - "لوحات إرشادية"
+    technical_keywords:
+      - "quadrichromie"
+      - "pelliculage"
+      - "grammage"
+      - "vinyle adhésif"
+      - "forex"
+
+  - id: "production-audiovisuelle-spots"
+    label: "Production Audiovisuelle, Spots Vidéo & Photographie"
+    weight: 2.5
+    synonyms_fr:
+      - "audiovisuel"
+      - "production audiovisuelle"
+      - "film institutionnel"
+      - "spot vidéo"
+      - "capsule vidéo"
+      - "reportage photo"
+      - "couverture médiatique"
+      - "drone"
+      - "montage vidéo"
+    synonyms_ar:
+      - "إنتاج سمعي بصري"
+      - "شريط وثائقي"
+      - "تصوير فوتوغرافي"
+    technical_keywords:
+      - "4k"
+      - "full hd"
+      - "voix off"
+      - "motion design"
+      - "étalonnage"
+
+  - id: "goodies-articles-promotionnels"
+    label: "Articles Promotionnels, Goodies & Cadeaux d'Entreprise"
+    weight: 2.0
+    synonyms_fr:
+      - "goodies"
+      - "objet publicitaire"
+      - "article promotionnel"
+      - "cadeau d'entreprise"
+      - "clé usb personnalisée"
+      - "sacoche personnalisée"
+      - "casquette"
+      - "t-shirt"
+      - "trophée"
+      - "médaille"
+    synonyms_ar:
+      - "هدايا ترويجية"
+      - "دروع تذكارية"
+    technical_keywords:
+      - "sérigraphie"
+      - "gravure laser"
+      - "broderie"
+
+negative_constraints:
+  keywords:
+    - "matériel médical"
+    - "gros œuvre"
+    - "pièces de rechange auto"
+    - "carburant vrac"
+    - "médicament"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

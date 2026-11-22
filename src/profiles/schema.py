@@ -29,7 +29,10 @@ class ScoringWeights(BaseModel):
 class CompanyProfileSchema(BaseModel):
     version: str = "1.0"
     tenant_id: str
+    profile_id: str | None = None
     profile_name: str
+    icon: str | None = None
+    description: str | None = None
     contact_email: str | None = None
     macro_filters: MacroFilters
     catalog: list[CatalogItem]

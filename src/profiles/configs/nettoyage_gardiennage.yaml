@@ -1,0 +1,138 @@
+version: "1.0"
+tenant_id: "nettoyage-gardiennage-morocco"
+profile_name: "Nettoyage, Sécurité Physique, Gardiennage & Hygiène"
+icon: "🧹"
+description: "Gardiennage humain, sécurité physique des sites, nettoyage industriel, dératisation et espaces verts"
+contact_email: "nettoyage@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Services"
+    - "Fournitures"
+  prestation_types:
+    - "Gardiennage et surveillance des bâtiments administratifs"
+    - "Nettoyage et entretien des locaux"
+    - "Désinsectisation, dératisation et désinfection (3D)"
+    - "Entretien des espaces verts et jardins"
+    - "Achat de produits et matériel d'entretien et de nettoyage"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Fès-Meknès"
+      - "Marrakech-Safi"
+    max_travel_distance_km: 600
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "gardiennage-surveillance"
+    label: "Gardiennage, Surveillance Physique & Sécurité des Sites"
+    weight: 3.0
+    synonyms_fr:
+      - "gardiennage"
+      - "surveillance"
+      - "sécurité physique"
+      - "agent de sécurité"
+      - "gardien"
+      - "gardiens"
+      - "vigile"
+      - "vigiles"
+      - "maître-chien"
+      - "ronde"
+      - "poste de garde"
+    synonyms_ar:
+      - "الحراسة والمراقبة"
+      - "حراسة أمنية"
+      - "أعوان الحراسة"
+    technical_keywords:
+      - "24h/24"
+      - "7j/7"
+      - "cnss"
+      - "tenue réglementaire"
+
+  - id: "nettoyage-entretien-locaux"
+    label: "Nettoyage Courant & Entretien Approfondi des Bâtiments"
+    weight: 3.0
+    synonyms_fr:
+      - "nettoyage"
+      - "entretien des locaux"
+      - "femme de ménage"
+      - "agent de nettoyage"
+      - "balayage"
+      - "lavage"
+      - "lustrage"
+      - "vitrerie"
+      - "dépoussiérage"
+    synonyms_ar:
+      - "النظافة والصيانة"
+      - "تنظيف المباني"
+      - "عاملات النظافة"
+    technical_keywords:
+      - "mono brosse"
+      - "autolaveuse"
+      - "chariot de ménage"
+
+  - id: "produits-hygiene-nettoyage"
+    label: "Produits d'Entretien, Hygiène & Lessives"
+    weight: 2.0
+    synonyms_fr:
+      - "produit d'entretien"
+      - "eau de javel"
+      - "détergent"
+      - "savon liquide"
+      - "désinfectant"
+      - "papier hygiénique"
+      - "essuie-tout"
+      - "sac poubelle"
+      - "balai"
+      - "raclette"
+    synonyms_ar:
+      - "مواد التنظيف"
+      - "مطهرات"
+      - "أكياس القمامة"
+    technical_keywords:
+      - "bactéricide"
+      - "fongicide"
+      - "bidon 5l"
+
+  - id: "deratisation-espaces-verts"
+    label: "Dératisation (3D) & Entretien des Espaces Verts"
+    weight: 2.0
+    synonyms_fr:
+      - "dératisation"
+      - "désinsectisation"
+      - "désinfection"
+      - "lutte antivectorielle"
+      - "espace vert"
+      - "espaces verts"
+      - "jardinage"
+      - "tonte"
+      - "arrosage"
+      - "taille"
+    synonyms_ar:
+      - "إبادة القوارض والحشرات"
+      - "تهيئة المساحات الخضراء"
+    technical_keywords:
+      - "raticide"
+      - "insecticide"
+      - "tondeuse"
+      - "débroussailleuse"
+
+negative_constraints:
+  keywords:
+    - "matériel informatique"
+    - "développement web"
+    - "camion benne seul"
+    - "béton armé"
+    - "médicament"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

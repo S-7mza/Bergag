@@ -1,0 +1,146 @@
+version: "1.0"
+tenant_id: "transport-vehicules-morocco"
+profile_name: "Véhicules, Engins, Pièces de Rechange & Carburant"
+icon: "🚚"
+description: "Véhicules utilitaires, engins de travaux, camions, pièces de rechange mécaniques, pneus et carburant"
+contact_email: "transport@morocco-procure.ma"
+
+macro_filters:
+  categories:
+    - "Fournitures"
+    - "Services"
+  prestation_types:
+    - "Achat et location de véhicules"
+    - "Achat d'engins et matériels de transport"
+    - "Achat de pièces de rechange pour véhicules et engins"
+    - "Achat de carburants et lubrifiants"
+    - "Entretien et réparation mécanique du parc automobile"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Marrakech-Safi"
+      - "Tanger-Tétouan-Al Hoceïma"
+    max_travel_distance_km: 700
+  financial_bands:
+    min_amount_mad: 5000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "vehicules-utilitaires-tourisme"
+    label: "Véhicules Utilitaires, Berlines, 4x4 & Camionnettes"
+    weight: 3.0
+    synonyms_fr:
+      - "véhicule"
+      - "vehicule"
+      - "voiture"
+      - "automobile"
+      - "utilitaire"
+      - "camionnette"
+      - "pick-up"
+      - "4x4"
+      - "ambulance"
+      - "fourgon"
+      - "minibus"
+      - "camion"
+    synonyms_ar:
+      - "سيارات"
+      - "شاحنات"
+      - "عربات نقل"
+      - "سيارة إسعاف"
+    technical_keywords:
+      - "diesel"
+      - "hdi"
+      - "dci"
+      - "climatisation"
+      - "abs"
+      - "direction assistée"
+
+  - id: "engins-terrassement-agricoles"
+    label: "Engins de Travaux Publics & Tracteurs"
+    weight: 3.0
+    synonyms_fr:
+      - "engin"
+      - "engins"
+      - "tractopelle"
+      - "niveleuse"
+      - "chargeuse"
+      - "pelleteuse"
+      - "tracteur"
+      - "compacteur"
+      - "benne"
+      - "citerne"
+    synonyms_ar:
+      - "آليات الأشغال"
+      - "جرار"
+      - "شاحنة صهريج"
+    technical_keywords:
+      - "chenilles"
+      - "godet"
+      - "hydraulique"
+      - "4x4"
+
+  - id: "pieces-rechange-mecanique"
+    label: "Pièces de Rechange Mécaniques & Filtration"
+    weight: 2.5
+    synonyms_fr:
+      - "pièces de rechange"
+      - "pieces de rechange"
+      - "filtre à huile"
+      - "filtre à air"
+      - "filtre à gasoil"
+      - "plaquettes de frein"
+      - "disque de frein"
+      - "amortisseur"
+      - "batterie auto"
+      - "embrayage"
+      - "courroie"
+    synonyms_ar:
+      - "قطع الغيار"
+      - "فرامل"
+      - "بطاريات السيارات"
+    technical_keywords:
+      - "d'origine"
+      - "12v"
+      - "70ah"
+      - "oem"
+
+  - id: "pneumatiques-lubrifiants"
+    label: "Pneumatiques & Lubrifiants Moteur"
+    weight: 2.0
+    synonyms_fr:
+      - "pneumatique"
+      - "pneumatiques"
+      - "pneu"
+      - "pneus"
+      - "lubrifiant"
+      - "huile moteur"
+      - "liquide de refroidissement"
+      - "graisse"
+      - "vidange"
+    synonyms_ar:
+      - "عجلات"
+      - "زيوت المحركات"
+    technical_keywords:
+      - "15w40"
+      - "5w30"
+      - "tubeless"
+      - "michelin"
+      - "goodyear"
+
+negative_constraints:
+  keywords:
+    - "développement logiciel web"
+    - "serveurs informatiques"
+    - "médicament"
+    - "gardiennage physique"
+    - "mobilier de bureau seul"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  line_item_coverage: 0.45
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.10

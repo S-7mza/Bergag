@@ -15,8 +15,8 @@ from sqlalchemy.orm import selectinload
 from src.database.session import get_db_session
 from src.models.tender import Tender, Buyer, LineItem
 from src.models.profile import CompanyProfile, ProfileMatch, UserTenderAction
-from src.profiles.loader import load_profile, load_all_profiles
-from src.profiles.schema import CompanyProfileSchema
+from src.profiles.loader import load_profile, load_all_profiles, save_profile, delete_profile, DEFAULT_SECTOR_ICONS
+from src.profiles.schema import CompanyProfileSchema, CatalogItem, MacroFilters, NegativeConstraints, ScoringWeights
 from src.engine.scoring_cascade import ScoringCascadeEngine, invalidate_tender_cache
 from src.engine.pricing_helper import PricingHelper
 from src.engine.pipeline_manager import pipeline_manager
@@ -44,60 +44,172 @@ router = APIRouter(prefix="/api", tags=["Procurement Feed"])
 
 @router.get("/profiles")
 async def get_available_profiles():
-    """Lists all loaded company profiles"""
+    """Lists all loaded company profiles with rich metadata, catalog item counts, and keyword totals"""
     profiles = load_all_profiles()
-    return [
-        {
+    res = []
+    for p in profiles:
+        kw_count = sum(
+            len(getattr(c, "synonyms_fr", [])) + len(getattr(c, "synonyms_ar", [])) + len(getattr(c, "technical_keywords", []))
+            for c in p.catalog
+        )
+        res.append({
+            "id": p.profile_id or p.tenant_id,
             "tenant_id": p.tenant_id,
             "profile_name": p.profile_name,
+            "icon": p.icon or DEFAULT_SECTOR_ICONS.get(p.profile_id or "", "🏷️"),
+            "description": p.description or f"Secteur {p.profile_name}",
             "categories": p.macro_filters.categories,
-            "catalog_count": len(p.catalog)
+            "catalog_count": len(p.catalog),
+            "keywords_count": kw_count,
+            "negative_keywords_count": len(p.negative_constraints.keywords)
+        })
+    return res
+
+@router.get("/profiles/{profile_id}")
+async def get_profile_detail(profile_id: str):
+    """Returns full details of a specific sector profile including catalog items and weights"""
+    try:
+        profile = load_profile(profile_id)
+        data = profile.model_dump()
+        data["id"] = profile.profile_id or profile_id
+        data["icon"] = profile.icon or DEFAULT_SECTOR_ICONS.get(profile_id, "🏷️")
+        return data
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Secteur '{profile_id}' non trouvé")
+
+@router.put("/profiles/{profile_id}")
+async def update_profile_configuration(profile_id: str, payload: Dict[str, Any]):
+    """Updates an existing sector profile, modifying its keywords, weights, categories, or negative constraints"""
+    try:
+        # Preserve or assign tenant_id & profile_id
+        if "tenant_id" not in payload:
+            payload["tenant_id"] = f"{profile_id}-tenant"
+        if "profile_name" not in payload:
+            payload["profile_name"] = profile_id.replace("_", " ").title()
+
+        saved = save_profile(payload, profile_id)
+        # Invalidate evaluation caches
+        _STAGE23_CACHE = getattr(ScoringCascadeEngine, "_STAGE23_CACHE", {})
+        if isinstance(_STAGE23_CACHE, dict):
+            _STAGE23_CACHE.clear()
+
+        return {
+            "success": True,
+            "message": f"Secteur '{saved.profile_name}' mis à jour avec succès",
+            "profile": saved.model_dump()
         }
-        for p in profiles
-    ]
+    except Exception as e:
+        logger.error(f"Error updating profile {profile_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Erreur mise à jour secteur: {str(e)}")
+
+@router.post("/profiles")
+async def create_new_sector_profile(payload: Dict[str, Any]):
+    """Creates a new sector profile with custom keywords, weights, and categories"""
+    name = payload.get("profile_name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom du secteur est obligatoire")
+
+    slug = payload.get("id") or re.sub(r'[^a-z0-9_]', '_', name.lower()).strip('_')
+    if not slug:
+        slug = f"sector_{int(datetime.now().timestamp())}"
+
+    if "tenant_id" not in payload:
+        payload["tenant_id"] = f"{slug}-tenant"
+    if "macro_filters" not in payload:
+        payload["macro_filters"] = {
+            "categories": ["Fournitures", "Services", "Travaux"],
+            "prestation_types": [],
+            "geographic_coverage": {"mode": "national"},
+            "financial_bands": {"min_amount_mad": 5000.0, "max_amount_mad": 500000.0},
+            "minimum_deadline_hours": 24
+        }
+    if "catalog" not in payload:
+        payload["catalog"] = []
+    if "negative_constraints" not in payload:
+        payload["negative_constraints"] = {"keywords": [], "disallowed_buyer_types": []}
+    if "scoring_weights" not in payload:
+        payload["scoring_weights"] = {
+            "line_item_coverage": 0.45,
+            "semantic_similarity: ": 0.30,
+            "feasibility_proximity": 0.15,
+            "commercial_attractiveness": 0.10
+        }
+
+    try:
+        saved = save_profile(payload, slug)
+        return {
+            "success": True,
+            "message": f"Nouveau secteur '{saved.profile_name}' créé avec succès",
+            "profile_id": slug,
+            "profile": saved.model_dump()
+        }
+    except Exception as e:
+        logger.error(f"Error creating profile: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Erreur création secteur: {str(e)}")
+
+@router.delete("/profiles/{profile_id}")
+async def remove_sector_profile(profile_id: str):
+    """Deletes a custom sector profile (standard profiles cannot be deleted)"""
+    protected = {"it_hardware", "software_data", "cctv_security"}
+    if profile_id in protected:
+        raise HTTPException(status_code=403, detail="Les secteurs standards du système ne peuvent pas être supprimés")
+
+    success = delete_profile(profile_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Secteur '{profile_id}' introuvable")
+
+    return {"success": True, "message": f"Secteur '{profile_id}' supprimé avec succès"}
 
 def extract_profile_candidate_keywords(profile: CompanyProfileSchema) -> List[str]:
     """
-    Extracts high-signal root keywords from profile catalog and prestation types
-    to filter candidate tenders from PostgreSQL before scoring.
+    Extracts high-signal root keywords from profile catalog and prestation types,
+    prioritized by catalog item weight (High priority first) to optimize candidate selection.
     """
     from src.engine.feedback_manager import STOPWORDS as EXTENDED_STOPWORDS
     stopwords = set(EXTENDED_STOPWORDS)
-    keywords = set()
+
+    # Collect candidate keywords with their priority weights
+    weighted_candidates: Dict[str, float] = {}
+
     for cat in getattr(profile, "catalog", []):
+        cat_weight = float(getattr(cat, "weight", 1.0))
         for phrase in getattr(cat, "synonyms_fr", []):
             cleaned = phrase.strip().lower()
             if len(cleaned) >= 3 and cleaned not in stopwords:
-                keywords.add(cleaned)
+                weighted_candidates[cleaned] = max(weighted_candidates.get(cleaned, 0.0), cat_weight)
                 for w in cleaned.split():
                     w_clean = w.strip(" ,.'-")
                     if len(w_clean) >= 3 and w_clean not in stopwords:
-                        keywords.add(w_clean)
+                        weighted_candidates[w_clean] = max(weighted_candidates.get(w_clean, 0.0), cat_weight)
         for kw in getattr(cat, "technical_keywords", []):
             kw_clean = kw.strip().lower()
             if len(kw_clean) >= 3 and kw_clean not in stopwords:
-                keywords.add(kw_clean)
+                weighted_candidates[kw_clean] = max(weighted_candidates.get(kw_clean, 0.0), cat_weight)
 
-    # Prestation types
+    # Prestation types (high baseline weight 2.5)
     macro_filters = getattr(profile, "macro_filters", None)
     if macro_filters:
         for pt in getattr(macro_filters, "prestation_types", []):
             for w in pt.lower().split():
                 w_clean = w.strip(" ,.'-")
                 if len(w_clean) >= 4 and w_clean not in stopwords:
-                    keywords.add(w_clean)
+                    weighted_candidates[w_clean] = max(weighted_candidates.get(w_clean, 0.0), 2.5)
 
-    # Active Learning: Incorporate top human-confirmed domain keywords for this profile
+    # Active Learning: Incorporate top human-confirmed domain keywords
     profile_name = getattr(profile, "profile_name", "")
     if profile_name:
         learned_words = feedback_manager.get_learned_terms(profile_name)
         for lw in learned_words[:25]:
             if lw not in stopwords and len(lw) >= 4:
-                keywords.add(lw)
+                weighted_candidates[lw] = max(weighted_candidates.get(lw, 0.0), 3.0)
 
-    return [k for k in keywords if len(k) >= 3]
-
-    return [k for k in keywords if len(k) >= 3]
+    # Sort descending by priority weight, then length
+    sorted_keywords = sorted(
+        weighted_candidates.keys(),
+        key=lambda k: (weighted_candidates[k], len(k)),
+        reverse=True
+    )
+    return [k for k in sorted_keywords if len(k) >= 3]
 
 
 @router.get("/feed", response_model=List[TenderFeedItem])
@@ -177,10 +289,15 @@ async def get_tender_feed(
         elif aligned_ids:
             stmt = stmt.where(Tender.portal_id.in_(aligned_ids))
 
-        # Disjoint prestation categories (transport, engins, citernes, gardiennage) never match tech profiles
-        disjoint_prestations = ["transport", "engin", "citerne", "gardiennage", "denree", "denrée"]
-        for dp in disjoint_prestations:
-            stmt = stmt.where(~Tender.prestation_type.ilike(f"%{dp}%"))
+        # Dynamically exclude disjoint prestations only if they do not belong to the active profile
+        profile_prestation_str = " ".join(getattr(profile.macro_filters, "prestation_types", [])).lower()
+        profile_cat_str = " ".join([getattr(c, "label", "") for c in getattr(profile, "catalog", [])]).lower()
+        combined_profile_terms = f"{profile_prestation_str} {profile_cat_str}"
+
+        disjoint_candidates = ["transport", "engin", "citerne", "gardiennage", "denree", "denrée", "terrassement", "gardien"]
+        for dp in disjoint_candidates:
+            if dp not in combined_profile_terms:
+                stmt = stmt.where(~Tender.prestation_type.ilike(f"%{dp}%"))
 
         # Explicit negative keywords SQL exclusion
         neg_kws = getattr(profile.negative_constraints, "keywords", [])
