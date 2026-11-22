@@ -50,6 +50,33 @@ async def test_offline_exporter_awards_with_fixture(tmp_path):
     assert first["amount_ttc"] == 10040.0
 
 @pytest.mark.asyncio
+async def test_offline_exporter_awards_by_months(tmp_path):
+    fixture_path = FIXTURES_DIR / "results_page1.html"
+    with open(fixture_path, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    mock_client = AsyncMock()
+    mock_client.get.return_value = html
+
+    exporter = OfflineExporter(client=mock_client)
+    # Collect for month 11 and 12 of year 2026
+    month_results = await exporter.collect_awards_by_months(
+        year=2026,
+        start_month=11,
+        end_month=12,
+        max_pages_per_month=1,
+        output_dir=tmp_path
+    )
+
+    assert len(month_results) == 2
+    assert month_results[0]["month"] == 11
+    assert month_results[0]["item_count"] == 10
+    assert (tmp_path / "export_awards_2026_11.json").exists()
+
+    assert month_results[1]["month"] == 12
+    assert (tmp_path / "export_awards_2026_12.json").exists()
+
+@pytest.mark.asyncio
 async def test_offline_importer_invalid_bundle():
     importer = OfflineImporter()
 
@@ -189,5 +216,36 @@ def test_api_sync_offline_bundle_json_endpoint(client):
         data = res.json()
         assert data["status"] == "success"
         assert data["domain"] == "awards"
+        assert data["items_processed"] == 1
+
+def test_api_universal_offline_bundle_upload(client):
+    test_bundle = {
+        "manifest": {
+            "format_version": "1.0.0",
+            "domain": "bdc",
+            "item_count": 1
+        },
+        "items": [{"portal_id": 12345, "reference": "01/2026"}]
+    }
+
+    with patch("src.ingestion.offline.importer.OfflineImporter.import_bundle", new_callable=AsyncMock) as mock_import:
+        mock_import.return_value = {
+            "status": "success",
+            "domain": "bdc",
+            "items_total": 1,
+            "items_processed": 1,
+            "linked_tenders": 0,
+            "errors_count": 0
+        }
+
+        # Test universal endpoint /api/admin/ingestion/offline/upload
+        res = client.post(
+            "/api/admin/ingestion/offline/upload",
+            files={"file": ("export_bdc_test.json", json.dumps(test_bundle).encode("utf-8"), "application/json")}
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "success"
+        assert data["domain"] == "bdc"
         assert data["items_processed"] == 1
 

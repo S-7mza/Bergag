@@ -13,6 +13,16 @@ from src.ingestion.offline.importer import OfflineImporter, OfflineImportError
 
 logger = logging.getLogger(__name__)
 
+try:
+    import python_multipart
+    HAS_MULTIPART = True
+except ImportError:
+    try:
+        import multipart
+        HAS_MULTIPART = True
+    except ImportError:
+        HAS_MULTIPART = False
+
 router = APIRouter(prefix="/api/admin/ingestion/awards", tags=["Awards Ingestion & Archive Sync"])
 
 class AwardsSyncRequest(BaseModel):
@@ -88,41 +98,49 @@ async def abort_awards_sync(
     """
     return awards_batch_manager.abort_sync(user_name=user.full_name)
 
-@router.post("/offline/upload")
-async def upload_offline_bundle(
-    file: UploadFile = File(...),
-    session: AsyncSession = Depends(get_db_session),
-    user: User = Depends(require_role(["admin"]))
-):
-    """
-    Uploads and synchronizes a portable offline export package (.json)
-    generated from a local collector machine into the PostgreSQL database.
-    Supports both Awards and BDC notice bundles with idempotent upsert.
-    """
-    if not file.filename.endswith(".json"):
-        raise HTTPException(status_code=400, detail="Format de fichier non supporté. Veuillez uploader un bundle JSON (.json).")
+if HAS_MULTIPART:
+    @router.post("/offline/upload")
+    async def upload_offline_bundle(
+        file: UploadFile = File(...),
+        session: AsyncSession = Depends(get_db_session),
+        user: User = Depends(require_role(["admin"]))
+    ):
+        """
+        Uploads and synchronizes a portable offline export package (.json)
+        generated from a local collector machine into the PostgreSQL database.
+        Supports both Awards and BDC notice bundles with idempotent upsert.
+        """
+        if not file.filename.endswith(".json"):
+            raise HTTPException(status_code=400, detail="Format de fichier non supporté. Veuillez uploader un bundle JSON (.json).")
 
-    try:
-        content = await file.read()
-        importer = OfflineImporter()
-        res = await importer.import_bundle(content, session=session)
-        await session.commit()
-        return {
-            "status": "success",
-            "filename": file.filename,
-            "domain": res["domain"],
-            "items_total": res["items_total"],
-            "items_processed": res["items_processed"],
-            "linked_tenders": res["linked_tenders"],
-            "errors_count": res["errors_count"],
-            "message": f"{res['items_processed']} éléments ({res['domain']}) synchronisés avec succès depuis '{file.filename}'."
-        }
-    except OfflineImportError as oie:
-        raise HTTPException(status_code=422, detail=f"Erreur de validation du bundle: {oie}")
-    except Exception as e:
-        logger.error(f"Failed to process offline bundle upload '{file.filename}': {e}", exc_info=True)
-        await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Erreur lors de l'importation: {e}")
+        try:
+            content = await file.read()
+            importer = OfflineImporter()
+            res = await importer.import_bundle(content, session=session)
+            await session.commit()
+            return {
+                "status": "success",
+                "filename": file.filename,
+                "domain": res["domain"],
+                "items_total": res["items_total"],
+                "items_processed": res["items_processed"],
+                "linked_tenders": res["linked_tenders"],
+                "errors_count": res["errors_count"],
+                "message": f"{res['items_processed']} éléments ({res['domain']}) synchronisés avec succès depuis '{file.filename}'."
+            }
+        except OfflineImportError as oie:
+            raise HTTPException(status_code=422, detail=f"Erreur de validation du bundle: {oie}")
+        except Exception as e:
+            logger.error(f"Failed to process offline bundle upload '{file.filename}': {e}", exc_info=True)
+            await session.rollback()
+            raise HTTPException(status_code=500, detail=f"Erreur lors de l'importation: {e}")
+else:
+    @router.post("/offline/upload")
+    async def upload_offline_bundle_fallback():
+        raise HTTPException(
+            status_code=503,
+            detail="Le support de téléversement de fichiers nécessite 'python-multipart'. Installez-le avec 'pip install python-multipart' ou utilisez l'endpoint JSON '/offline/sync-json'."
+        )
 
 @router.post("/offline/sync-json")
 async def sync_offline_bundle_json(

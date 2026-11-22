@@ -19,11 +19,12 @@ class BdcIngestionService:
     Orchestrates the active BDC ingestion pipeline:
     Discovery -> DB Existence Gate -> Detail Fetch -> Raw Snapshot -> DB Upsert.
     """
-    def __init__(self, session: AsyncSession, client: PortalHttpClient):
+    def __init__(self, session: AsyncSession, client: Optional[PortalHttpClient] = None):
         self.session = session
         self.client = client
-        self.listing_spider = ListingSpider(client)
-        self.detail_spider = DetailSpider(client)
+        self.listing_spider = ListingSpider(client) if client else None
+        self.detail_spider = DetailSpider(client) if client else None
+        self._buyer_cache = {}
 
     async def tender_exists(self, portal_id: int) -> bool:
         """Checks 1st if a consultation ID already exists in the database"""
@@ -46,7 +47,10 @@ class BdcIngestionService:
         return [pid for pid in int_ids if pid not in existing_ids]
 
     async def get_or_create_buyer(self, official_name: str, location_hint: Optional[str] = None) -> Buyer:
-        slug = slugify(official_name)
+        slug = slugify(official_name)[:255]
+        if slug in self._buyer_cache:
+            return self._buyer_cache[slug]
+
         stmt = select(Buyer).where(Buyer.slug == slug)
         res = await self.session.execute(stmt)
         buyer = res.scalar_one_or_none()
@@ -56,12 +60,13 @@ class BdcIngestionService:
             buyer = Buyer(
                 slug=slug,
                 official_name=official_name,
-                buyer_type=buyer_type,
-                city=location_hint
+                buyer_type=buyer_type[:64],
+                city=location_hint[:64] if location_hint else None
             )
             self.session.add(buyer)
             await self.session.flush()
 
+        self._buyer_cache[slug] = buyer
         return buyer
 
     async def ingest_tender_detail(
@@ -72,8 +77,8 @@ class BdcIngestionService:
     ) -> Tender:
         """Atomically saves raw snapshot and inserts/updates Tender + LineItems into DB"""
         portal_id = int(detail_data["portal_id"])
-        reference = detail_data["reference"]
-        buyer_name = detail_data["buyer_name"] or "Acheteur Inconnu"
+        reference = (detail_data.get("reference") or "").strip()[:64]
+        buyer_name = (detail_data.get("buyer_name") or "Acheteur Inconnu").strip()
 
         # Check 1st: if tender is already in DB and skip_if_exists is True, return immediately
         stmt = select(Tender).where(Tender.portal_id == portal_id)
@@ -99,7 +104,7 @@ class BdcIngestionService:
                 pass
 
         # Standardized compound natural key matching AwardMatcher
-        compound_key = compute_compound_ref_key(buyer.official_name, reference, year)
+        compound_key = compute_compound_ref_key(buyer.official_name, reference, year)[:255]
 
         def safe_dt(val: Optional[str]) -> datetime:
             if not val:
@@ -112,12 +117,13 @@ class BdcIngestionService:
 
         published_dt = safe_dt(detail_data.get("published_at"))
         deadline_dt = safe_dt(detail_data.get("deadline_at"))
+        main_category = (detail_data.get("main_category") or "Fournitures")[:32]
 
         if tender:
             # Explicit update requested (skip_if_exists=False)
             tender.deadline_at = deadline_dt
-            tender.title = detail_data["title"]
-            tender.main_category = detail_data["main_category"]
+            tender.title = detail_data.get("title", "")
+            tender.main_category = main_category
             tender.prestation_type = detail_data.get("prestation_type")
             tender.execution_location = detail_data.get("execution_location")
             tender.attachment_available = detail_data.get("attachment_available", False)
@@ -133,12 +139,12 @@ class BdcIngestionService:
             # Create new tender
             tender = Tender(
                 portal_id=portal_id,
-                source_type="bdc",
+                source_type=(detail_data.get("source_type") or "bdc")[:32],
                 reference=reference,
                 compound_natural_key=compound_key,
                 buyer_id=buyer.id,
-                title=detail_data["title"],
-                main_category=detail_data["main_category"],
+                title=detail_data.get("title", ""),
+                main_category=main_category,
                 prestation_type=detail_data.get("prestation_type"),
                 execution_location=detail_data.get("execution_location"),
                 published_at=published_dt,
@@ -153,15 +159,30 @@ class BdcIngestionService:
 
         # Insert structured line items
         for item in detail_data.get("line_items", []):
+            qty_raw = item.get("quantity", 1.0)
+            try:
+                qty_dec = Decimal(str(qty_raw if qty_raw is not None else 1.0))
+            except Exception:
+                qty_dec = Decimal("1.00")
+
+            tva_raw = item.get("tva_rate", 20.0)
+            try:
+                tva_dec = Decimal(str(tva_raw if tva_raw is not None else 20.0))
+            except Exception:
+                tva_dec = Decimal("20.00")
+
+            extracted_brand = item.get("extracted_brand")
+
             line_item = LineItem(
                 tender_id=portal_id,
-                item_order=item["item_order"],
-                designation=item["designation"],
+                item_order=int(item.get("item_order", 1)),
+                designation=str(item.get("designation") or "Item"),
                 technical_specs=item.get("technical_specs"),
-                unit=item.get("unit", "U"),
-                quantity=Decimal(str(item.get("quantity", 1.0))),
-                tva_rate=Decimal(str(item.get("tva_rate", 20.0))),
-                warranty_required=item.get("warranty_required")
+                unit=str(item.get("unit") or "U")[:32],
+                quantity=qty_dec,
+                tva_rate=tva_dec,
+                warranty_required=item.get("warranty_required"),
+                extracted_brand=str(extracted_brand)[:128] if extracted_brand else None
             )
             self.session.add(line_item)
 

@@ -85,12 +85,13 @@ class OfflineImporter:
         session: AsyncSession,
         domain: str,
         items: List[Dict[str, Any]],
-        manifest: Dict[str, Any]
+        manifest: Dict[str, Any],
+        chunk_size: int = 100
     ) -> Dict[str, Any]:
         items_created = 0
-        items_updated = 0
         linked_tenders = 0
         errors = 0
+        total_items = len(items)
 
         if domain == "awards":
             service = AwardsIngestionService(session)
@@ -100,6 +101,10 @@ class OfflineImporter:
                     if award.tender_id:
                         linked_tenders += 1
                     items_created += 1
+
+                    if items_created % chunk_size == 0:
+                        await session.commit()
+                        logger.info(f"[OfflineImporter] Progress: {items_created}/{total_items} awards committed ({round(items_created/total_items*100, 1)}%).")
                 except Exception as e:
                     logger.error(f"[OfflineImporter] Failed to import award {item.get('reference')}: {e}")
                     errors += 1
@@ -110,16 +115,20 @@ class OfflineImporter:
                 try:
                     await service.ingest_tender_detail(item, skip_if_exists=False)
                     items_created += 1
+
+                    if items_created % chunk_size == 0:
+                        await session.commit()
+                        logger.info(f"[OfflineImporter] Progress: {items_created}/{total_items} BDC notices committed ({round(items_created/total_items*100, 1)}%).")
                 except Exception as e:
                     logger.error(f"[OfflineImporter] Failed to import BDC #{item.get('portal_id')}: {e}")
                     errors += 1
         else:
             raise OfflineImportError(f"Domaine d'importation inconnu: '{domain}' (attendus: 'awards' ou 'bdc')")
 
-        await session.flush()
+        await session.commit()
 
         logger.info(
-            f"[OfflineImporter] Import complete: {items_created} {domain} items processed, "
+            f"[OfflineImporter] Import complete: {items_created}/{total_items} {domain} items processed and committed, "
             f"{linked_tenders} linked to consultations, {errors} errors."
         )
 

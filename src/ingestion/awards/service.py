@@ -27,9 +27,13 @@ class AwardsIngestionService:
         self.client = client
         self.spider = ResultsSpider(client) if client else None
         self.matcher = AwardMatcher(session)
+        self._buyer_cache = {}
 
     async def get_or_create_buyer(self, official_name: str, location_hint: Optional[str] = None) -> Buyer:
-        slug = slugify(official_name)
+        slug = slugify(official_name)[:255]
+        if slug in self._buyer_cache:
+            return self._buyer_cache[slug]
+
         stmt = select(Buyer).where(Buyer.slug == slug)
         res = await self.session.execute(stmt)
         buyer = res.scalar_one_or_none()
@@ -39,12 +43,13 @@ class AwardsIngestionService:
             buyer = Buyer(
                 slug=slug,
                 official_name=official_name,
-                buyer_type=buyer_type,
-                city=location_hint
+                buyer_type=buyer_type[:64],
+                city=location_hint[:64] if location_hint else None
             )
             self.session.add(buyer)
             await self.session.flush()
 
+        self._buyer_cache[slug] = buyer
         return buyer
 
     async def ingest_award(self, award_data: dict, raw_log: Optional[RawIngestionLog] = None) -> Award:
@@ -57,16 +62,16 @@ class AwardsIngestionService:
             self.session.add(raw_log)
 
         buyer_name = (award_data.get("buyer_name") or "Acheteur Inconnu").strip()
-        reference = (award_data.get("reference") or "").strip()
+        reference = (award_data.get("reference") or "").strip()[:64]
         title = (award_data.get("title") or "").strip()
         winner_name = (award_data.get("winner_name") or "—").strip()
-        status = award_data.get("status") or "Attribué"
+        status = (award_data.get("status") or "Attribué").strip()[:32]
 
         # 1. Resolve Buyer entity
         await self.get_or_create_buyer(buyer_name)
 
         # 2. Compute canonical compound key
-        compound_key = compute_compound_ref_key(buyer_name, reference)
+        compound_key = compute_compound_ref_key(buyer_name, reference)[:255]
 
         # 3. Attempt multi-pass cross-linking with tender consultation
         tender_id = await self.matcher.find_matching_tender(
@@ -124,6 +129,7 @@ class AwardsIngestionService:
             logger.debug(f"Updated existing award {compound_key} [{winner_name}]")
         else:
             # Create new award record
+            winner_id = award_data.get("winner_identifier")
             award = Award(
                 tender_id=tender_id,
                 compound_ref_key=compound_key,
@@ -131,7 +137,7 @@ class AwardsIngestionService:
                 buyer_name_raw=buyer_name,
                 title_raw=title,
                 winner_name=winner_name,
-                winner_identifier=award_data.get("winner_identifier"),
+                winner_identifier=str(winner_id)[:64] if winner_id else None,
                 amount_ttc=amount,
                 devis_received_count=devis_count,
                 status=status,

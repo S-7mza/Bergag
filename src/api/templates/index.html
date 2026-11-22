@@ -2612,6 +2612,96 @@
                         </template>
                     </div>
 
+                    <!-- 3C. OFFLINE EXPORT GENERATOR WIDGET (Local File Export) -->
+                    <div class="bg-slate-900 rounded-2xl border border-dashed border-emerald-500/50 p-6 shadow-xl space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                            <div>
+                                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <span>📤</span> Exportateur Hors-Ligne (Collecte Locale en Fichier JSON)
+                                </h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5">
+                                    Collectez les attributions ou BDC directement depuis le portail vers un fichier JSON autonome pour l'importer plus tard sur le serveur distant.
+                                </p>
+                            </div>
+                            <span class="text-[10px] text-emerald-400 font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">Zéro Base de Données Requise</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Type de Données</label>
+                                <select x-model="offlineExportDomain" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                                    <option value="awards">Attributions & Résultats (Marchés Attribués)</option>
+                                    <option value="bdc">Bons de Commande Actifs (BDC)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Nombre de Pages (50/page)</label>
+                                <input type="number" min="1" max="50" x-model.number="offlineExportPages"
+                                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-400 mb-1">Mot-clé optionnel</label>
+                                <input type="text" placeholder="Ex: informatique, gardiennage" x-model="offlineExportKeyword"
+                                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-2">
+                            <button type="button" @click="triggerOfflineExport()"
+                                    :disabled="exportingOffline"
+                                    class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 flex items-center gap-2">
+                                <span x-show="!exportingOffline">📥</span>
+                                <span x-show="exportingOffline" class="animate-spin text-xs">⚙️</span>
+                                <span x-text="exportingOffline ? 'Collecte locale en cours...' : 'Générer le Fichier JSON Local'"></span>
+                            </button>
+
+                            <button type="button" @click="fetchOfflineExportsList()"
+                                    class="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                                <span>🔄</span> Actualiser la liste des fichiers
+                            </button>
+                        </div>
+
+                        <!-- Export Result Banner -->
+                        <template x-if="offlineExportResult">
+                            <div class="p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 text-xs font-mono space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold">✓ Export généré avec succès !</span>
+                                    <button type="button" @click="offlineExportResult = null" class="text-slate-400 hover:text-white">&times;</button>
+                                </div>
+                                <div class="text-[11px] text-slate-300">
+                                    Fichier : <strong class="text-white" x-text="offlineExportResult.output_file"></strong>
+                                </div>
+                                <div class="text-[11px] text-slate-400 flex gap-4">
+                                    <span>Éléments : <strong class="text-white" x-text="offlineExportResult.item_count"></strong></span>
+                                    <span>Total Portail : <strong class="text-white" x-text="offlineExportResult.portal_total_archive"></strong></span>
+                                    <span>Durée : <strong class="text-white" x-text="offlineExportResult.duration_seconds + 's'"></strong></span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Available Local Files List -->
+                        <template x-if="offlineExportsList && offlineExportsList.length > 0">
+                            <div class="mt-4 pt-3 border-t border-slate-800 space-y-2">
+                                <span class="text-[10px] text-slate-400 uppercase font-semibold">Fichiers d'Export Générés Récemment :</span>
+                                <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                                    <template x-for="f in offlineExportsList" :key="f.filename">
+                                        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-xs font-mono">
+                                            <div class="truncate mr-3">
+                                                <span class="text-slate-200" x-text="f.filename"></span>
+                                                <span class="text-[10px] text-slate-500 ml-2" x-text="f.size_kb + ' KB • ' + f.modified_at"></span>
+                                            </div>
+                                            <a :href="'/api/admin/ingestion/awards/offline/download/' + f.filename"
+                                               download
+                                               class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] rounded-lg transition-all flex items-center gap-1 shrink-0">
+                                                <span>⬇️</span> Télécharger
+                                            </a>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
                     <!-- 4. Awards Synchronization History (Dedicated Journal) -->
                     <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
                         <div class="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -3017,6 +3107,12 @@
                 offlineFileToUpload: null,
                 uploadingOffline: false,
                 offlineUploadResult: null,
+                offlineExportDomain: 'awards',
+                offlineExportPages: 5,
+                offlineExportKeyword: '',
+                exportingOffline: false,
+                offlineExportResult: null,
+                offlineExportsList: [],
                 pricingStudioBaseCost: 45000,
                 pricingStudioLogistics: 3500,
                 pricingStudioMarginPct: 30,
@@ -3732,6 +3828,46 @@
                 handleOfflineBundleSelect(event) {
                     if (event.target.files && event.target.files.length > 0) {
                         this.offlineFileToUpload = event.target.files[0];
+                    }
+                },
+
+                async fetchOfflineExportsList() {
+                    try {
+                        const res = await fetch('/api/admin/ingestion/awards/offline/list');
+                        if (res.ok) {
+                            this.offlineExportsList = await res.json();
+                        }
+                    } catch (e) {
+                        console.error('Failed to load offline exports list', e);
+                    }
+                },
+
+                async triggerOfflineExport() {
+                    this.exportingOffline = true;
+                    this.offlineExportResult = null;
+                    try {
+                        const query = new URLSearchParams({
+                            pages: this.offlineExportPages,
+                            domain: this.offlineExportDomain
+                        });
+                        if (this.offlineExportKeyword) {
+                            query.append('keyword', this.offlineExportKeyword);
+                        }
+                        const res = await fetch('/api/admin/ingestion/awards/offline/export?' + query.toString(), {
+                            method: 'POST'
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.offlineExportResult = data;
+                            this.showToast(data.item_count + ' éléments extraits en fichier local avec succès !', 'success');
+                            await this.fetchOfflineExportsList();
+                        } else {
+                            this.showToast(data.detail || 'Erreur lors de l\'exportation.', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur de connexion lors de la collecte.', 'error');
+                    } finally {
+                        this.exportingOffline = false;
                     }
                 },
 

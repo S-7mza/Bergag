@@ -30,6 +30,7 @@ APScheduler>=3.10.4
 # Web Dashboard & API
 fastapi>=0.110.0
 uvicorn>=0.29.0
+python-multipart>=0.0.9
 
 # Security & RBAC
 bcrypt>=4.1.0
