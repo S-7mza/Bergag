@@ -6,6 +6,7 @@ from src.engine.hard_filters import evaluate_hard_filters
 from src.engine.lexical_matcher import LexicalMatcher
 from src.engine.line_item_matcher import LineItemMatcher
 from src.engine.llm_judge import LLMJudge
+from src.engine.cancellation_tracker import is_cancellation_notice, extract_target_cancelled_reference
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +45,15 @@ class ScoringCascadeEngine:
         # --- Stage 1: Operational Gates & Pre-conditions ---
         is_eligible, hard_reasons = evaluate_hard_filters(tender_data, profile)
 
-        # Cancelled tenders are immediately dropped at Stage 1
-        is_cancelled = any("annul" in r.lower() for r in hard_reasons) or (tender_data.get("status") or "").lower().strip() in ("annule", "annulé")
+        # Cancelled tenders (or cancellation notices) are immediately dropped at Stage 1
+        is_cancelled = (
+            any("annul" in r.lower() for r in hard_reasons)
+            or (tender_data.get("status") or "").lower().strip() in ("annule", "annulé", "cancelled")
+            or is_cancellation_notice(tender_data.get("title"), tender_data.get("reference"))
+        )
         if is_cancelled:
+            target_ref = extract_target_cancelled_reference(tender_data.get("title"), tender_data.get("reference"))
+            target_msg = f" (Avis d'annulation visant réf: {target_ref})" if target_ref else ""
             return CascadeEvaluationResult(
                 overall_score=0.0,
                 decision_recommendation="NO-GO",
@@ -54,8 +61,8 @@ class ScoringCascadeEngine:
                 lexical_score=0.0,
                 feasibility_score=0.0,
                 line_item_matches=[],
-                red_flags=["Tender is officially cancelled ('Annulé')."],
-                llm_reasoning="Disqualified at Stage 1 (Hard Gate): Tender is officially cancelled ('Annulé')."
+                red_flags=[f"Tender is officially cancelled ('Annulé'){target_msg}."],
+                llm_reasoning=f"Disqualified at Stage 1 (Hard Gate): Tender is officially cancelled ('Annulé'){target_msg}."
             )
 
         # Build full text for lexical search

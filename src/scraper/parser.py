@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from bs4 import BeautifulSoup
 from typing import Any
+from src.engine.cancellation_tracker import is_cancellation_notice
 
 def clean_text(text: str | None) -> str:
     if not text:
@@ -62,8 +63,12 @@ def parse_listing_page(html: str) -> list[dict[str, Any]]:
         status = "active"
         if side:
             v_el = side.select_one('.bdc-card__v')
-            if v_el and "annulé" in v_el.get_text().lower():
+            if v_el and "annul" in v_el.get_text().lower():
                 status = "annule"
+
+        # Also detect if this consultation is itself a published cancellation notice
+        if is_cancellation_notice(title, reference):
+            status = "annule"
 
         # Portal ID from link
         link_el = card.select_one('a[href*="/show/"]')

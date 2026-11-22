@@ -16,6 +16,11 @@ from src.profiles.schema import CompanyProfileSchema
 from src.engine.scoring_cascade import ScoringCascadeEngine
 from src.engine.pricing_helper import PricingHelper
 from src.engine.pipeline_manager import pipeline_manager
+from src.engine.cancellation_tracker import (
+    is_cancellation_notice,
+    extract_target_cancelled_reference,
+    reconcile_database_cancellations
+)
 from src.api.schemas import (
     TenderFeedItem, 
     TenderDetailResponse, 
@@ -88,7 +93,7 @@ async def get_tender_feed(
     search: Optional[str] = Query(None, description="Search keyword in title, reference, or line items"),
     region: Optional[str] = Query(None, description="Filter by location/region"),
     category: Optional[str] = Query(None, description="Filter by category (Fournitures, Services, etc.)"),
-    urgency: Optional[str] = Query(None, description="Urgency filter (urgent_24h, urgent_48h)"),
+    urgency: Optional[str] = Query(None, description="Urgency / Deadline filter ('1d', '2d', '3d', '4d', '1w', '2w', '1m', 'urgent_24h', 'urgent_48h')"),
     status_filter: Optional[str] = Query("all", description="Status filter: 'all', 'open' (eliminate closed), 'closed'"),
     exclude_closed: bool = Query(False, description="Whether to eliminate closed/expired offers"),
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, deadline_asc, items_desc, id_desc)"),
@@ -152,14 +157,52 @@ async def get_tender_feed(
     is_open_only = (status_filter == "open" or exclude_closed)
 
     if is_open_only:
-        stmt = stmt.where(Tender.deadline_at > now)
+        stmt = stmt.where(
+            Tender.deadline_at > now,
+            Tender.status != "annule",
+            Tender.status != "cancelled",
+            ~Tender.title.ilike("%annulation%"),
+            ~Tender.title.ilike("%annule et remplace%"),
+            ~Tender.reference.ilike("DA%")
+        )
     elif status_filter == "closed":
         stmt = stmt.where(Tender.deadline_at <= now)
+    elif status_filter == "cancelled":
+        stmt = stmt.where(
+            or_(
+                Tender.status.in_(["annule", "cancelled"]),
+                Tender.title.ilike("%annulation%"),
+                Tender.title.ilike("%annule et remplace%"),
+                Tender.reference.ilike("DA%")
+            )
+        )
 
-    if urgency == "urgent_24h":
-        stmt = stmt.where(Tender.deadline_at > now, Tender.deadline_at <= (now + timedelta(hours=24)))
-    elif urgency == "urgent_48h":
-        stmt = stmt.where(Tender.deadline_at > now, Tender.deadline_at <= (now + timedelta(hours=48)))
+    # Urgency / Deadline filtering (closing in 1d, 2d, 3d, 4d, 1w, 2w, 1m)
+    urgency_days_map = {
+        "1d": 1,
+        "24h": 1,
+        "urgent_24h": 1,
+        "2d": 2,
+        "48h": 2,
+        "urgent_48h": 2,
+        "3d": 3,
+        "72h": 3,
+        "4d": 4,
+        "96h": 4,
+        "5d": 5,
+        "1w": 7,
+        "7d": 7,
+        "2w": 14,
+        "14d": 14,
+        "1m": 30,
+        "30d": 30
+    }
+    if urgency and urgency in urgency_days_map:
+        days_limit = urgency_days_map[urgency]
+        stmt = stmt.where(
+            Tender.deadline_at > now,
+            Tender.deadline_at <= (now + timedelta(days=days_limit))
+        )
 
     # Fetch candidate pool (up to 500 candidate tenders)
     stmt = stmt.order_by(Tender.deadline_at.asc()).limit(500)
@@ -196,6 +239,14 @@ async def get_tender_feed(
 
         cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
+        # Determine verdict: if officially cancelled or an annulation notice, verdict is ANNULÉ
+        decision_verdict = cascade_res.decision_recommendation
+        if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
+            decision_verdict = "ANNULÉ"
+            overall_score = 0.0
+        else:
+            overall_score = cascade_res.overall_score
+
         scored_items.append(
             TenderFeedItem(
                 portal_id=t.portal_id,
@@ -207,23 +258,29 @@ async def get_tender_feed(
                 published_at=t.published_at.strftime("%d/%m/%Y %H:%M"),
                 deadline_at=t.deadline_at.strftime("%d/%m/%Y %H:%M"),
                 status=t.status,
-                match_score=cascade_res.overall_score,
-                decision_verdict=cascade_res.decision_recommendation,
+                match_score=overall_score,
+                decision_verdict=decision_verdict,
                 line_item_count=len(t.line_items),
                 portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}"
             )
         )
 
-    # Eliminate closed/expired offers if requested
+    # Eliminate closed/expired or cancelled offers if requested
     if is_open_only:
         scored_items = [
             item for item in scored_items 
-            if "CLÔTURÉ" not in item.decision_verdict and "CLOTURE" not in item.decision_verdict
+            if item.decision_verdict not in ("CLÔTURÉ", "ANNULÉ")
+            and not is_cancellation_notice(item.title, item.reference)
         ]
     elif status_filter == "closed":
         scored_items = [
             item for item in scored_items 
-            if "CLÔTURÉ" in item.decision_verdict or "CLOTURE" in item.decision_verdict
+            if item.decision_verdict == "CLÔTURÉ"
+        ]
+    elif status_filter == "cancelled":
+        scored_items = [
+            item for item in scored_items 
+            if item.decision_verdict == "ANNULÉ" or is_cancellation_notice(item.title, item.reference)
         ]
 
     # Compute comprehensive sector statistics across all scored candidate items
@@ -250,6 +307,21 @@ async def get_tender_feed(
         feed_items.sort(key=lambda x: x.match_score, reverse=True)
 
     return feed_items[:limit]
+
+@router.post("/reconcile-cancellations")
+async def trigger_cancellation_reconciliation(
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Scans for cancellation notices and cross-links them to previous tenders published
+    by the same public buyer, marking the previous tenders as cancelled ('annule').
+    """
+    result = await reconcile_database_cancellations(session)
+    return {
+        "success": True,
+        "message": f"Réconciliation des annulations : {result['notices_tagged']} avis d'annulation marqués, {result['targets_cancelled']} offres cibles annulées.",
+        "details": result
+    }
 
 @router.get("/tenders/{portal_id}", response_model=TenderDetailResponse)
 async def get_tender_detail(

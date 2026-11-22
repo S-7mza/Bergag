@@ -482,6 +482,11 @@ def test_feed_status_filter_open_eliminates_closed(client):
         items_all = res_all.json()
         assert len(items_all) == 2
         assert res_all.headers["x-total-count"] == "2"
+
+        # 3. Test deadline urgency filters (1d, 2d, 3d, 4d, 1w, 2w, 1m)
+        for u in ["1d", "2d", "3d", "4d", "1w", "2w", "1m", "urgent_24h", "urgent_48h"]:
+            u_res = client.get(f"/api/feed?profile_name=it_hardware&urgency={u}")
+            assert u_res.status_code == 200
     finally:
         app.dependency_overrides.pop(get_db_session, None)
 

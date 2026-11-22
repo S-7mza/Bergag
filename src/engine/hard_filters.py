@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Tuple, List
 from src.profiles.schema import CompanyProfileSchema
+from src.engine.cancellation_tracker import is_cancellation_notice
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +17,11 @@ def evaluate_hard_filters(tender_data: dict, profile: CompanyProfileSchema) -> T
     """
     reasons = []
 
-    # 1. Status Filter
+    # 1. Status Filter (both in-place cancellation and published cancellation notices)
     status = (tender_data.get("status") or "active").lower().strip()
-    if status in ("annule", "annulé"):
-        reasons.append("Consultation officiellement annulée par l'acheteur.")
+    is_cancelled_notice = is_cancellation_notice(tender_data.get("title"), tender_data.get("reference"))
+    if status in ("annule", "annulé", "cancelled") or is_cancelled_notice:
+        reasons.append("Consultation officiellement annulée par l'acheteur (ou avis de décision d'annulation).")
 
     # 2. Deadline Remaining Buffer
     deadline_at_str = tender_data.get("deadline_at")
