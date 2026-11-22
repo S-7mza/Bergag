@@ -174,17 +174,57 @@
 
                 <div class="flex items-center gap-3">
 
-                    <div class="hidden sm:flex items-center gap-1.5">
-                        <div class="flex items-center bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs shadow-sm">
-                            <span class="text-slate-500 mr-2 text-[11px] font-medium">Secteur :</span>
-                            <select x-model="selectedProfile" @change="fetchFeed()" class="bg-slate-950 text-white text-xs font-semibold focus:ring-0 outline-none cursor-pointer max-w-[230px] truncate">
-                                <template x-for="p in availableProfiles" :key="p.id">
-                                    <option class="bg-slate-900 text-slate-100 py-1" :value="p.id" x-text="(p.icon || '🏷️') + ' ' + p.profile_name"></option>
-                                </template>
-                                <template x-if="!availableProfiles || availableProfiles.length === 0">
-                                    <option class="bg-slate-900 text-slate-100 py-1" value="it_hardware">🖥️ Matériel Informatique & Réseaux</option>
-                                </template>
-                            </select>
+                    <div class="hidden sm:flex items-center gap-1.5" x-data="{ sectorDropdownOpen: false }">
+                        <div class="relative">
+                            <button type="button" @click="sectorDropdownOpen = !sectorDropdownOpen"
+                                    class="flex items-center bg-slate-950 hover:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-xs shadow-sm transition-all text-white gap-2 max-w-[270px]">
+                                <span class="text-slate-500 text-[11px] font-medium shrink-0">Secteur :</span>
+                                <span class="font-semibold truncate flex items-center gap-1.5 text-slate-100" x-text="getProfileLabel(selectedProfile)">
+                                    🖥️ Matériel Informatique & Réseaux
+                                </span>
+                                <svg class="w-3.5 h-3.5 text-slate-400 shrink-0 ml-auto transition-transform" :class="sectorDropdownOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+
+                            <!-- Custom Dark Theme Dropdown Menu -->
+                            <div x-show="sectorDropdownOpen" @click.away="sectorDropdownOpen = false" x-cloak
+                                 x-transition:enter="transition ease-out duration-100"
+                                 x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:enter-end="opacity-100 scale-100"
+                                 x-transition:leave="transition ease-in duration-75"
+                                 x-transition:leave-start="opacity-100 scale-100"
+                                 x-transition:leave-end="opacity-0 scale-95"
+                                 class="absolute left-0 mt-1.5 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-1.5 max-h-96 overflow-y-auto">
+                                <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 mb-1 flex items-center justify-between">
+                                    <span>Choisir un Secteur Métier</span>
+                                    <span class="text-emerald-400 font-mono" x-text="availableProfiles.length + ' profils'"></span>
+                                </div>
+                                <div class="space-y-0.5">
+                                    <template x-for="p in availableProfiles" :key="p.id">
+                                        <button type="button" @click="selectedProfile = p.id; sectorDropdownOpen = false; fetchFeed()"
+                                                :class="selectedProfile === p.id ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-200 hover:bg-slate-800/80 border border-transparent'"
+                                                class="w-full text-left px-2.5 py-2 rounded-xl text-xs flex items-center gap-2.5 transition-colors">
+                                            <span class="text-base shrink-0" x-text="p.icon || '🏷️'"></span>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="truncate text-xs font-semibold" x-text="p.profile_name"></div>
+                                                <div class="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                                                    <span x-text="p.catalog_count + ' concepts'"></span>
+                                                    <span>&bull;</span>
+                                                    <span x-text="p.keywords_count + ' mots-clés'"></span>
+                                                </div>
+                                            </div>
+                                            <span x-show="selectedProfile === p.id" class="text-emerald-400 font-bold text-xs shrink-0">✓</span>
+                                        </button>
+                                    </template>
+                                </div>
+                                <div class="pt-1.5 mt-1 border-t border-slate-800/80">
+                                    <button type="button" @click="sectorDropdownOpen = false; openSectorManager()"
+                                            class="w-full text-center px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 text-xs font-medium transition-colors flex items-center justify-center gap-1.5">
+                                        <span>⚙️</span> Gérer les Secteurs & Mots-clés
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Button to open Sector & Keyword Manager -->
@@ -1611,6 +1651,7 @@
                             <label class="text-[10px] text-slate-500 font-semibold block mb-1">Clôture / Échéance</label>
 
                             <select x-model="selectedUrgency" @change="fetchFeed()" class="w-full bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-emerald-500 outline-none">
+                            <option x-show="selectedUrgencies.length > 1" :value="selectedUrgency" x-text="'✨ ' + selectedUrgencies.length + ' intervalles sélectionnés'"></option>
                             <option value="all">Tous les délais</option>
                             <option value="1d">🚨 Moins de 24h (≤ 1 jour)</option>
                             <option value="2d">⏳ Entre 1 et 2 jours (24h à 48h)</option>
@@ -1671,64 +1712,73 @@
                         </button>
                     </div>
 
-                    <!-- Quick Deadline / Clôture Filter Pills (Plages d'échéances discrètes) -->
+                    <!-- Quick Deadline / Clôture Filter Pills (Plages d'échéances discrètes & Sélection Multiple) -->
                     <div class="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-slate-800/50">
                         <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1 mr-1">
-                            <span>⏱️</span> Échéance :
+                            <span>⏱️</span> Échéances :
                         </span>
-                        <button type="button" @click="setUrgency('all')"
-                                :class="selectedUrgency === 'all' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold shadow-sm' : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'"
-                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95">
+                        <button type="button" @click="toggleUrgency('all')"
+                                :class="selectedUrgencies.length === 0 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold shadow-sm ring-1 ring-emerald-500/30' : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'"
+                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95"
+                                title="Réinitialiser et afficher tous les délais">
                             Tous
                         </button>
-                        <button type="button" @click="setUrgency('1d')"
-                                :class="selectedUrgency === '1d' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold shadow-sm ring-1 ring-rose-500/50' : 'bg-slate-950 text-slate-400 hover:text-rose-300 border-slate-800'"
+                        <button type="button" @click="toggleUrgency('1d')"
+                                :class="selectedUrgencies.includes('1d') ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold shadow-sm ring-1 ring-rose-500/50' : 'bg-slate-950 text-slate-400 hover:text-rose-300 border-slate-800'"
                                 class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
-                                title="Clôture imminente en moins de 24h">
-                            <span class="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                                title="Moins de 24h (cliquer pour activer/désactiver)">
+                            <span class="h-1.5 w-1.5 rounded-full bg-rose-500" :class="selectedUrgencies.includes('1d') ? 'animate-ping' : ''"></span>
                             <span>&lt; 1 jour</span>
+                            <span x-show="selectedUrgencies.includes('1d')" class="text-[9px] font-bold ml-0.5">✓</span>
                         </button>
-                        <button type="button" @click="setUrgency('2d')"
-                                :class="selectedUrgency === '2d' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold shadow-sm ring-1 ring-amber-500/50' : 'bg-slate-950 text-slate-400 hover:text-amber-300 border-slate-800'"
+                        <button type="button" @click="toggleUrgency('2d')"
+                                :class="selectedUrgencies.includes('2d') ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold shadow-sm ring-1 ring-amber-500/50' : 'bg-slate-950 text-slate-400 hover:text-amber-300 border-slate-800'"
                                 class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
-                                title="Clôture entre 1 jour et 2 jours (24h à 48h)">
+                                title="Entre 1 et 2 jours (24h à 48h)">
                             <span>⏳ 1 à 2 jours</span>
+                            <span x-show="selectedUrgencies.includes('2d')" class="text-[9px] font-bold ml-0.5">✓</span>
                         </button>
-                        <button type="button" @click="setUrgency('3d')"
-                                :class="selectedUrgency === '3d' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold shadow-sm ring-1 ring-amber-500/50' : 'bg-slate-950 text-slate-400 hover:text-amber-300 border-slate-800'"
-                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95"
-                                title="Clôture entre 2 jours et 3 jours (48h à 72h)">
-                            2 à 3 jours
-                        </button>
-                        <button type="button" @click="setUrgency('4d')"
-                                :class="selectedUrgency === '4d' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold shadow-sm ring-1 ring-amber-500/50' : 'bg-slate-950 text-slate-400 hover:text-amber-300 border-slate-800'"
-                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95"
-                                title="Clôture entre 3 jours et 4 jours (72h à 96h)">
-                            3 à 4 jours
-                        </button>
-                        <button type="button" @click="setUrgency('1w')"
-                                :class="selectedUrgency === '1w' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
+                        <button type="button" @click="toggleUrgency('3d')"
+                                :class="selectedUrgencies.includes('3d') ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold shadow-sm ring-1 ring-amber-500/50' : 'bg-slate-950 text-slate-400 hover:text-amber-300 border-slate-800'"
                                 class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
-                                title="Clôture entre 4 jours et 1 semaine (4j à 7j)">
+                                title="Entre 2 et 3 jours (48h à 72h)">
+                            <span>2 à 3 jours</span>
+                            <span x-show="selectedUrgencies.includes('3d')" class="text-[9px] font-bold ml-0.5">✓</span>
+                        </button>
+                        <button type="button" @click="toggleUrgency('4d')"
+                                :class="selectedUrgencies.includes('4d') ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold shadow-sm ring-1 ring-amber-500/50' : 'bg-slate-950 text-slate-400 hover:text-amber-300 border-slate-800'"
+                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
+                                title="Entre 3 et 4 jours (72h à 96h)">
+                            <span>3 à 4 jours</span>
+                            <span x-show="selectedUrgencies.includes('4d')" class="text-[9px] font-bold ml-0.5">✓</span>
+                        </button>
+                        <button type="button" @click="toggleUrgency('1w')"
+                                :class="selectedUrgencies.includes('1w') ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
+                                class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
+                                title="Entre 4 jours et 1 semaine (4j à 7j)">
                             <span>📅 4j à 1 sem.</span>
+                            <span x-show="selectedUrgencies.includes('1w')" class="text-[9px] font-bold ml-0.5">✓</span>
                         </button>
-                        <button type="button" @click="setUrgency('2w')"
-                                :class="selectedUrgency === '2w' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
+                        <button type="button" @click="toggleUrgency('2w')"
+                                :class="selectedUrgencies.includes('2w') ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
                                 class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
-                                title="Clôture entre 1 semaine et 2 semaines (7j à 14j)">
+                                title="Entre 1 et 2 semaines (7j à 14j)">
                             <span>📅 1 à 2 sem.</span>
+                            <span x-show="selectedUrgencies.includes('2w')" class="text-[9px] font-bold ml-0.5">✓</span>
                         </button>
-                        <button type="button" @click="setUrgency('1m')"
-                                :class="selectedUrgency === '1m' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
+                        <button type="button" @click="toggleUrgency('1m')"
+                                :class="selectedUrgencies.includes('1m') ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
                                 class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
-                                title="Clôture entre 2 semaines et 1 mois (14j à 30j)">
+                                title="Entre 2 semaines et 1 mois (14j à 30j)">
                             <span>📆 2 sem. à 1 mois</span>
+                            <span x-show="selectedUrgencies.includes('1m')" class="text-[9px] font-bold ml-0.5">✓</span>
                         </button>
-                        <button type="button" @click="setUrgency('gt_1m')"
-                                :class="selectedUrgency === 'gt_1m' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
+                        <button type="button" @click="toggleUrgency('gt_1m')"
+                                :class="selectedUrgencies.includes('gt_1m') ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold shadow-sm ring-1 ring-indigo-500/50' : 'bg-slate-950 text-slate-400 hover:text-indigo-300 border-slate-800'"
                                 class="px-2.5 py-1 rounded-lg text-[11px] border transition-all active:scale-95 flex items-center gap-1"
-                                title="Clôture dans plus d'un mois (> 30 jours)">
+                                title="Plus d'un mois (> 30 jours)">
                             <span>📆 &gt; 1 mois</span>
+                            <span x-show="selectedUrgencies.includes('gt_1m')" class="text-[9px] font-bold ml-0.5">✓</span>
                         </button>
                     </div>
 
@@ -7236,7 +7286,22 @@
 
                 selectedCategory: 'all',
 
-                selectedUrgency: 'all',
+                selectedUrgencies: [],
+
+                get selectedUrgency() {
+                    if (!this.selectedUrgencies || this.selectedUrgencies.length === 0) return 'all';
+                    if (this.selectedUrgencies.length === 1) return this.selectedUrgencies[0];
+                    return this.selectedUrgencies.join(',');
+                },
+
+                set selectedUrgency(val) {
+                    if (!val || val === 'all') {
+                        this.selectedUrgencies = [];
+                    } else {
+                        const parts = String(val).split(',').map(s => s.trim()).filter(s => s.length > 0 && s !== 'all');
+                        this.selectedUrgencies = Array.from(new Set(parts));
+                    }
+                },
 
                 sortBy: 'score_desc',
 
@@ -8009,27 +8074,34 @@
                         chips.push({ key: 'category', label: catLabel });
                     }
 
-                    if (this.selectedUrgency !== 'all') {
-                        const urgencyLabels = {
-                            '1d': '🚨 Échéance : < 1 jour (≤ 24h)',
-                            'under_1d': '🚨 Échéance : < 1 jour (≤ 24h)',
-                            'urgent_24h': '🚨 Échéance : < 1 jour (≤ 24h)',
-                            '2d': '⏳ Échéance : 1 à 2 jours',
-                            '1_2d': '⏳ Échéance : 1 à 2 jours',
-                            'urgent_48h': '⏳ Échéance : 1 à 2 jours',
-                            '3d': '⏳ Échéance : 2 à 3 jours',
-                            '2_3d': '⏳ Échéance : 2 à 3 jours',
-                            '4d': '⏳ Échéance : 3 à 4 jours',
-                            '3_4d': '⏳ Échéance : 3 à 4 jours',
-                            '1w': '📅 Échéance : 4j à 1 semaine',
-                            '4_7d': '📅 Échéance : 4j à 1 semaine',
-                            '2w': '📅 Échéance : 1 à 2 semaines',
-                            '1_2w': '📅 Échéance : 1 à 2 semaines',
-                            '1m': '📆 Échéance : 2 sem. à 1 mois',
-                            '2w_1m': '📆 Échéance : 2 sem. à 1 mois',
-                            'gt_1m': '📆 Échéance : > 1 mois',
-                            'over_1m': '📆 Échéance : > 1 mois'
-                        };
+                    const urgencyLabels = {
+                        '1d': '🚨 < 1 jour (≤ 24h)',
+                        'under_1d': '🚨 < 1 jour (≤ 24h)',
+                        'urgent_24h': '🚨 < 1 jour (≤ 24h)',
+                        '2d': '⏳ 1 à 2 jours',
+                        '1_2d': '⏳ 1 à 2 jours',
+                        'urgent_48h': '⏳ 1 à 2 jours',
+                        '3d': '⏳ 2 à 3 jours',
+                        '2_3d': '⏳ 2 à 3 jours',
+                        '4d': '⏳ 3 à 4 jours',
+                        '3_4d': '⏳ 3 à 4 jours',
+                        '1w': '📅 4j à 1 sem.',
+                        '4_7d': '📅 4j à 1 sem.',
+                        '2w': '📅 1 à 2 sem.',
+                        '1_2w': '📅 1 à 2 sem.',
+                        '1m': '📆 2 sem. à 1 mois',
+                        '2w_1m': '📆 2 sem. à 1 mois',
+                        'gt_1m': '📆 > 1 mois',
+                        'over_1m': '📆 > 1 mois'
+                    };
+                    if (this.selectedUrgencies && this.selectedUrgencies.length > 0) {
+                        for (const u of this.selectedUrgencies) {
+                            chips.push({
+                                key: 'urgency_' + u,
+                                label: 'Échéance: ' + (urgencyLabels[u] || u)
+                            });
+                        }
+                    } else if (this.selectedUrgency !== 'all') {
                         chips.push({ key: 'urgency', label: urgencyLabels[this.selectedUrgency] || ('Échéance: ' + this.selectedUrgency) });
                     }
 
@@ -8067,7 +8139,17 @@
 
                     if (key === 'category') this.selectedCategory = 'all';
 
-                    if (key === 'urgency') this.selectedUrgency = 'all';
+                    if (key === 'urgency') {
+
+                        this.selectedUrgencies = [];
+
+                    } else if (key && key.startsWith('urgency_')) {
+
+                        const uVal = key.replace('urgency_', '');
+
+                        this.selectedUrgencies = (this.selectedUrgencies || []).filter(u => u !== uVal);
+
+                    }
 
 
 
@@ -8545,9 +8627,23 @@
                 },
 
 
-                setUrgency(val) {
-                    this.selectedUrgency = val;
+                toggleUrgency(val) {
+                    if (!this.selectedUrgencies) this.selectedUrgencies = [];
+                    if (!val || val === 'all') {
+                        this.selectedUrgencies = [];
+                    } else {
+                        const idx = this.selectedUrgencies.indexOf(val);
+                        if (idx > -1) {
+                            this.selectedUrgencies.splice(idx, 1);
+                        } else {
+                            this.selectedUrgencies.push(val);
+                        }
+                    }
                     this.fetchFeed();
+                },
+
+                setUrgency(val) {
+                    this.toggleUrgency(val);
                 },
 
                 resetFilters() {
@@ -8559,6 +8655,8 @@
                     this.selectedRegion = 'all';
 
                     this.selectedCategory = 'all';
+
+                    this.selectedUrgencies = [];
 
                     this.selectedUrgency = 'all';
 

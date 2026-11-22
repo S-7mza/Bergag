@@ -122,5 +122,16 @@ def test_urgency_discrete_interval_filtering(client):
         for key in ["1d", "2d", "3d", "4d", "1w", "2w", "1m", "gt_1m"]:
             res = client.get(f"/api/feed?profile_name=it_hardware&urgency={key}")
             assert res.status_code == 200
+
+        # Multi-selection: comma-separated intervals
+        res_multi = client.get("/api/feed?profile_name=it_hardware&urgency=1d,2d")
+        assert res_multi.status_code == 200
+
+        res_multi3 = client.get("/api/feed?profile_name=it_hardware&urgency=1d,2d,3d")
+        assert res_multi3.status_code == 200
+
+        # Multi-selection with region & category
+        res_multi_all = client.get("/api/feed?profile_name=it_hardware&urgency=2d,3d&region=Casablanca,Rabat&category=Fournitures,Services")
+        assert res_multi_all.status_code == 200
     finally:
         app.dependency_overrides.pop(get_db_session, None)

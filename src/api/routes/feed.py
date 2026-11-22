@@ -357,13 +357,18 @@ async def get_tender_feed(
                     stmt = stmt.where(~Tender.title.ilike(f"%{nkw}%"))
 
     if region and region != "all":
-        stmt = stmt.where(Tender.execution_location.ilike(f"%{region}%"))
+        region_list = [r.strip() for r in region.split(",") if r.strip() and r.strip().lower() != "all"]
+        if region_list:
+            stmt = stmt.where(or_(*[Tender.execution_location.ilike(f"%{r}%") for r in region_list]))
 
     if category and category != "all":
         cat_clean = category.lower().strip()
         if cat_clean in ("both", "materiel_services", "fournitures_services", "materiel_service", "all_tech"):
             # Include both Fournitures (Matériel) and Services, while excluding Travaux/Civil works
             stmt = stmt.where(Tender.main_category.in_(["Fournitures", "Services"]))
+        elif "," in category:
+            cats = [c.strip() for c in category.split(",") if c.strip()]
+            stmt = stmt.where(or_(*[Tender.main_category.ilike(f"%{c}%") for c in cats]))
         elif cat_clean in ("fournitures", "materiel", "matériel"):
             # Matériel / Fournitures alone
             stmt = stmt.where(or_(Tender.main_category.ilike("%Fourniture%"), Tender.main_category.ilike("%materiel%")))
@@ -400,13 +405,25 @@ async def get_tender_feed(
             )
         )
 
-    if urgency and urgency in URGENCY_RANGE_MAP:
-        min_days, max_days = URGENCY_RANGE_MAP[urgency]
-        min_boundary = now + timedelta(days=min_days) if min_days > 0 else now
-        stmt = stmt.where(Tender.deadline_at > min_boundary)
-        if max_days is not None:
-            max_boundary = now + timedelta(days=max_days)
-            stmt = stmt.where(Tender.deadline_at <= max_boundary)
+    # Multi-selection support for urgency / deadline intervals (e.g. "1_2d,2_3d" or "1d,2d")
+    if urgency and urgency.strip() and urgency.strip().lower() != "all":
+        raw_keys = [k.strip() for k in urgency.split(",") if k.strip()]
+        valid_intervals = [URGENCY_RANGE_MAP[k] for k in raw_keys if k in URGENCY_RANGE_MAP]
+
+        if valid_intervals:
+            interval_conditions = []
+            for min_days, max_days in valid_intervals:
+                min_boundary = now + timedelta(days=min_days) if min_days > 0 else now
+                if max_days is not None:
+                    max_boundary = now + timedelta(days=max_days)
+                    interval_conditions.append(
+                        (Tender.deadline_at > min_boundary) & (Tender.deadline_at <= max_boundary)
+                    )
+                else:
+                    interval_conditions.append(Tender.deadline_at > min_boundary)
+
+            if interval_conditions:
+                stmt = stmt.where(or_(*interval_conditions))
 
     # Fetch candidate pool (sized to evaluate all active tenders in DB, up to 5000)
     pool_limit = max(limit, 3000)
