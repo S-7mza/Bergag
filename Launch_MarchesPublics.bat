@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
-title "Marches Publics Maroc - Intelligence et Ingestion Suite"
-cd /d "%~dp0"
+title Marches Publics Maroc - Intelligence et Ingestion Suite
+cd /d "%~dp0."
 
 echo ======================================================================
 echo   MARCHES PUBLICS MAROC - LANCEUR ET INGESTION HORS-LIGNE
@@ -41,7 +41,7 @@ pause
 exit /b 1
 
 :run
-"%PYTHON_EXE%" scripts\launcher.py %*
+"%PYTHON_EXE%" "%~dp0scripts\launcher.py" %*
 if %errorlevel% neq 0 (
     echo.
     echo Le programme s'est arrete avec le code %errorlevel%.

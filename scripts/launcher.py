@@ -328,14 +328,24 @@ async def upload_file_to_live_server(file_path: Path, server_url: str):
 
     try:
         async with httpx.AsyncClient(timeout=upload_timeout, verify=False) as client:
-            for endpoint in candidate_endpoints:
-                print(f"    -> Tentative d'envoi vers : {endpoint}...", end="\r")
-                with open(file_path, "rb") as f:
-                    files = {"file": (file_path.name, f, "application/json")}
-                    resp = await client.post(endpoint, files=files)
+            multipart_endpoints = [
+                f"{server_url}/api/admin/ingestion/offline/upload",
+                f"{server_url}/api/admin/ingestion/{domain}/offline/upload",
+                f"{server_url}/api/admin/ingestion/awards/offline/upload"
+            ]
 
-                last_status = resp.status_code
-                last_response_text = resp.text
+            last_status = None
+            needs_json_fallback = False
+
+            for endpoint in multipart_endpoints:
+                print(f"    -> Tentative d'envoi multipart vers : {endpoint}...", end="\r")
+                try:
+                    with open(file_path, "rb") as f:
+                        files = {"file": (file_path.name, f, "application/json")}
+                        resp = await client.post(endpoint, files=files)
+                    last_status = resp.status_code
+                except Exception:
+                    continue
 
                 if resp.status_code == 200:
                     data = resp.json()
@@ -345,29 +355,34 @@ async def upload_file_to_live_server(file_path: Path, server_url: str):
                     print(f"    - Éléments importés   : {data.get('items_processed')} / {data.get('items_total')}")
                     print(f"    - Consultations liées : {data.get('linked_tenders', 0)}")
                     print(f"    - Erreurs             : {data.get('errors_count', 0)}")
-                    success = True
+                    return
+                elif resp.status_code == 503:
+                    print(f"\n{TermColor.YELLOW}[!] Serveur sans module multipart (503). Bascule automatique vers le mode JSON direct...{TermColor.RESET}")
+                    needs_json_fallback = True
                     break
                 elif resp.status_code == 404:
-                    # Try next candidate endpoint
                     continue
                 else:
-                    # Non-404 error (e.g. 422, 500)
-                    print(f"\n\n{TermColor.RED}[!] Erreur serveur HTTP {resp.status_code} sur {endpoint} :{TermColor.RESET}")
-                    print(f"    {resp.text[:300]}")
-                    return
+                    print(f"\n{TermColor.YELLOW}[!] Réponse HTTP {resp.status_code} sur {endpoint}. Tentative en mode JSON direct...{TermColor.RESET}")
+                    needs_json_fallback = True
+                    break
 
-        if not success:
-            # Fallback attempt via direct JSON body sync (does not require python-multipart)
+            # 2. Try JSON payload endpoints (fallback when multipart is absent or failed)
             json_endpoints = [
                 f"{server_url}/api/admin/ingestion/offline/sync-json",
+                f"{server_url}/api/admin/ingestion/{domain}/offline/sync-json",
                 f"{server_url}/api/admin/ingestion/awards/offline/sync-json"
             ]
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    bundle_payload = json.load(f)
-                for j_ep in json_endpoints:
-                    print(f"    -> Tentative directe (JSON payload) vers : {j_ep}...", end="\r")
-                    resp = await client.post(j_ep, json=bundle_payload)
+            print(f"    -> Lecture du bundle JSON pour transmission directe...")
+            with open(file_path, "rb") as f:
+                file_content = f.read()
+
+            headers = {"Content-Type": "application/json"}
+            for j_ep in json_endpoints:
+                print(f"    -> Tentative directe (JSON payload) vers : {j_ep}...", end="\r")
+                try:
+                    resp = await client.post(j_ep, content=file_content, headers=headers)
+                    last_status = resp.status_code
                     if resp.status_code == 200:
                         data = resp.json()
                         print(f"\n\n{TermColor.GREEN}{TermColor.BOLD}[✓] Synchronisation réussie sur le serveur (Mode JSON direct) !{TermColor.RESET}")
@@ -376,17 +391,21 @@ async def upload_file_to_live_server(file_path: Path, server_url: str):
                         print(f"    - Éléments importés   : {data.get('items_processed')} / {data.get('items_total')}")
                         print(f"    - Consultations liées : {data.get('linked_tenders', 0)}")
                         print(f"    - Erreurs             : {data.get('errors_count', 0)}")
-                        success = True
-                        break
-            except Exception:
-                pass
+                        return
+                    elif resp.status_code == 404:
+                        continue
+                    else:
+                        print(f"\n\n{TermColor.RED}[!] Erreur HTTP {resp.status_code} sur {j_ep} :{TermColor.RESET}")
+                        print(f"    {resp.text[:300]}")
+                        return
+                except Exception:
+                    continue
 
-        if not success:
-            print(f"\n\n{TermColor.RED}{TermColor.BOLD}[!] Échec de synchronisation : Le serveur a répondu HTTP {last_status or 404} (Introuvable).{TermColor.RESET}")
+            # If all failed:
+            print(f"\n\n{TermColor.RED}{TermColor.BOLD}[!] Échec de synchronisation : Le serveur a répondu HTTP {last_status or 404}.{TermColor.RESET}")
             print(f"    - Serveur ciblé : {server_url}")
             print(f"\n{TermColor.YELLOW}💡 Explication & Résolution :{TermColor.RESET}")
-            print(f"    1. Le serveur distant ({server_url}) fonctionne actuellement avec une version antérieure du code.")
-            print(f"       -> Pour l'activer, connectez-vous au serveur distant et exécutez 'git pull' puis redémarrez FastAPI/Docker.")
+            print(f"    1. Assurez-vous que le serveur ({server_url}) est à jour (git pull && docker compose restart web).")
             print(f"\n    2. Si vous souhaitez importer ces données directement dans votre base locale :")
             print(f"       -> Utilisez l'option {TermColor.BOLD}[5] 💾 Importer un Fichier Local dans PostgreSQL Local{TermColor.RESET} du menu principal.")
             print(f"       -> L'importation s'exécutera instantanément en local sans dépendre du serveur distant !")
