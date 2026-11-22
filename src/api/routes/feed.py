@@ -3,6 +3,7 @@ import io
 import csv
 import zipfile
 import mimetypes
+from urllib.parse import quote
 import logging
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -22,6 +23,7 @@ from src.engine.pipeline_manager import pipeline_manager
 from src.engine.feedback_manager import feedback_manager
 from src.scraper.client import PortalHttpClient
 from src.scraper.detail_spider import DetailSpider
+from src.scraper.attachment_worker import AttachmentWorker
 from src.engine.cancellation_tracker import (
     is_cancellation_notice,
     extract_target_cancelled_reference,
@@ -719,7 +721,24 @@ async def get_tender_attachment_files(
             "files": []
         }
 
+    BROWSER_RENDERABLE_EXTS = {".pdf", ".txt", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".html", ".htm"}
+    OFFICE_MIMES = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xls": "application/vnd.ms-excel",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".ppt": "application/vnd.ms-powerpoint",
+        ".txt": "text/plain; charset=utf-8",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".svg": "image/svg+xml",
+    }
+
     files_list = []
+    folder_names = set()
     try:
         with zipfile.ZipFile(cache_file, 'r') as zf:
             for member in zf.namelist():
@@ -727,17 +746,65 @@ async def get_tender_attachment_files(
                 if info.is_dir() or member.startswith("__MACOSX") or member.endswith(".DS_Store"):
                     continue
                 base_name = member.split('/')[-1]
+                folder = '/'.join(member.split('/')[:-1]) if '/' in member else ""
+                if folder:
+                    folder_names.add(folder)
                 ext = base_name.split('.')[-1].lower() if '.' in base_name else ""
+                dot_ext = f".{ext}"
                 is_cps = any(k in base_name.lower() for k in ["cps", "cahier", "prescriptions", "specifications"])
+                is_browser = dot_ext in BROWSER_RENDERABLE_EXTS
+
+                if dot_ext == ".pdf":
+                    target_app = "Navigateur (PDF)"
+                    action_label = "Ouvrir directement le PDF"
+                    action_type = "browser"
+                    icon = "📄"
+                elif dot_ext in (".docx", ".doc"):
+                    target_app = "Microsoft Word"
+                    action_label = "Ouvrir dans Microsoft Word"
+                    action_type = "word"
+                    icon = "📝"
+                elif dot_ext in (".xlsx", ".xls"):
+                    target_app = "Microsoft Excel"
+                    action_label = "Ouvrir dans Microsoft Excel"
+                    action_type = "excel"
+                    icon = "📊"
+                elif dot_ext in (".png", ".jpg", ".jpeg", ".svg", ".webp"):
+                    target_app = "Navigateur (Image)"
+                    action_label = "Afficher l'image"
+                    action_type = "browser"
+                    icon = "🖼️"
+                elif dot_ext == ".txt":
+                    target_app = "Navigateur (Texte)"
+                    action_label = "Lire directement"
+                    action_type = "browser"
+                    icon = "📋"
+                else:
+                    target_app = "Application associée"
+                    action_label = "Télécharger / Ouvrir"
+                    action_type = "generic"
+                    icon = "📎"
+
+                # Direct click URL: for browser-renderable formats opens inline; for Word/Office downloads & opens desktop app
+                click_url = f"/api/tenders/{portal_id}/attachment/file?path={quote(member)}&inline={'true' if is_browser else 'false'}"
+
                 files_list.append({
                     "filename": base_name,
                     "raw_path": member,
+                    "folder": folder,
                     "extension": ext,
                     "size_bytes": info.file_size,
                     "size_formatted": f"{round(info.file_size / 1024, 1)} Ko" if info.file_size < 1048576 else f"{round(info.file_size / (1024 * 1024), 2)} Mo",
                     "is_cps": is_cps,
-                    "direct_url": f"/api/tenders/{portal_id}/attachment/file?path={member}&inline=true",
-                    "download_url": f"/api/tenders/{portal_id}/attachment/file?path={member}&inline=false"
+                    "is_browser_renderable": is_browser,
+                    "target_app": target_app,
+                    "action_label": action_label,
+                    "action_type": action_type,
+                    "icon": icon,
+                    "click_url": click_url,
+                    "direct_url": f"/api/tenders/{portal_id}/attachment/file?path={quote(member)}&inline=true",
+                    "download_url": f"/api/tenders/{portal_id}/attachment/file?path={quote(member)}&inline=false",
+                    "preview_url": f"/api/tenders/{portal_id}/attachment/text-preview?path={quote(member)}"
                 })
     except Exception as e:
         logger.error(f"Error reading archive {cache_file}: {e}")
@@ -746,9 +813,10 @@ async def get_tender_attachment_files(
         "portal_id": portal_id,
         "available": True,
         "archive_size": cache_file.stat().st_size,
-        "archive_size_formatted": f"{round(cache_file.stat().st_size / 1024, 1)} Ko",
+        "archive_size_formatted": f"{round(cache_file.stat().st_size / 1024, 1)} Ko" if cache_file.stat().st_size < 1048576 else f"{round(cache_file.stat().st_size / (1024 * 1024), 2)} Mo",
         "archive_download_url": f"/api/tenders/{portal_id}/attachment/download",
         "portal_direct_url": f"https://www.marchespublics.gov.ma{t.attachment_url}" if t.attachment_url else None,
+        "folders": sorted(list(folder_names)),
         "file_count": len(files_list),
         "files": files_list
     }
@@ -761,8 +829,9 @@ async def stream_tender_attachment_single_file(
     session: AsyncSession = Depends(get_db_session)
 ):
     """
-    Extracts and streams a single file (e.g. CPS PDF) directly from the archive.
-    Enables viewing the official signed CPS PDF directly inside the browser in 1 click!
+    Extracts and streams a single file (e.g. CPS PDF, Word docx) directly from the archive.
+    - PDF / TXT / Images: served inline for instant 1-click opening in browser tabs.
+    - Word / Excel / Office: served with native application MIME types so clicking triggers Microsoft Word/Excel desktop application.
     """
     cache_dir = Path("data/attachments")
     cache_file = cache_dir / f"tender_{portal_id}.zip"
@@ -787,16 +856,98 @@ async def stream_tender_attachment_single_file(
         raise HTTPException(status_code=500, detail=f"Erreur d'extraction du document: {e}")
 
     filename = path.split('/')[-1]
-    mime_type, _ = mimetypes.guess_type(filename)
-    if not mime_type:
-        mime_type = "application/pdf" if filename.lower().endswith(".pdf") else "application/octet-stream"
+    ext = ('.' + filename.split('.')[-1].lower()) if '.' in filename else ""
+    
+    OFFICE_MIMES = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xls": "application/vnd.ms-excel",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".ppt": "application/vnd.ms-powerpoint",
+        ".txt": "text/plain; charset=utf-8",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".svg": "image/svg+xml",
+    }
+    BROWSER_RENDERABLE_EXTS = {".pdf", ".txt", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".html", ".htm"}
 
-    disposition_type = "inline" if inline else "attachment"
+    mime_type = OFFICE_MIMES.get(ext)
+    if not mime_type:
+        mime_type, _ = mimetypes.guess_type(filename)
+        mime_type = mime_type or "application/octet-stream"
+
+    # For browser-renderable files, respect inline parameter.
+    # For Word/Excel, force attachment so browser hands off to Microsoft Word/Excel!
+    if inline and ext in BROWSER_RENDERABLE_EXTS:
+        disposition_type = "inline"
+    else:
+        disposition_type = "attachment"
+
     return Response(
         content=file_bytes,
         media_type=mime_type,
         headers={"Content-Disposition": f'{disposition_type}; filename="{filename}"'}
     )
+
+@router.get("/tenders/{portal_id}/attachment/text-preview")
+async def get_attachment_document_text_preview(
+    portal_id: int,
+    path: str = Query(..., description="Document path inside the ZIP archive"),
+    session: AsyncSession = Depends(get_db_session)
+) -> Dict[str, Any]:
+    """
+    Extracts text and tabular specifications from documents (.docx, .doc, .pdf, .txt)
+    allowing instant browser preview without requiring Microsoft Word or desktop applications.
+    """
+    cache_dir = Path("data/attachments")
+    cache_file = cache_dir / f"tender_{portal_id}.zip"
+
+    if not cache_file.exists():
+        await download_tender_attachment(portal_id=portal_id, session=session)
+
+    if not cache_file.exists():
+        raise HTTPException(status_code=404, detail="Archive introuvable.")
+
+    try:
+        with zipfile.ZipFile(cache_file, 'r') as zf:
+            matching_names = [n for n in zf.namelist() if n == path or n.endswith(path) or path.endswith(n)]
+            if not matching_names:
+                raise HTTPException(status_code=404, detail=f"Fichier '{path}' introuvable dans l'archive.")
+            target_name = matching_names[0]
+            file_bytes = zf.read(target_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur d'extraction: {e}")
+
+    filename = path.split('/')[-1]
+    ext = filename.split('.')[-1].lower() if '.' in filename else ""
+
+    worker = AttachmentWorker()
+    if ext == "pdf":
+        ef = worker._extract_pdf(file_bytes, filename)
+    elif ext == "docx":
+        ef = worker._extract_docx(file_bytes, filename)
+    elif ext == "doc":
+        ef = worker._extract_doc(file_bytes, filename)
+    elif ext in ("txt", "json", "csv"):
+        text = file_bytes.decode('utf-8', errors='ignore')
+        from src.scraper.attachment_worker import ExtractedFile
+        ef = ExtractedFile(filename=filename, extension=ext, text=text)
+    else:
+        raise HTTPException(status_code=400, detail=f"Format .{ext} non prévisualisable en mode texte.")
+
+    return {
+        "portal_id": portal_id,
+        "filename": filename,
+        "extension": ext,
+        "is_scanned": ef.is_scanned,
+        "ocr_applied": ef.ocr_applied,
+        "text": ef.text[:35000], # Up to 35k chars for instant reading
+        "text_length": len(ef.text),
+        "tables": ef.tables[:15] if ef.tables else []
+    }
 
 @router.get("/pipeline")
 async def get_team_pipeline(

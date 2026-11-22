@@ -6226,59 +6226,133 @@
 
 
 
-                    <!-- Official Attachment & CPS Documents Card -->
-                    <div x-show="activeTender?.attachment_available" class="bg-gradient-to-r from-slate-900 to-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 space-y-3 shadow-lg">
+                    <!-- Official Attachment & CPS Documents - Folder Discovery -->
+                    <div x-show="activeTender?.attachment_available" class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/50 border border-indigo-500/30 rounded-2xl p-4 space-y-3.5 shadow-xl">
                         <div class="flex flex-wrap justify-between items-center gap-2">
-                            <div class="flex items-center gap-2.5">
-                                <span class="text-xl">📁</span>
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-lg shrink-0">
+                                    📁
+                                </div>
                                 <div>
                                     <h4 class="font-bold text-white text-xs flex items-center gap-2">
-                                        Dossier d'Achat & Pièces Jointes Officielles (CPS)
+                                        <span>Explorateur de Documents & Dossier CPS (Folder Discovery)</span>
                                         <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">
                                             Accès Direct • Sans Login TGR
                                         </span>
                                     </h4>
                                     <p class="text-[11px] text-slate-400">
-                                        Téléchargez directement les documents officiels déposés par l'acheteur sans authentification sur le portail TGR.
+                                        Contenu du dossier de consultation officiel. Cliquez directement sur le nom d'un document pour l'ouvrir.
                                     </p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
                                 <a :href="'/api/tenders/' + activeTender?.portal_id + '/attachment/download'" 
                                    download
+                                   title="Télécharger l'intégralité du dossier sous forme d'archive ZIP"
                                    class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/20 flex items-center gap-1.5">
-                                    <span>📦</span> Télécharger Dossier (.ZIP)
+                                    <span>📦</span> Télécharger Tout (.ZIP)
                                 </a>
                             </div>
                         </div>
 
-                        <!-- Extracted documents inside archive -->
+                        <!-- Folder path banner if subfolder detected -->
+                        <template x-if="attachmentFilesData && attachmentFilesData.folders && attachmentFilesData.folders.length > 0">
+                            <div class="flex flex-wrap items-center gap-2 px-3 py-1.5 bg-slate-950/60 rounded-xl border border-slate-800 text-[11px] text-slate-400">
+                                <span class="text-indigo-400 font-bold">📂 Répertoire Dossier :</span>
+                                <span class="font-mono text-slate-300" x-text="attachmentFilesData.folders.join(', ') + '/'"></span>
+                                <span class="ml-auto text-slate-500 font-medium" x-text="attachmentFilesData.file_count + ' document(s) &bull; ' + attachmentFilesData.archive_size_formatted"></span>
+                            </div>
+                        </template>
+
+                        <!-- File list in Folder Discovery -->
                         <template x-if="attachmentFilesData && attachmentFilesData.files && attachmentFilesData.files.length > 0">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/80">
+                            <div class="space-y-2 pt-1 border-t border-slate-800/80">
                                 <template x-for="file in attachmentFilesData.files" :key="file.raw_path">
-                                    <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2 hover:border-slate-700 transition-colors">
-                                        <div class="flex items-center gap-2 min-w-0">
-                                            <span class="text-lg" x-text="file.extension === 'pdf' ? '📄' : (file.extension === 'docx' || file.extension === 'doc' ? '📝' : '📎')"></span>
-                                            <div class="truncate">
-                                                <p class="text-xs font-bold text-slate-200 truncate" :title="file.filename" x-text="file.filename"></p>
-                                                <p class="text-[10px] text-slate-400 flex items-center gap-1.5">
-                                                    <span x-text="file.size_formatted"></span>
-                                                    <template x-if="file.is_cps">
-                                                        <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold text-[9px] border border-indigo-500/30">CPS</span>
+                                    <div class="bg-slate-950/90 border border-slate-800 hover:border-slate-700 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all">
+                                        <!-- File details & Clickable Name -->
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <span class="text-2xl shrink-0" x-text="file.icon"></span>
+                                            <div class="min-w-0">
+                                                <!-- Click Directly on File Name -->
+                                                <a :href="file.click_url"
+                                                   :target="file.is_browser_renderable ? '_blank' : '_self'"
+                                                   :title="file.action_label"
+                                                   class="text-xs font-bold text-white hover:text-emerald-400 underline decoration-slate-600 hover:decoration-emerald-400 transition-colors truncate block">
+                                                    <span x-text="file.filename"></span>
+                                                    <span class="text-[10px] text-slate-400 no-underline font-normal ml-1" x-text="file.is_browser_renderable ? '↗ (Ouvrir)' : '⬇ (Word/App)'"></span>
+                                                </a>
+                                                <div class="flex flex-wrap items-center gap-2 mt-1 text-[10px]">
+                                                    <span class="text-slate-400 font-mono" x-text="file.size_formatted"></span>
+                                                    
+                                                    <!-- Application Target Badge -->
+                                                    <template x-if="file.action_type === 'browser'">
+                                                        <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-medium">
+                                                            ⚡ Ouvre directement dans le navigateur
+                                                        </span>
                                                     </template>
-                                                </p>
+                                                    <template x-if="file.action_type === 'word'">
+                                                        <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+                                                            📝 Ouvre dans Microsoft Word
+                                                        </span>
+                                                    </template>
+                                                    <template x-if="file.action_type === 'excel'">
+                                                        <span class="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 font-medium">
+                                                            📊 Ouvre dans Microsoft Excel
+                                                        </span>
+                                                    </template>
+                                                    <template x-if="file.is_cps">
+                                                        <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                                                            ⭐ CPS Spécifications
+                                                        </span>
+                                                    </template>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div class="flex items-center gap-1 flex-shrink-0">
-                                            <a :href="file.direct_url" target="_blank" title="Consulter dans le navigateur" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs transition-colors border border-slate-700">
-                                                👁️
-                                            </a>
-                                            <a :href="file.download_url" download title="Télécharger ce document" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 rounded-lg text-xs transition-colors border border-slate-700">
-                                                ⬇️
+
+                                        <!-- Action buttons -->
+                                        <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                            <!-- Direct Browser Open (for PDF/TXT/Images) -->
+                                            <template x-if="file.is_browser_renderable">
+                                                <a :href="file.direct_url" target="_blank"
+                                                   title="Ouvrir directement dans le navigateur"
+                                                   class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 flex items-center gap-1 transition-colors">
+                                                    <span>👁️</span> <span class="hidden sm:inline">Ouvrir</span>
+                                                </a>
+                                            </template>
+
+                                            <!-- Open in Application (for Word/Excel) -->
+                                            <template x-if="file.action_type === 'word' || file.action_type === 'excel'">
+                                                <a :href="file.download_url"
+                                                   title="Télécharger et ouvrir dans l'application locale"
+                                                   class="px-2.5 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white rounded-lg text-xs font-semibold border border-indigo-500/40 flex items-center gap-1 transition-colors">
+                                                    <span x-text="file.action_type === 'word' ? '📝' : '📊'"></span>
+                                                    <span x-text="file.action_type === 'word' ? 'Ouvrir Word' : 'Ouvrir Excel'"></span>
+                                                </a>
+                                            </template>
+
+                                            <!-- Instant In-App Text Preview Button -->
+                                            <button @click="openDocTextPreview(activeTender.portal_id, file.raw_path)"
+                                                    title="Lire le texte et les tableaux extraits sans ouvrir de logiciel externe"
+                                                    class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-semibold border border-slate-700 flex items-center gap-1 transition-colors">
+                                                <span>📖</span> <span class="hidden sm:inline">Aperçu Texte</span>
+                                            </button>
+
+                                            <!-- Direct Download Button -->
+                                            <a :href="file.download_url" download
+                                               title="Télécharger ce fichier seul"
+                                               class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs border border-slate-700 transition-colors">
+                                                <span>⬇️</span>
                                             </a>
                                         </div>
                                     </div>
                                 </template>
+                            </div>
+                        </template>
+
+                        <!-- Loading state while archive is probed -->
+                        <template x-if="!attachmentFilesData">
+                            <div class="text-center py-4 text-slate-500 text-xs flex items-center justify-center gap-2">
+                                <span class="animate-spin text-indigo-400">⏳</span> Inspection et extraction du dossier de pièces jointes...
                             </div>
                         </template>
                     </div>
@@ -6432,6 +6506,73 @@
         </div>
 
 
+
+        <!-- Document Text & Tables Instant Preview Modal -->
+        <div x-show="docPreviewModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div @click.away="docPreviewModalOpen = false" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <!-- Header -->
+                <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">📖</span>
+                        <div>
+                            <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                                <span x-text="docPreviewData?.filename || 'Aperçu du document'"></span>
+                                <template x-if="docPreviewData?.is_scanned">
+                                    <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px]">Document Scanné • OCR Appliqué</span>
+                                </template>
+                            </h3>
+                            <p class="text-xs text-slate-400" x-text="(docPreviewData?.text_length || 0).toLocaleString('fr-FR') + ' caractères extraits du document'"></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="copyDocPreviewText()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 flex items-center gap-1 transition-colors">
+                            <span>📋</span> Copier Texte
+                        </button>
+                        <button @click="docPreviewModalOpen = false" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-lg">&times;</button>
+                    </div>
+                </div>
+
+                <!-- Body -->
+                <div class="p-5 overflow-y-auto space-y-4 flex-1">
+                    <template x-if="docPreviewLoading">
+                        <div class="text-center py-12 text-slate-400 text-xs flex flex-col items-center gap-3">
+                            <span class="animate-spin text-2xl text-indigo-400">⏳</span>
+                            <span>Extraction et lecture du document en cours...</span>
+                        </div>
+                    </template>
+
+                    <!-- Tables if any -->
+                    <template x-if="!docPreviewLoading && docPreviewData?.tables && docPreviewData.tables.length > 0">
+                        <div class="space-y-3">
+                            <h4 class="font-bold text-emerald-400 text-xs">Tableaux & Spécifications Structurées :</h4>
+                            <template x-for="(tbl, tIdx) in docPreviewData.tables" :key="tIdx">
+                                <div class="border border-slate-800 rounded-xl overflow-hidden bg-slate-950 mb-3">
+                                    <table class="w-full text-xs">
+                                        <tbody>
+                                            <template x-for="(row, rIdx) in tbl" :key="rIdx">
+                                                <tr :class="rIdx === 0 ? 'bg-slate-800/80 font-bold text-slate-300' : 'border-t border-slate-800/50 hover:bg-slate-900/40'">
+                                                    <template x-for="(cell, cIdx) in row" :key="cIdx">
+                                                        <td class="py-1.5 px-2.5 text-left border-r border-slate-800/40 last:border-r-0" x-text="cell"></td>
+                                                    </template>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- Text Content -->
+                    <template x-if="!docPreviewLoading && docPreviewData?.text">
+                        <div>
+                            <h4 class="font-bold text-slate-300 text-xs mb-2">Contenu Textuel Extrait :</h4>
+                            <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed select-text" x-text="docPreviewData.text"></pre>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
 
         <!-- Authentication & Persona Switcher Modal -->
 
@@ -6761,6 +6902,9 @@
 
                 pricingData: null,
                 attachmentFilesData: null,
+                docPreviewModalOpen: false,
+                docPreviewLoading: false,
+                docPreviewData: null,
 
                 targetMarginPct: 30,
 
@@ -7944,6 +8088,33 @@
                 },
 
 
+
+                                async openDocTextPreview(portalId, rawPath) {
+                    this.docPreviewModalOpen = true;
+                    this.docPreviewLoading = true;
+                    this.docPreviewData = null;
+                    try {
+                        const res = await fetch('/api/tenders/' + portalId + '/attachment/text-preview?path=' + encodeURIComponent(rawPath));
+                        if (res.ok) {
+                            this.docPreviewData = await res.json();
+                        } else {
+                            this.showToast('Impossible d\'extraire le texte de ce document', 'error');
+                            this.docPreviewModalOpen = false;
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur: ' + e, 'error');
+                        this.docPreviewModalOpen = false;
+                    } finally {
+                        this.docPreviewLoading = false;
+                    }
+                },
+
+                copyDocPreviewText() {
+                    if (!this.docPreviewData?.text) return;
+                    navigator.clipboard.writeText(this.docPreviewData.text).then(() => {
+                        this.showToast('Texte du document copié dans le presse-papier !', 'success');
+                    });
+                },
 
                 copyFicheLink() {
 

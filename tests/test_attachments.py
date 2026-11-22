@@ -132,6 +132,20 @@ def test_api_attachment_endpoints():
         assert "inline" in res_pdf.headers["content-disposition"]
         assert b"%PDF-1.4 dummy CPS content" in res_pdf.content
 
+        # 4. Test rich folder discovery metadata
+        assert cps_doc["is_browser_renderable"] is True
+        assert "Navigateur" in cps_doc["target_app"]
+        assert "Ouvrir" in cps_doc["action_label"]
+        assert "inline=true" in cps_doc["click_url"]
+
+        # 5. Test /api/tenders/{portal_id}/attachment/text-preview
+        res_preview = client.get(f"/api/tenders/777888/attachment/text-preview?path={cps_doc['raw_path']}")
+        assert res_preview.status_code == 200
+        preview_data = res_preview.json()
+        assert preview_data["filename"] == "CPS_Prescriptions_Techniques.pdf"
+        assert "text" in preview_data
+        assert "tables" in preview_data
+
     finally:
         app.dependency_overrides.pop(get_db_session, None)
         if test_zip_path.exists():
