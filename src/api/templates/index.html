@@ -6384,6 +6384,16 @@
 
     <script>
 
+        function formatMAD(val) {
+
+            if (val === null || val === undefined || isNaN(val)) return '0 DH';
+
+            return Math.round(Number(val)).toLocaleString('fr-FR') + ' DH';
+
+        }
+
+        window.formatMAD = formatMAD;
+
         function dashboardApp() {
 
             return {
@@ -7124,6 +7134,16 @@
                 hasPermission(permission) {
 
                     return this.currentUser.permissions && this.currentUser.permissions.includes(permission);
+
+                },
+
+
+
+                formatMAD(val) {
+
+                    if (val === null || val === undefined || isNaN(val)) return '0 DH';
+
+                    return Math.round(Number(val)).toLocaleString('fr-FR') + ' DH';
 
                 },
 
