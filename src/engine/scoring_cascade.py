@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from src.profiles.schema import CompanyProfileSchema
 from src.engine.hard_filters import evaluate_hard_filters
 from src.engine.lexical_matcher import LexicalMatcher
@@ -20,6 +20,9 @@ class CascadeEvaluationResult:
     line_item_matches: List[Dict[str, Any]]
     red_flags: List[str]
     llm_reasoning: str
+
+# In-memory evaluation cache: (portal_id, profile_name) -> (passed_lexical, veto_reason, lexical_score, coverage_score, item_evals, unmatched_items)
+_STAGE23_CACHE: Dict[Tuple[int, str], Tuple[bool, Optional[str], float, float, List[Dict[str, Any]], List[str]]] = {}
 
 class ScoringCascadeEngine:
     """
@@ -65,13 +68,33 @@ class ScoringCascadeEngine:
                 llm_reasoning=f"Disqualified at Stage 1 (Hard Gate): Tender is officially cancelled ('Annulé'){target_msg}."
             )
 
-        # Build full text for lexical search
-        full_text = f"{tender_data.get('title', '')} {tender_data.get('prestation_type', '')}"
-        for item in tender_data.get("line_items", []):
-            full_text += f" {item.get('designation', '')} {item.get('technical_specs', '')}"
+        # --- Stages 2 & 3: Lexical Matching & BOM Catalog Coverage (with in-memory cache) ---
+        line_items = tender_data.get("line_items", [])
+        portal_id = tender_data.get("portal_id")
+        cache_key = (portal_id, profile.profile_name) if portal_id else None
 
-        # --- Stage 2: Lexical Match & Negative Keyword Veto ---
-        passed_lexical, veto_reason, lexical_score = LexicalMatcher.evaluate(full_text, profile)
+        cached_stage23 = _STAGE23_CACHE.get(cache_key) if cache_key else None
+        if cached_stage23 is not None:
+            passed_lexical, veto_reason, lexical_score, coverage_score, item_evals, unmatched_items = cached_stage23
+        else:
+            # Build full text for lexical search
+            full_text = f"{tender_data.get('title', '')} {tender_data.get('prestation_type', '')}"
+            for item in line_items:
+                full_text += f" {item.get('designation', '')} {item.get('technical_specs', '')}"
+
+            # --- Stage 2: Lexical Match & Negative Keyword Veto ---
+            passed_lexical, veto_reason, lexical_score = LexicalMatcher.evaluate(full_text, profile)
+
+            coverage_score, item_evals, unmatched_items = 0.0, [], []
+            if passed_lexical:
+                # --- Stage 3: Line-Item Catalog Mapping (BOM Coverage) ---
+                coverage_score, item_evals, unmatched_items = LineItemMatcher.match_line_items(
+                    line_items, 
+                    profile
+                )
+
+            if cache_key:
+                _STAGE23_CACHE[cache_key] = (passed_lexical, veto_reason, lexical_score, coverage_score, item_evals, unmatched_items)
 
         # If hard negative keyword veto (e.g. gardiennage, traiteur, maçonnerie): instant elimination
         if not passed_lexical:
@@ -85,13 +108,6 @@ class ScoringCascadeEngine:
                 red_flags=[veto_reason or "Veto par mot-clé négatif exclu"],
                 llm_reasoning=f"Disqualifié par exclusion négative : {veto_reason}"
             )
-
-        # --- Stage 3: Line-Item Catalog Mapping (BOM Coverage) ---
-        line_items = tender_data.get("line_items", [])
-        coverage_score, item_evals, unmatched_items = LineItemMatcher.match_line_items(
-            line_items, 
-            profile
-        )
 
         weights = profile.scoring_weights
         has_geo_issue = any("région" in r.lower() or "territoire" in r.lower() for r in hard_reasons)

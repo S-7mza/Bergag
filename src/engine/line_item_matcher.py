@@ -10,6 +10,15 @@ def strip_accents(text: str) -> str:
     nfkd = unicodedata.normalize('NFKD', text)
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
+_PATTERN_CACHE: Dict[str, re.Pattern] = {}
+
+def _get_compiled_pattern(term: str) -> re.Pattern:
+    pat = _PATTERN_CACHE.get(term)
+    if pat is None:
+        pat = re.compile(rf'\b{re.escape(term)}(?:s|x)?\b', re.IGNORECASE)
+        _PATTERN_CACHE[term] = pat
+    return pat
+
 class LineItemMatcher:
     """
     Stage 3: Line-Item Catalog Mapping & Bill of Materials (BOM) Coverage.
@@ -54,19 +63,16 @@ class LineItemMatcher:
 
                     if " " in trig_norm:
                         # Multi-word phrase match (e.g. 'application web')
-                        pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
-                        if re.search(pattern, full_item_text):
+                        if _get_compiled_pattern(trig_norm).search(full_item_text):
                             hits += 1
                         else:
                             # Token subset with word boundaries
                             trig_words = [w for w in trig_norm.split() if len(w) > 2]
-                            if trig_words and all(re.search(rf'\b{re.escape(w)}(?:s|x)?\b', full_item_text) for w in trig_words):
+                            if trig_words and all(_get_compiled_pattern(w).search(full_item_text) for w in trig_words):
                                 hits += 1
                     else:
                         # Single word / acronym: MUST match on exact word boundaries!
-                        # Prevents short acronyms like "api" from falsely matching inside "papier", "sql" in "desquels", etc.
-                        pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
-                        if re.search(pattern, full_item_text):
+                        if _get_compiled_pattern(trig_norm).search(full_item_text):
                             hits += 1
 
                 if hits > 0:

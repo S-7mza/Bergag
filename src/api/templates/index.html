@@ -6910,17 +6910,20 @@
 
 
 
+                    // 1. Immediately fetch Opportunity Feed with 100% network priority
                     this.fetchFeed();
 
                     this.fetchPipeline();
 
                     this.recalcStudioPricing();
 
-                    this.runPeriodAudit();
-
-                    this.runActiveAudit();
-
                     this.startHeartbeatPolling();
+
+                    // 2. Defer heavy background portal audits so initial feed load has 0ms latency
+                    setTimeout(() => {
+                        this.runActiveAudit();
+                        this.runPeriodAudit();
+                    }, 2500);
 
                 },
 

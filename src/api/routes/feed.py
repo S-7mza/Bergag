@@ -143,9 +143,9 @@ async def get_tender_feed(
         # genuine sector opportunities rather than arbitrary unrelated rows (food, fuel, cleaning).
         candidate_kws = extract_profile_candidate_keywords(profile)
         if candidate_kws:
-            title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws]
-            prestation_conditions = [Tender.prestation_type.ilike(f"%{kw}%") for kw in candidate_kws]
-            line_conditions = [LineItem.designation.ilike(f"%{kw}%") for kw in candidate_kws[:30]]
+            title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws[:40]]
+            prestation_conditions = [Tender.prestation_type.ilike(f"%{kw}%") for kw in candidate_kws[:40]]
+            line_conditions = [LineItem.designation.ilike(f"%{kw}%") for kw in candidate_kws[:15]]
             stmt = stmt.where(
                 or_(
                     *title_conditions,

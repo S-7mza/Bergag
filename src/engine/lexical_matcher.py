@@ -16,6 +16,24 @@ def tokenize(text: str) -> set[str]:
     tokens = re.findall(r'\b[a-zA-Z0-9_\u0600-\u06FF]{3,}\b', norm)
     return set(tokens)
 
+_LEXICAL_PATTERN_CACHE: dict[str, re.Pattern] = {}
+
+def _get_lexical_pattern(term: str) -> re.Pattern:
+    pat = _LEXICAL_PATTERN_CACHE.get(term)
+    if pat is None:
+        pat = re.compile(rf'\b{re.escape(term)}(?:s|x)?\b', re.IGNORECASE)
+        _LEXICAL_PATTERN_CACHE[term] = pat
+    return pat
+
+_NEG_PATTERN_CACHE: dict[str, re.Pattern] = {}
+
+def _get_neg_pattern(term: str) -> re.Pattern:
+    pat = _NEG_PATTERN_CACHE.get(term)
+    if pat is None:
+        pat = re.compile(rf'\b{re.escape(term)}(?:s|x|es|e)?\b', re.IGNORECASE)
+        _NEG_PATTERN_CACHE[term] = pat
+    return pat
+
 class LexicalMatcher:
     """
     Stage 2: Lexical Keyword & Negative Constraints Filter.
@@ -41,8 +59,7 @@ class LexicalMatcher:
             if not neg_norm:
                 continue
             # Match singular, plural (s/x), and feminine forms (e/es) so "photocopieur" matches "photocopieurs"
-            pattern = rf'\b{re.escape(neg_norm)}(?:s|x|es|e)?\b'
-            if re.search(pattern, norm_tender):
+            if _get_neg_pattern(neg_norm).search(norm_tender):
                 return False, f"Veto par mot-clé négatif exclu : '{neg_word}'", 0.0
 
         # 2. Positive Lexical & Synonym Scoring
@@ -63,20 +80,17 @@ class LexicalMatcher:
                     continue
 
                 if " " in trig_norm:
-                    pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
-                    if re.search(pattern, norm_tender):
+                    if _get_lexical_pattern(trig_norm).search(norm_tender):
                         matched = True
                         break
                     # Multi-word token subset match with word boundaries
                     trig_words = [w for w in trig_norm.split() if len(w) > 2]
-                    if trig_words and all(w in tokens or re.search(rf'\b{re.escape(w)}(?:s|x)?\b', norm_tender) for w in trig_words):
+                    if trig_words and all(w in tokens or _get_lexical_pattern(w).search(norm_tender) for w in trig_words):
                         matched = True
                         break
                 else:
                     # Single word / acronym: MUST match on exact word boundaries, never raw substring
-                    # e.g. "api" must match word "API", NOT inside "papier"
-                    pattern = rf'\b{re.escape(trig_norm)}(?:s|x)?\b'
-                    if trig_norm in tokens or re.search(pattern, norm_tender):
+                    if trig_norm in tokens or _get_lexical_pattern(trig_norm).search(norm_tender):
                         matched = True
                         break
 
