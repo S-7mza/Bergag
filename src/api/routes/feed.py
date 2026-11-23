@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import APIRouter, Depends, Query, HTTPException, Response
-from sqlalchemy import select, desc, or_
+from sqlalchemy import select, desc, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from src.database.session import get_db_session
@@ -290,8 +290,9 @@ async def get_tender_feed(
 
     scoring_engine = ScoringCascadeEngine()
 
-    # RBAC Enforcement: Viewers only see curated high-confidence opportunities (>=75% GO)
-    effective_min_score = max(min_score, 75.0) if role == "viewer" else min_score
+    # RBAC Enforcement: Viewers only see curated high-confidence opportunities (>=75% GO),
+    # unless an explicit search query is provided (user direct keyword search is mandatory)
+    effective_min_score = min_score if (search and search.strip()) else (max(min_score, 75.0) if role == "viewer" else min_score)
 
     # Build candidate selection query
     stmt = (
@@ -302,20 +303,40 @@ async def get_tender_feed(
 
     if search and search.strip():
         search_raw = search.strip()
-        search_pattern = f"%{search_raw.lower()}%"
-        search_conditions = [
-            Tender.title.ilike(search_pattern),
-            Tender.reference.ilike(search_pattern),
-            Tender.execution_location.ilike(search_pattern),
-            Tender.buyer.has(Buyer.name.ilike(search_pattern)),
-            Tender.line_items.any(LineItem.designation.ilike(search_pattern))
-        ]
-        # Support direct portal ID lookup (e.g. "410796" or "#410796")
         clean_id_str = search_raw.lstrip('#').strip()
-        if clean_id_str.isdigit():
-            search_conditions.append(Tender.portal_id == int(clean_id_str))
 
-        stmt = stmt.where(or_(*search_conditions))
+        if clean_id_str.isdigit():
+            # Support direct portal ID or reference lookup
+            stmt = stmt.where(
+                or_(
+                    Tender.portal_id == int(clean_id_str),
+                    Tender.reference.ilike(f"%{clean_id_str}%")
+                )
+            )
+        else:
+            # Multi-word mandatory keyword search:
+            # Every keyword in the user query MUST be present in the tender (AND between words)
+            # across any candidate field: title, reference, location, buyer official name, or line items (OR across fields)
+            search_words = [w for w in search_raw.split() if w.strip()]
+            if search_words:
+                word_clauses = []
+                for w in search_words:
+                    w_pattern = f"%{w.lower()}%"
+                    word_clauses.append(
+                        or_(
+                            Tender.title.ilike(w_pattern),
+                            Tender.reference.ilike(w_pattern),
+                            Tender.execution_location.ilike(w_pattern),
+                            Tender.buyer.has(Buyer.official_name.ilike(w_pattern)),
+                            Tender.line_items.any(
+                                or_(
+                                    LineItem.designation.ilike(w_pattern),
+                                    LineItem.technical_specs.ilike(w_pattern)
+                                )
+                            )
+                        )
+                    )
+                stmt = stmt.where(and_(*word_clauses))
     else:
         # Pre-filter candidates by sector keywords so the cascade scoring evaluates
         # genuine sector opportunities rather than arbitrary unrelated rows (food, fuel, cleaning).
@@ -417,7 +438,7 @@ async def get_tender_feed(
                 if max_days is not None:
                     max_boundary = now + timedelta(days=max_days)
                     interval_conditions.append(
-                        (Tender.deadline_at > min_boundary) & (Tender.deadline_at <= max_boundary)
+                        and_(Tender.deadline_at > min_boundary, Tender.deadline_at <= max_boundary)
                     )
                 else:
                     interval_conditions.append(Tender.deadline_at > min_boundary)
@@ -451,7 +472,7 @@ async def get_tender_feed(
                     "designation": item.designation,
                     "technical_specs": item.technical_specs,
                     "unit": item.unit,
-                    "quantity": float(item.quantity),
+                    "quantity": float(item.quantity) if item.quantity is not None else 1.0,
                     "tva_rate": float(item.tva_rate or 20.0),
                     "warranty_required": item.warranty_required
                 }
