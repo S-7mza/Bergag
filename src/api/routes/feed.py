@@ -24,6 +24,8 @@ from src.engine.feedback_manager import feedback_manager
 from src.scraper.client import PortalHttpClient
 from src.scraper.detail_spider import DetailSpider
 from src.scraper.attachment_worker import AttachmentWorker
+from src.engine.ai_matching_agent import ai_matching_agent
+from src.api.schemas import AIMatchingDiagnosis
 from src.engine.cancellation_tracker import (
     is_cancellation_notice,
     extract_target_cancelled_reference,
@@ -511,6 +513,36 @@ async def get_tender_feed(
     # Score all candidates against profile
     scored_items: List[TenderFeedItem] = []
     for t in tenders:
+        tender_dict = {
+            "portal_id": t.portal_id,
+            "reference": t.reference,
+            "title": t.title,
+            "buyer_name": t.buyer.official_name if t.buyer else "Inconnu",
+            "execution_location": t.execution_location,
+            "main_category": t.main_category,
+            "prestation_type": t.prestation_type,
+            "published_at": t.published_at.isoformat() if t.published_at else "",
+            "deadline_at": t.deadline_at.isoformat() if t.deadline_at else "",
+            "status": t.status,
+            "line_items": [
+                {
+                    "item_order": item.item_order,
+                    "designation": item.designation,
+                    "technical_specs": item.technical_specs,
+                    "unit": item.unit,
+                    "quantity": float(item.quantity) if item.quantity is not None else 1.0,
+                    "tva_rate": float(item.tva_rate or 20.0),
+                    "warranty_required": item.warranty_required
+                }
+                for item in t.line_items
+            ]
+        }
+
+        # Deep AI diagnosis against Programming, Web, Data & AI profile
+        ai_diag = ai_matching_agent.get_cached_diagnosis(t.portal_id)
+        if ai_diag is None:
+            ai_diag = ai_matching_agent.diagnose_tender_dict(tender_dict)
+
         if is_all_sectors:
             hours_left = (t.deadline_at - now).total_seconds() / 3600.0 if t.deadline_at else 999.0
             is_urgent = 0 < hours_left < 24.0
@@ -542,30 +574,6 @@ async def get_tender_feed(
 
             alignment_feedback = user_feedback
         else:
-            tender_dict = {
-                "portal_id": t.portal_id,
-                "reference": t.reference,
-                "title": t.title,
-                "buyer_name": t.buyer.official_name if t.buyer else "Inconnu",
-                "execution_location": t.execution_location,
-                "main_category": t.main_category,
-                "published_at": t.published_at.isoformat(),
-                "deadline_at": t.deadline_at.isoformat(),
-                "status": t.status,
-                "line_items": [
-                    {
-                        "item_order": item.item_order,
-                        "designation": item.designation,
-                        "technical_specs": item.technical_specs,
-                        "unit": item.unit,
-                        "quantity": float(item.quantity) if item.quantity is not None else 1.0,
-                        "tva_rate": float(item.tva_rate or 20.0),
-                        "warranty_required": item.warranty_required
-                    }
-                    for item in t.line_items
-                ]
-            }
-
             cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
             # Determine verdict: if officially cancelled or an annulation notice, verdict is ANNULÉ
@@ -592,7 +600,8 @@ async def get_tender_feed(
                 decision_verdict=decision_verdict,
                 line_item_count=len(t.line_items),
                 portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}",
-                alignment_feedback=alignment_feedback
+                alignment_feedback=alignment_feedback,
+                ai_matching=ai_diag
             )
         )
 
@@ -772,6 +781,11 @@ async def get_tender_detail(
     else:
         cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
+    # Deep AI Diagnosis against Programming, Web, Data & AI profile
+    ai_diag = ai_matching_agent.get_cached_diagnosis(t.portal_id)
+    if ai_diag is None:
+        ai_diag = ai_matching_agent.diagnose_tender_dict(tender_dict)
+
     return TenderDetailResponse(
         portal_id=t.portal_id,
         reference=t.reference,
@@ -792,6 +806,7 @@ async def get_tender_detail(
         llm_reasoning=cascade_res.llm_reasoning,
         line_item_evaluations=cascade_res.line_item_matches,
         alignment_feedback=cascade_res.alignment_feedback,
+        ai_matching=ai_diag,
         line_items=[
             LineItemSchema(
                 item_order=i.item_order,

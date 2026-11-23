@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
+from src.engine.ai_diagnostician import AIMatchingDiagnosis
 
 class LineItemSchema(BaseModel):
     item_order: int
@@ -26,6 +27,7 @@ class TenderFeedItem(BaseModel):
     line_item_count: int = 0
     portal_url: str
     alignment_feedback: Optional[str] = None # 'aligned', 'misaligned', or None
+    ai_matching: Optional[AIMatchingDiagnosis] = None # Deep AI Matching Diagnosis
 
 class TenderDetailResponse(BaseModel):
     portal_id: int
@@ -49,6 +51,7 @@ class TenderDetailResponse(BaseModel):
     llm_reasoning: Optional[str] = None
     line_item_evaluations: List[Dict[str, Any]] = []
     alignment_feedback: Optional[str] = None # 'aligned', 'misaligned', or None
+    ai_matching: Optional[AIMatchingDiagnosis] = None # Deep AI Matching Diagnosis
 
 class AlignmentFeedbackRequest(BaseModel):
     portal_id: int
@@ -81,3 +84,16 @@ class UserActionResponse(BaseModel):
     action: str
     tender_id: int
     message: Optional[str] = None
+
+class DiagnoseBatchRequest(BaseModel):
+    limit: int = Field(default=200, ge=1, le=2000)
+    open_only: bool = Field(default=False)
+    force_refresh: bool = Field(default=False)
+
+class DiagnoseBatchResponse(BaseModel):
+    success: bool
+    total_scanned: int
+    rating_distribution: Dict[str, int]
+    domain_distribution: Dict[str, int]
+    top_technologies: Dict[str, int]
+    top_opportunities: List[Dict[str, Any]]

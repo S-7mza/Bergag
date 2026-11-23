@@ -1543,7 +1543,13 @@
 
                         </div>
 
-
+                        <!-- Direct AI DB Sync Trigger Button -->
+                        <button @click="triggerAiDbSync()" :disabled="aiSyncing"
+                                class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                                title="Diagnostiquer tous les avis sans API externe et mettre à jour directement les taux en base de données">
+                            <span :class="{'animate-spin inline-block': aiSyncing}">🤖</span>
+                            <span x-text="aiSyncing ? 'Diagnostic en cours...' : 'Diagnostic IA BD'"></span>
+                        </button>
 
                     </div>
 
@@ -1904,6 +1910,18 @@
 
                                                 </span>
 
+                                                <!-- Special Field: AI Matching Rate (Web, Dev, Data) -->
+                                                <template x-if="item.ai_matching">
+                                                    <span :class="{
+                                                        'bg-indigo-500/15 text-indigo-300 border-indigo-500/40': item.ai_matching.matching_rate >= 70,
+                                                        'bg-sky-500/10 text-sky-300 border-sky-500/30': item.ai_matching.matching_rate >= 45 && item.ai_matching.matching_rate < 70,
+                                                        'bg-slate-800/80 text-slate-400 border-slate-700': item.ai_matching.matching_rate < 45
+                                                    }" class="px-2 py-0.5 rounded-full font-mono font-bold border inline-flex items-center gap-1 text-[10px]" :title="'Diagnostic IA Profil Web/Dev/Data: ' + item.ai_matching.primary_domain">
+                                                        <span>🤖</span>
+                                                        <span x-text="'AI: ' + item.ai_matching.matching_rate.toFixed(0) + '% ' + (item.ai_matching.rating_label === 'EXCELLENT_MATCH' ? 'TOP' : item.ai_matching.rating_label.replace('_MATCH',''))"></span>
+                                                    </span>
+                                                </template>
+
                                                 <!-- User Alignment Feedback Action Pill -->
                                                 <div @click.stop class="inline-flex items-center">
                                                     <template x-if="item.alignment_feedback === 'aligned'">
@@ -2082,6 +2100,18 @@
                                             <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
 
                                         </span>
+
+                                        <!-- Special Field: AI Matching Rate (Web, Dev, Data) -->
+                                        <template x-if="item.ai_matching">
+                                            <span :class="{
+                                                'bg-indigo-500/15 text-indigo-300 border-indigo-500/40': item.ai_matching.matching_rate >= 70,
+                                                'bg-sky-500/10 text-sky-300 border-sky-500/30': item.ai_matching.matching_rate >= 45 && item.ai_matching.matching_rate < 70,
+                                                'bg-slate-800/80 text-slate-400 border-slate-700': item.ai_matching.matching_rate < 45
+                                            }" class="px-2 py-0.5 rounded-full font-mono font-bold border inline-flex items-center gap-1 text-[10px]" :title="'Diagnostic IA Profil Web/Dev/Data: ' + item.ai_matching.primary_domain">
+                                                <span>🤖</span>
+                                                <span x-text="'AI: ' + item.ai_matching.matching_rate.toFixed(0) + '% ' + (item.ai_matching.rating_label === 'EXCELLENT_MATCH' ? 'TOP' : item.ai_matching.rating_label.replace('_MATCH',''))"></span>
+                                            </span>
+                                        </template>
 
                                         <!-- Alignment badge / Quick vote in cards -->
                                         <div @click.stop class="inline-flex items-center">
@@ -6270,7 +6300,108 @@
 
                     </div>
 
+                    <!-- Deep AI Matching Diagnosis Card (Special Field: Web, Programmation & Data) -->
+                    <div x-show="activeTender?.ai_matching" class="p-4 rounded-2xl border text-xs space-y-3 bg-gradient-to-br from-indigo-950/30 via-slate-900/60 to-purple-950/20 border-indigo-500/30 shadow-lg shadow-indigo-950/20">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-500/20 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">🤖</span>
+                                <div>
+                                    <span class="font-bold text-white text-xs block">Diagnostic Approfondi IA &bull; Profil Web, Logiciel & Data</span>
+                                    <span class="text-[10px] text-indigo-300 font-mono" x-text="'Domaine identifié : ' + (activeTender?.ai_matching?.primary_domain || 'Génie Logiciel & Web')"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span :class="{
+                                    'bg-emerald-500/20 text-emerald-300 border-emerald-500/40': activeTender?.ai_matching?.matching_rate >= 80,
+                                    'bg-indigo-500/20 text-indigo-300 border-indigo-500/40': activeTender?.ai_matching?.matching_rate >= 65 && activeTender?.ai_matching?.matching_rate < 80,
+                                    'bg-amber-500/20 text-amber-300 border-amber-500/40': activeTender?.ai_matching?.matching_rate >= 45 && activeTender?.ai_matching?.matching_rate < 65,
+                                    'bg-rose-500/20 text-rose-300 border-rose-500/40': activeTender?.ai_matching?.matching_rate < 45
+                                }" class="px-2.5 py-1 rounded-xl font-mono font-black text-xs border inline-flex items-center gap-1.5 shadow-sm">
+                                    <span>🎯 Taux de Match :</span>
+                                    <span x-text="(activeTender?.ai_matching?.matching_rate !== undefined ? activeTender.ai_matching.matching_rate.toFixed(0) : '0') + '%'"></span>
+                                    <span class="text-[10px] opacity-80" x-text="'(' + activeTender?.ai_matching?.rating_label + ')'"></span>
+                                </span>
+                                <span class="px-2 py-0.5 rounded-lg text-[10px] font-mono font-semibold border"
+                                      :class="{
+                                          'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': activeTender?.ai_matching?.hardware_dependency === 'NONE',
+                                          'bg-amber-500/10 text-amber-400 border-amber-500/30': activeTender?.ai_matching?.hardware_dependency === 'LOW' || activeTender?.ai_matching?.hardware_dependency === 'MEDIUM',
+                                          'bg-rose-500/10 text-rose-400 border-rose-500/30': activeTender?.ai_matching?.hardware_dependency === 'HIGH'
+                                      }"
+                                      :title="'Dépendance en matériel physique : ' + activeTender?.ai_matching?.hardware_dependency">
+                                    <span x-text="'Matériel : ' + activeTender?.ai_matching?.hardware_dependency"></span>
+                                </span>
+                            </div>
+                        </div>
 
+                        <!-- Tech Stack chips -->
+                        <div x-show="activeTender?.ai_matching?.detected_technologies?.length > 0" class="flex items-center flex-wrap gap-1.5">
+                            <span class="text-[10px] font-semibold text-slate-400 uppercase font-mono mr-1">Stack & Outils détectés :</span>
+                            <template x-for="tech in activeTender?.ai_matching?.detected_technologies">
+                                <span class="px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 font-mono text-[10px] font-semibold" x-text="tech"></span>
+                            </template>
+                        </div>
+
+                        <!-- Sub-scores breakdown -->
+                        <div x-show="activeTender?.ai_matching?.sub_scores" class="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80 text-[10px]">
+                            <div>
+                                <span class="text-slate-400 block font-mono text-[9px]">Web & Portails</span>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <div class="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-indigo-400 h-full rounded-full" :style="'width: ' + (activeTender?.ai_matching?.sub_scores?.web_development || 0) + '%'"></div>
+                                    </div>
+                                    <span class="font-mono font-bold text-white text-[10px]" x-text="(activeTender?.ai_matching?.sub_scores?.web_development || 0).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block font-mono text-[9px]">Génie Logiciel</span>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <div class="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-sky-400 h-full rounded-full" :style="'width: ' + (activeTender?.ai_matching?.sub_scores?.software_programming || 0) + '%'"></div>
+                                    </div>
+                                    <span class="font-mono font-bold text-white text-[10px]" x-text="(activeTender?.ai_matching?.sub_scores?.software_programming || 0).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block font-mono text-[9px]">Data & BI</span>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <div class="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-emerald-400 h-full rounded-full" :style="'width: ' + (activeTender?.ai_matching?.sub_scores?.data_engineering_bi || 0) + '%'"></div>
+                                    </div>
+                                    <span class="font-mono font-bold text-white text-[10px]" x-text="(activeTender?.ai_matching?.sub_scores?.data_engineering_bi || 0).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block font-mono text-[9px]">IA & Automatisation</span>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <div class="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-purple-400 h-full rounded-full" :style="'width: ' + (activeTender?.ai_matching?.sub_scores?.ai_automation || 0) + '%'"></div>
+                                    </div>
+                                    <span class="font-mono font-bold text-white text-[10px]" x-text="(activeTender?.ai_matching?.sub_scores?.ai_automation || 0).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block font-mono text-[9px]">Cloud & DevOps</span>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <div class="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-teal-400 h-full rounded-full" :style="'width: ' + (activeTender?.ai_matching?.sub_scores?.cloud_devops || 0) + '%'"></div>
+                                    </div>
+                                    <span class="font-mono font-bold text-white text-[10px]" x-text="(activeTender?.ai_matching?.sub_scores?.cloud_devops || 0).toFixed(0) + '%'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Strategic recommendation -->
+                        <div class="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/20 text-[11px] leading-relaxed text-indigo-100 flex items-start gap-2">
+                            <span class="text-sm shrink-0">💡</span>
+                            <div>
+                                <span class="font-bold text-white block mb-0.5">Conseil Stratégique de Réponse :</span>
+                                <span x-text="activeTender?.ai_matching?.strategic_recommendation"></span>
+                            </div>
+                        </div>
+
+                        <!-- Diagnostic summary paragraph -->
+                        <p class="text-[11px] leading-relaxed text-slate-300 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/80" x-text="activeTender?.ai_matching?.diagnostic_summary"></p>
+                    </div>
 
                     <!-- Metadata Grid -->
 
@@ -7421,6 +7552,7 @@
                 },
 
                 toasts: [],
+                aiSyncing: false,
 
                 loading: false,
 
@@ -7960,6 +8092,24 @@
 
                     this.toasts = this.toasts.filter(t => t.id !== id);
 
+                },
+
+                async triggerAiDbSync() {
+                    this.aiSyncing = true;
+                    try {
+                        const res = await fetch('/api/agent/sync-db', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast(data.message || 'Diagnostic IA synchronisé avec succès en base de données !', 'success');
+                            await this.fetchFeed();
+                        } else {
+                            this.showToast('Erreur: ' + (data.detail || 'Erreur synchronisation'), 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur lors du diagnostic IA : ' + e, 'error');
+                    } finally {
+                        this.aiSyncing = false;
+                    }
                 },
 
 

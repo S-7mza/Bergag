@@ -1,7 +1,10 @@
 version: "1.0"
 tenant_id: "hamza-solutions"
-profile_name: "Software, Programming & Data Solutions"
+profile_id: "software_data"
+profile_name: "Software, Web & Data Solutions"
 contact_email: "hamza@example.com"
+icon: "💻"
+description: "Développement web, programmation sur mesure, ingénierie de données, BI et automatisation IA"
 
 macro_filters:
   categories:
@@ -12,65 +15,202 @@ macro_filters:
     - "Achat de matériel technique, de logiciels et de matériel informatique"
     - "Entretien et maintenance de logiciels et de progiciels"
     - "Études, conseil et formation"
+    - "Services informatiques et développement logiciel"
+    - "Prestations d'études et d'assistance technique"
   geographic_coverage:
     mode: "national"
     preferred_regions:
       - "Casablanca-Settat"
       - "Rabat-Salé-Kénitra"
-    max_travel_distance_km: 300
+    max_travel_distance_km: 500
   financial_bands:
     min_amount_mad: 10000.0
     max_amount_mad: 500000.0
   minimum_deadline_hours: 24
 
 catalog:
+  - id: "web-development"
+    label: "Web Development, Portals & CMS"
+    weight: 1.0
+    synonyms_fr:
+      - "développement web"
+      - "site web"
+      - "portail web"
+      - "application web"
+      - "plateforme web"
+      - "intranet"
+      - "extranet"
+      - "refonte de site web"
+      - "refonte site"
+      - "portail électronique"
+      - "guichet unique électronique"
+      - "système de gestion de contenu"
+      - "cms"
+      - "interface web"
+      - "front-end"
+      - "responsive design"
+    synonyms_ar:
+      - "تطوير مواقع الويب"
+      - "موقع إلكتروني"
+      - "بوابة إلكترونية"
+      - "تطبيق ويب"
+      - "منصة رقمية"
+    technical_keywords:
+      - "React"
+      - "Vue.js"
+      - "Angular"
+      - "Node.js"
+      - "Next.js"
+      - "JavaScript"
+      - "TypeScript"
+      - "HTML5"
+      - "CSS3"
+      - "Tailwind"
+      - "PHP"
+      - "Laravel"
+      - "Symfony"
+      - "Django"
+      - "WordPress"
+      - "Drupal"
+      - "REST API"
+      - "GraphQL"
+
   - id: "custom-software"
-    label: "Custom Software & Web Development"
+    label: "Custom Programming & Mobile Apps"
     weight: 1.0
     synonyms_fr:
       - "développement logiciel"
-      - "application web"
-      - "portail web"
       - "développement sur mesure"
+      - "progiciel sur mesure"
+      - "application mobile"
+      - "application métier"
       - "numérisation des processus"
+      - "dématérialisation"
       - "plateforme informatique"
+      - "système d'information"
+      - "génie logiciel"
+      - "maintenance applicative"
+      - "tma"
+      - "tierce maintenance applicative"
+      - "intégration de systèmes"
+      - "interopérabilité"
     synonyms_ar:
       - "تطوير البرمجيات"
       - "تطوير التطبيقات"
+      - "برمجيات مخصصة"
+      - "تطبيق جوال"
       - "رقمنة"
+      - "نظام معلوماتي"
     technical_keywords:
       - "Python"
-      - "React"
-      - "Node.js"
-      - "PostgreSQL"
+      - "Java"
+      - "Spring Boot"
+      - "C#"
+      - ".NET"
+      - "Go"
+      - "Flutter"
+      - "React Native"
+      - "iOS"
+      - "Android"
+      - "Microservices"
       - "API"
+      - "PostgreSQL"
+      - "MySQL"
       - "Docker"
-      - "cloud"
+      - "Git"
 
   - id: "data-solutions"
-    label: "Data Engineering, BI & Automation"
+    label: "Data Engineering, BI & Analytics"
     weight: 0.95
     synonyms_fr:
       - "business intelligence"
       - "traitement de données"
       - "analyse de données"
-      - "automatisation"
+      - "ingénierie de données"
       - "tableau de bord décisionnel"
       - "tableau de bord bi"
       - "tableau de bord de gestion"
       - "tableau de bord analytique"
       - "reporting automatisé"
+      - "entrepôt de données"
+      - "data warehouse"
+      - "datamart"
       - "migration de données"
+      - "pipeline de données"
+      - "gouvernance des données"
+      - "qualité des données"
     synonyms_ar:
       - "معالجة البيانات"
       - "ذكاء الأعمال"
-      - "أتمتة"
+      - "لوحة القيادة"
+      - "تحليل البيانات"
+      - "قاعدة بيانات"
     technical_keywords:
       - "ETL"
+      - "ELT"
       - "PowerBI"
+      - "Tableau"
+      - "Superset"
       - "SQL"
+      - "PostgreSQL"
+      - "Oracle"
+      - "Airflow"
+      - "dbt"
       - "Dashboard"
-      - "pipeline de données"
+      - "Big Data"
+      - "Data Lake"
+
+  - id: "ai-automation"
+    label: "AI, NLP & Process Automation"
+    weight: 0.90
+    synonyms_fr:
+      - "intelligence artificielle"
+      - "automatisation des processus"
+      - "reconnaissance optique de caractères"
+      - "ocr"
+      - "traitement automatique du langage"
+      - "chatbot"
+      - "agent conversationnel"
+      - "rpa"
+      - "vision par ordinateur"
+      - "apprentissage automatique"
+    synonyms_ar:
+      - "الذكاء الاصطناعي"
+      - "أتمتة العمليات"
+      - "تعلم الآلة"
+    technical_keywords:
+      - "Machine Learning"
+      - "Deep Learning"
+      - "NLP"
+      - "OCR"
+      - "LLM"
+      - "PyTorch"
+      - "TensorFlow"
+      - "Scikit-learn"
+      - "LangChain"
+
+  - id: "cloud-devops"
+    label: "Cloud, DevOps & Maintenance"
+    weight: 0.85
+    synonyms_fr:
+      - "hébergement web"
+      - "infrastructure cloud"
+      - "déploiement continu"
+      - "conteneurisation"
+      - "sécurité applicative"
+      - "sauvegarde et archivage"
+    synonyms_ar:
+      - "الحوسبة السحابية"
+      - "استضافة المواقع"
+    technical_keywords:
+      - "Cloud"
+      - "Docker"
+      - "Kubernetes"
+      - "CI/CD"
+      - "AWS"
+      - "Azure"
+      - "GCP"
+      - "Linux"
 
 negative_constraints:
   keywords:
@@ -146,4 +286,3 @@ scoring_weights:
   semantic_similarity: 0.30
   feasibility_proximity: 0.15
   commercial_attractiveness: 0.15
-
