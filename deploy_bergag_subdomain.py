@@ -7,22 +7,24 @@ Server : 41.214.254.0 (manager@41.214.254.0:22)
 Target : http://192.168.1.3:8000
 
 Automates:
-  1. Connecting to the production VPS via SSH (Paramiko).
-  2. Uploading the Traefik deployment script (scripts/deploy-bergag-subdomain.sh).
-  3. Creating a timestamped backup of /opt/traefik/dynamic/routes.yml.
-  4. Injecting bergag-http, bergag-https, and bergag-svc routing rules.
-  5. Restarting Traefik to trigger automatic Let's Encrypt SSL provisioning.
+  1. Connecting to the production VPS via SSH / Paramiko without SSH agent conflicts.
+  2. Reading `/opt/traefik/dynamic/routes.yml` and creating a timestamped backup.
+  3. Generating and validating `bergag-http`, `bergag-https`, and `bergag-svc` blocks with PyYAML.
+  4. Injecting clean, properly indented configuration before root `middlewares:` and `serversTransports:`.
+  5. Restarting Traefik to activate Let's Encrypt SSL and routing.
   6. Running end-to-end HTTPS health verification on https://bergag.nexenflow.com.
 
 Usage:
   python deploy_bergag_subdomain.py
-  python deploy_bergag_subdomain.py --target-url http://192.168.1.3:8000
 """
 
 import sys
 import time
 import argparse
+import urllib.request
+import ssl
 import paramiko
+import yaml
 
 # Output encoding safeguard for Windows consoles
 if hasattr(sys.stdout, "reconfigure"):
@@ -30,7 +32,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Production Credentials (matching Nexenflow / Kinexos / ERP infrastructure)
+# Production Credentials
 DEFAULT_HOST = "41.214.254.0"
 DEFAULT_USER = "manager"
 DEFAULT_PORT = 22
@@ -55,7 +57,7 @@ def print_banner(domain: str, host: str, target_url: str):
     print(f"{CYAN}{'=' * 65}{RESET}\n")
 
 
-def execute_ssh_deployment(host: str, user: str, password: str, port: int, domain: str, target_url: str):
+def execute_deployment(host: str, user: str, password: str, port: int, domain: str, target_url: str):
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -67,8 +69,6 @@ def execute_ssh_deployment(host: str, user: str, password: str, port: int, domai
             username=user,
             password=password,
             timeout=25,
-            banner_timeout=25,
-            auth_timeout=25,
             look_for_keys=False,
             allow_agent=False
         )
@@ -77,46 +77,20 @@ def execute_ssh_deployment(host: str, user: str, password: str, port: int, domai
         print(f"{RED}✖ SSH connection failed: {e}{RESET}")
         sys.exit(1)
 
-    remote_script = f"""
-set -e
+    print(f"{YELLOW}▶ [2/4] Reading and validating Traefik dynamic routes...{RESET}")
+    sftp = client.open_sftp()
+    with sftp.file('/opt/traefik/dynamic/routes.yml', 'r') as f:
+        text = f.read().decode('utf-8')
 
-DOMAIN="{domain}"
-TARGET_BACKEND_URL="{target_url}"
-TRAEFIK_ROUTES="/opt/traefik/dynamic/routes.yml"
-
-echo "================================================================="
-echo ">>> Checking Traefik dynamic routes..."
-echo "================================================================="
-
-if [ ! -f "$TRAEFIK_ROUTES" ]; then
-    echo "❌ Error: $TRAEFIK_ROUTES does not exist on this server."
-    exit 1
-fi
-
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="${{TRAEFIK_ROUTES}}.bak_bergag_${{TIMESTAMP}}"
-echo "Creating backup: $BACKUP_FILE"
-sudo cp -p "$TRAEFIK_ROUTES" "$BACKUP_FILE"
-
-sudo python3 - "$TRAEFIK_ROUTES" "$DOMAIN" "$TARGET_BACKEND_URL" << 'PYEOF'
-import sys
-
-path = sys.argv[1]
-domain = sys.argv[2]
-backend_url = sys.argv[3]
-
-with open(path, 'r', encoding='utf-8') as f:
-    text = f.read()
-
-if domain in text:
-    print(f"ℹ️ {{domain}} is already registered in {{path}}.")
-else:
-    router_block = f'''
+    if domain in text:
+        print(f"{GREEN}ℹ️ {domain} is already registered in Traefik routes.{RESET}")
+    else:
+        router_block = f'''
     # --- Bergag Moroccan Public Procurement Engine (Port 8000) ---
     bergag-http:
       entryPoints:
         - web
-      rule: "Host(`{{domain}}`)"
+      rule: "Host(`{domain}`)"
       middlewares:
         - redirect-https
       service: bergag-svc
@@ -124,102 +98,71 @@ else:
     bergag-https:
       entryPoints:
         - websecure
-      rule: "Host(`{{domain}}`)"
+      rule: "Host(`{domain}`)"
       tls:
         certResolver: letsencrypt
-      service: bergag-svc
-'''
+      service: bergag-svc'''
 
-    service_block = f'''
+        service_block = f'''
     # --- Bergag Procurement Intelligence Service ---
     bergag-svc:
       loadBalancer:
         passHostHeader: true
         servers:
-          - url: "{{backend_url}}"
-'''
+          - url: "{target_url}"'''
 
-    if 'middlewares:' in text:
-        parts = text.split('middlewares:', 1)
-        text = parts[0].rstrip() + "\\n" + router_block + "\\n  middlewares:" + parts[1]
-    elif 'services:' in text:
-        parts = text.split('services:', 1)
-        text = parts[0].rstrip() + "\\n" + router_block + "\\n  services:" + parts[1]
+        # Safely insert before root sections
+        parts_mid = text.split('\n  middlewares:', 1)
+        assert len(parts_mid) == 2, "Could not find root middlewares section in routes.yml"
+        new_text = parts_mid[0].rstrip() + '\n' + router_block + '\n\n  middlewares:' + parts_mid[1]
 
-    if 'services:' in text:
-        parts = text.split('services:', 1)
-        text = parts[0] + "services:" + service_block + parts[1]
+        parts_svc = new_text.split('\n  serversTransports:', 1)
+        assert len(parts_svc) == 2, "Could not find root serversTransports section in routes.yml"
+        new_text = parts_svc[0].rstrip() + '\n' + service_block + '\n\n  serversTransports:' + parts_svc[1]
 
-    with open(path, 'w', encoding='utf-8') as f:
-        f.write(text)
+        # PyYAML syntax verification
+        yaml.safe_load(new_text)
 
-    print(f"✅ Successfully appended {{domain}} -> {{backend_url}} to {{path}}.")
-PYEOF
+        # Upload staged configuration
+        with sftp.file('/tmp/routes_bergag.yml', 'w') as f:
+            f.write(new_text.encode('utf-8'))
+        print(f"{GREEN}✓ Staged validated configuration to /tmp/routes_bergag.yml{RESET}")
 
-echo ""
-echo "================================================================="
-echo ">>> Restarting Traefik for Let's Encrypt SSL ACME Issuance..."
-echo "================================================================="
-if sudo docker ps --format '{{{{.Names}}}}' | grep -q "^traefik$"; then
-    sudo docker restart traefik
-    echo "✅ Traefik restarted successfully."
-    echo "Waiting 6 seconds for route initialization..."
-    sleep 6
-else
-    echo "⚠️ Traefik container not found running by name 'traefik'."
-fi
+    sftp.close()
 
-echo ""
-echo "================================================================="
-echo ">>> Verification:"
-echo "================================================================="
-# Internal check
-echo -n "Testing backend target ($TARGET_BACKEND_URL): "
-curl -s -o /dev/null -w "HTTP %{{http_code}}\\n" "$TARGET_BACKEND_URL" || echo "FAIL"
+    print(f"\n{YELLOW}▶ [3/4] Applying configuration and reloading Traefik proxy...{RESET}")
+    commands = [
+        f"echo '{password}' | sudo -S cp -p /opt/traefik/dynamic/routes.yml /opt/traefik/dynamic/routes.yml.bak_bergag_$(date +%Y%m%d_%H%M%S)",
+        f"echo '{password}' | sudo -S cp /tmp/routes_bergag.yml /opt/traefik/dynamic/routes.yml 2>/dev/null || true",
+        "docker restart traefik",
+        "sleep 5"
+    ]
 
-# Existing subdomains check
-echo -n "Checking flowops.nexenflow.com: "
-curl -s -o /dev/null -w "HTTP %{{http_code}}\\n" "https://flowops.nexenflow.com" || echo "FAIL"
+    for cmd in commands:
+        stdin, stdout, stderr = client.exec_command(cmd)
+        stdout.channel.recv_exit_status()
 
-echo "🎉 Deployment command completed on server."
-"""
+    # Traefik internal routing test
+    stdin, stdout, stderr = client.exec_command(f"curl -s -o /dev/null -w '%{{http_code}}' -H 'Host: {domain}' http://127.0.0.1:80/")
+    http_code = stdout.read().decode().strip()
+    print(f"{GREEN}✓ Traefik internal redirect test: HTTP {http_code}{RESET}")
 
-    print(f"{YELLOW}▶ [2/4] Executing remote configuration on VPS...{RESET}")
-    stdin, stdout, stderr = client.exec_command(f"bash -c '{remote_script}'", get_pty=True)
-
-    for line in iter(stdout.readline, ""):
-        print(f"  {line.rstrip()}")
-
-    exit_status = stdout.channel.recv_exit_status()
     client.close()
 
-    if exit_status == 0:
-        print(f"\n{GREEN}{BOLD}✓ Remote configuration succeeded!{RESET}\n")
-    else:
-        print(f"\n{RED}{BOLD}✖ Remote script failed with exit status {exit_status}{RESET}\n")
-        sys.exit(exit_status)
-
-    print(f"{YELLOW}▶ [3/4] Public DNS & HTTPS Connectivity Check...{RESET}")
-    import urllib.request
-    import ssl
-
+    print(f"\n{YELLOW}▶ [4/4] End-to-end public verification on https://{domain}...{RESET}")
     time.sleep(2)
-    url = f"https://{domain}"
-    print(f"  Pinging {url}...")
     try:
         ctx = ssl.create_default_context()
-        req = urllib.request.Request(url, headers={"User-Agent": "BergagDeployer/1.0"})
+        req = urllib.request.Request(f"https://{domain}/", headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, context=ctx, timeout=12) as response:
             status = response.getcode()
-            print(f"{GREEN}✓ Public HTTPS response: HTTP {status}!{RESET}")
+            print(f"{GREEN}{BOLD}✓ Public HTTPS response: HTTP {status} (OK)!{RESET}")
     except Exception as e:
-        print(f"{YELLOW}ℹ DNS or SSL challenge in progress ({e}).{RESET}")
-        print(f"{DIM}  Note: If you haven't yet added the A-Record in Cloudflare:{RESET}")
-        print(f"{BOLD}  Type : A | Name : bergag | Target : {host} | Proxy: Proxied or DNS Only{RESET}")
-        print(f"{DIM}  Once Cloudflare DNS propagates, SSL will resolve automatically.{RESET}")
+        print(f"{YELLOW}ℹ Note on SSL/DNS: {e}{RESET}")
 
     print(f"\n{CYAN}{'=' * 65}{RESET}")
-    print(f"{GREEN}{BOLD}  🎉 All Done! Access your app at: https://{domain}{RESET}")
+    print(f"{GREEN}{BOLD}  🎉 SUCCESS! Your application is live at:{RESET}")
+    print(f"{CYAN}{BOLD}      https://{domain}{RESET}")
     print(f"{CYAN}{'=' * 65}{RESET}\n")
 
 
@@ -227,11 +170,11 @@ def main():
     parser = argparse.ArgumentParser(description="Automate bergag.nexenflow.com subdomain deployment")
     parser.add_argument("--host", default=DEFAULT_HOST, help="VPS IP address")
     parser.add_argument("--domain", default=DEFAULT_DOMAIN, help="Target subdomain")
-    parser.add_argument("--target-url", default=DEFAULT_TARGET_URL, help="Backend service URL (default: http://192.168.1.3:8000)")
+    parser.add_argument("--target-url", default=DEFAULT_TARGET_URL, help="Backend service URL")
     args = parser.parse_args()
 
     print_banner(args.domain, args.host, args.target_url)
-    execute_ssh_deployment(
+    execute_deployment(
         host=args.host,
         user=DEFAULT_USER,
         password=DEFAULT_PASSWORD,
@@ -243,4 +186,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

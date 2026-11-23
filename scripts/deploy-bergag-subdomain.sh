@@ -132,9 +132,9 @@ EOF
 echo ""
 echo -e "${YELLOW}[3/4] Refreshing Traefik Proxy for ACME SSL Provisioning...${NC}"
 
-if sudo docker ps --format '{{.Names}}' | grep -q "^traefik$"; then
+if docker ps --format '{{.Names}}' | grep -q "^traefik$"; then
     echo "  Restarting Traefik container..."
-    sudo docker restart traefik
+    docker restart traefik
     echo -e "${GREEN}✓ Traefik restarted successfully${NC}"
     echo "  Waiting 6 seconds for Traefik route synchronization..."
     sleep 6
