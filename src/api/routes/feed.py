@@ -17,7 +17,7 @@ from src.models.tender import Tender, Buyer, LineItem
 from src.models.profile import CompanyProfile, ProfileMatch, UserTenderAction
 from src.profiles.loader import load_profile, load_all_profiles, save_profile, delete_profile, DEFAULT_SECTOR_ICONS
 from src.profiles.schema import CompanyProfileSchema, CatalogItem, MacroFilters, NegativeConstraints, ScoringWeights
-from src.engine.scoring_cascade import ScoringCascadeEngine, invalidate_tender_cache
+from src.engine.scoring_cascade import ScoringCascadeEngine, invalidate_tender_cache, CascadeEvaluationResult
 from src.engine.pricing_helper import PricingHelper
 from src.engine.pipeline_manager import pipeline_manager
 from src.engine.feedback_manager import feedback_manager
@@ -42,11 +42,42 @@ from src.api.schemas import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Procurement Feed"])
 
+ALL_SECTORS_PROFILE = CompanyProfileSchema(
+    version="1.0",
+    tenant_id="all",
+    profile_id="all",
+    profile_name="Tous les Secteurs",
+    icon="🌐",
+    description="Mode Global : Recherche transversale multi-secteurs sans restrictions ni contraintes de profil",
+    macro_filters=MacroFilters(
+        categories=["Fournitures", "Services", "Travaux"],
+        prestation_types=[],
+        geographic_coverage={"mode": "national"},
+        financial_bands={"min_amount_mad": 0.0, "max_amount_mad": 500000.0},
+        minimum_deadline_hours=0
+    ),
+    catalog=[],
+    negative_constraints=NegativeConstraints(keywords=[], disallowed_buyer_types=[]),
+    scoring_weights=ScoringWeights(line_item_coverage=0.25, semantic_similarity=0.25, feasibility_proximity=0.25, commercial_attractiveness=0.25)
+)
+
 @router.get("/profiles")
 async def get_available_profiles():
     """Lists all loaded company profiles with rich metadata, catalog item counts, and keyword totals"""
     profiles = load_all_profiles()
-    res = []
+    res = [
+        {
+            "id": "all",
+            "tenant_id": "all",
+            "profile_name": "Tous les Secteurs",
+            "icon": "🌐",
+            "description": "Mode Global : Recherche transversale multi-secteurs sans restrictions de profil",
+            "categories": ["Fournitures", "Services", "Travaux"],
+            "catalog_count": 0,
+            "keywords_count": 0,
+            "negative_keywords_count": 0
+        }
+    ]
     for p in profiles:
         kw_count = sum(
             len(getattr(c, "synonyms_fr", [])) + len(getattr(c, "synonyms_ar", [])) + len(getattr(c, "technical_keywords", []))
@@ -68,6 +99,12 @@ async def get_available_profiles():
 @router.get("/profiles/{profile_id}")
 async def get_profile_detail(profile_id: str):
     """Returns full details of a specific sector profile including catalog items and weights"""
+    if profile_id.lower().strip() in ("all", "tous", "all_sectors", "*"):
+        data = ALL_SECTORS_PROFILE.model_dump()
+        data["id"] = "all"
+        data["icon"] = "🌐"
+        data["is_system_global"] = True
+        return data
     try:
         profile = load_profile(profile_id)
         data = profile.model_dump()
@@ -80,6 +117,8 @@ async def get_profile_detail(profile_id: str):
 @router.put("/profiles/{profile_id}")
 async def update_profile_configuration(profile_id: str, payload: Dict[str, Any]):
     """Updates an existing sector profile, modifying its keywords, weights, categories, or negative constraints"""
+    if profile_id.lower().strip() in ("all", "tous", "all_sectors", "*"):
+        raise HTTPException(status_code=400, detail="Le profil global 'Tous les Secteurs' est un profil système non modifiable.")
     try:
         # Preserve or assign tenant_id & profile_id
         if "tenant_id" not in payload:
@@ -150,7 +189,7 @@ async def create_new_sector_profile(payload: Dict[str, Any]):
 @router.delete("/profiles/{profile_id}")
 async def remove_sector_profile(profile_id: str):
     """Deletes a custom sector profile (standard profiles cannot be deleted)"""
-    protected = {"it_hardware", "software_data", "cctv_security"}
+    protected = {"all", "it_hardware", "software_data", "cctv_security"}
     if profile_id in protected:
         raise HTTPException(status_code=403, detail="Les secteurs standards du système ne peuvent pas être supprimés")
 
@@ -283,10 +322,14 @@ async def get_tender_feed(
     Returns dynamically filtered, ranked active procurement opportunities
     scored against the selected profile and scoped by user role.
     """
-    try:
-        profile = load_profile(profile_name)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Profile '{profile_name}' not found")
+    is_all_sectors = bool(profile_name and profile_name.lower().strip() in ("all", "tous", "all_sectors", "*"))
+    if is_all_sectors:
+        profile = ALL_SECTORS_PROFILE
+    else:
+        try:
+            profile = load_profile(profile_name)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Profile '{profile_name}' not found")
 
     scoring_engine = ScoringCascadeEngine()
 
@@ -337,7 +380,7 @@ async def get_tender_feed(
                         )
                     )
                 stmt = stmt.where(and_(*word_clauses))
-    else:
+    elif not is_all_sectors:
         # Pre-filter candidates by sector keywords so the cascade scoring evaluates
         # genuine sector opportunities rather than arbitrary unrelated rows (food, fuel, cleaning).
         candidate_kws = extract_profile_candidate_keywords(profile)
@@ -453,42 +496,86 @@ async def get_tender_feed(
     res = await session.execute(stmt)
     tenders = res.scalars().all()
 
+    # Preload alignment feedback for all sectors or specific profile
+    if is_all_sectors:
+        aligned_ids = set()
+        misaligned_ids = set()
+        all_profs = [p.profile_id for p in load_all_profiles()] + ["all"]
+        for p_id in all_profs:
+            aligned_ids.update(feedback_manager.get_aligned_portal_ids(p_id))
+            misaligned_ids.update(feedback_manager.get_misaligned_portal_ids(p_id))
+    else:
+        aligned_ids = set(feedback_manager.get_aligned_portal_ids(profile_name))
+        misaligned_ids = set(feedback_manager.get_misaligned_portal_ids(profile_name))
+
     # Score all candidates against profile
     scored_items: List[TenderFeedItem] = []
     for t in tenders:
-        tender_dict = {
-            "portal_id": t.portal_id,
-            "reference": t.reference,
-            "title": t.title,
-            "buyer_name": t.buyer.official_name if t.buyer else "Inconnu",
-            "execution_location": t.execution_location,
-            "main_category": t.main_category,
-            "published_at": t.published_at.isoformat(),
-            "deadline_at": t.deadline_at.isoformat(),
-            "status": t.status,
-            "line_items": [
-                {
-                    "item_order": item.item_order,
-                    "designation": item.designation,
-                    "technical_specs": item.technical_specs,
-                    "unit": item.unit,
-                    "quantity": float(item.quantity) if item.quantity is not None else 1.0,
-                    "tva_rate": float(item.tva_rate or 20.0),
-                    "warranty_required": item.warranty_required
-                }
-                for item in t.line_items
-            ]
-        }
+        if is_all_sectors:
+            hours_left = (t.deadline_at - now).total_seconds() / 3600.0 if t.deadline_at else 999.0
+            is_urgent = 0 < hours_left < 24.0
 
-        cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
+            user_feedback = None
+            if t.portal_id in aligned_ids:
+                user_feedback = "aligned"
+            elif t.portal_id in misaligned_ids:
+                user_feedback = "misaligned"
 
-        # Determine verdict: if officially cancelled or an annulation notice, verdict is ANNULÉ
-        decision_verdict = cascade_res.decision_recommendation
-        if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
-            decision_verdict = "ANNULÉ"
-            overall_score = 0.0
+            if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
+                decision_verdict = "ANNULÉ"
+                overall_score = 0.0
+            elif hours_left <= 0:
+                decision_verdict = "CLÔTURÉ"
+                overall_score = 0.0
+            elif user_feedback == "misaligned":
+                decision_verdict = "NO-GO"
+                overall_score = 20.0
+            elif user_feedback == "aligned":
+                decision_verdict = "GO"
+                overall_score = 100.0
+            elif is_urgent:
+                decision_verdict = "CONSIDER"
+                overall_score = 75.0
+            else:
+                decision_verdict = "GO"
+                overall_score = 100.0
+
+            alignment_feedback = user_feedback
         else:
-            overall_score = cascade_res.overall_score
+            tender_dict = {
+                "portal_id": t.portal_id,
+                "reference": t.reference,
+                "title": t.title,
+                "buyer_name": t.buyer.official_name if t.buyer else "Inconnu",
+                "execution_location": t.execution_location,
+                "main_category": t.main_category,
+                "published_at": t.published_at.isoformat(),
+                "deadline_at": t.deadline_at.isoformat(),
+                "status": t.status,
+                "line_items": [
+                    {
+                        "item_order": item.item_order,
+                        "designation": item.designation,
+                        "technical_specs": item.technical_specs,
+                        "unit": item.unit,
+                        "quantity": float(item.quantity) if item.quantity is not None else 1.0,
+                        "tva_rate": float(item.tva_rate or 20.0),
+                        "warranty_required": item.warranty_required
+                    }
+                    for item in t.line_items
+                ]
+            }
+
+            cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
+
+            # Determine verdict: if officially cancelled or an annulation notice, verdict is ANNULÉ
+            decision_verdict = cascade_res.decision_recommendation
+            if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
+                decision_verdict = "ANNULÉ"
+                overall_score = 0.0
+            else:
+                overall_score = cascade_res.overall_score
+            alignment_feedback = cascade_res.alignment_feedback
 
         scored_items.append(
             TenderFeedItem(
@@ -505,7 +592,7 @@ async def get_tender_feed(
                 decision_verdict=decision_verdict,
                 line_item_count=len(t.line_items),
                 portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}",
-                alignment_feedback=cascade_res.alignment_feedback
+                alignment_feedback=alignment_feedback
             )
         )
 
@@ -611,8 +698,8 @@ async def get_tender_detail(
                 "item_order": item.item_order,
                 "designation": item.designation,
                 "technical_specs": item.technical_specs,
-                "unit": item.unit,
-                "quantity": float(item.quantity),
+                "unit": item.unit or "U",
+                "quantity": float(item.quantity) if item.quantity is not None else 1.0,
                 "tva_rate": float(item.tva_rate or 20.0),
                 "warranty_required": item.warranty_required
             }
@@ -620,16 +707,70 @@ async def get_tender_detail(
         ]
     }
 
-    try:
-        profile = load_profile(profile_name)
-    except FileNotFoundError:
+    is_all_sectors = bool(profile_name and profile_name.lower().strip() in ("all", "tous", "all_sectors", "*"))
+    if is_all_sectors:
+        profile = ALL_SECTORS_PROFILE
+    else:
         try:
-            profile = load_profile("it_hardware")
+            profile = load_profile(profile_name)
         except FileNotFoundError:
-            profile = load_all_profiles()[0]
+            try:
+                profile = load_profile("it_hardware")
+            except FileNotFoundError:
+                profile = load_all_profiles()[0]
 
     scoring_engine = ScoringCascadeEngine()
-    cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
+    if is_all_sectors:
+        aligned_ids = set()
+        misaligned_ids = set()
+        all_profs = [p.profile_id for p in load_all_profiles()] + ["all"]
+        for p_id in all_profs:
+            aligned_ids.update(feedback_manager.get_aligned_portal_ids(p_id))
+            misaligned_ids.update(feedback_manager.get_misaligned_portal_ids(p_id))
+
+        user_feedback = None
+        if t.portal_id in aligned_ids:
+            user_feedback = "aligned"
+        elif t.portal_id in misaligned_ids:
+            user_feedback = "misaligned"
+
+        now_utc = datetime.now(timezone.utc)
+        hours_left = (t.deadline_at - now_utc).total_seconds() / 3600.0 if t.deadline_at else 999.0
+        is_urgent = 0 < hours_left < 24.0
+
+        if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
+            score = 0.0
+            verdict = "ANNULÉ"
+        elif hours_left <= 0:
+            score = 0.0
+            verdict = "CLÔTURÉ"
+        elif user_feedback == "misaligned":
+            score = 20.0
+            verdict = "NO-GO"
+        elif user_feedback == "aligned":
+            score = 100.0
+            verdict = "GO"
+        elif is_urgent:
+            score = 75.0
+            verdict = "CONSIDER"
+        else:
+            score = 100.0
+            verdict = "GO"
+
+        cascade_res = CascadeEvaluationResult(
+            overall_score=score,
+            decision_recommendation=verdict,
+            coverage_score=1.0,
+            lexical_score=1.0,
+            feasibility_score=1.0,
+            line_item_matches=[],
+            red_flags=["⚠️ Consultation sous délai court (< 24h restantes)"] if is_urgent else [],
+            llm_reasoning="Mode Global (Tous les Secteurs) : Consultation affichée sans contraintes de profil sectoriel.",
+            alignment_feedback=user_feedback,
+            learned_exemplar_bonus=0.0
+        )
+    else:
+        cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
     return TenderDetailResponse(
         portal_id=t.portal_id,
@@ -642,7 +783,7 @@ async def get_tender_detail(
         published_at=t.published_at.strftime("%d/%m/%Y %H:%M"),
         deadline_at=t.deadline_at.strftime("%d/%m/%Y %H:%M"),
         status=t.status,
-        attachment_available=t.attachment_available,
+        attachment_available=bool(t.attachment_available),
         attachment_url=t.attachment_url,
         match_score=cascade_res.overall_score,
         decision_verdict=cascade_res.decision_recommendation,
@@ -656,8 +797,8 @@ async def get_tender_detail(
                 item_order=i.item_order,
                 designation=i.designation,
                 technical_specs=i.technical_specs,
-                unit=i.unit,
-                quantity=float(i.quantity),
+                unit=i.unit or "U",
+                quantity=float(i.quantity) if i.quantity is not None else 1.0,
                 tva_rate=float(i.tva_rate or 20.0),
                 warranty_required=i.warranty_required
             )
@@ -1247,8 +1388,15 @@ async def submit_alignment_feedback(
     # Invalidate scoring cache so the new score recalculates with the feedback
     invalidate_tender_cache(req.portal_id, req.profile_name)
 
-    # Re-evaluate score immediately
-    profile = load_profile(req.profile_name)
+    is_all_sectors = bool(req.profile_name and req.profile_name.lower().strip() in ("all", "tous", "all_sectors", "*"))
+    if is_all_sectors:
+        profile = ALL_SECTORS_PROFILE
+    else:
+        try:
+            profile = load_profile(req.profile_name)
+        except FileNotFoundError:
+            profile = load_all_profiles()[0]
+
     scoring_engine = ScoringCascadeEngine()
 
     tender_dict = {
@@ -1264,14 +1412,21 @@ async def submit_alignment_feedback(
                 "designation": i.designation,
                 "technical_specs": i.technical_specs,
                 "unit": i.unit,
-                "quantity": float(i.quantity),
+                "quantity": float(i.quantity) if i.quantity is not None else 1.0,
                 "tva_rate": float(i.tva_rate or 20.0),
                 "warranty_required": i.warranty_required
             }
             for i in (tender.line_items if tender else [])
         ]
     }
-    eval_res = await scoring_engine.evaluate_tender(tender_dict, profile)
+    if is_all_sectors:
+        score = 100.0 if req.is_aligned else 20.0
+        verdict = "GO" if req.is_aligned else "NO-GO"
+    else:
+        eval_res = await scoring_engine.evaluate_tender(tender_dict, profile)
+        score = eval_res.overall_score
+        verdict = eval_res.decision_recommendation
+
     stats = feedback_manager.get_profile_stats(req.profile_name)
 
     return AlignmentFeedbackResponse(
@@ -1279,8 +1434,8 @@ async def submit_alignment_feedback(
         portal_id=req.portal_id,
         profile_name=req.profile_name,
         alignment_feedback="aligned" if req.is_aligned else "misaligned",
-        updated_score=eval_res.overall_score,
-        updated_verdict=eval_res.decision_recommendation,
+        updated_score=score,
+        updated_verdict=verdict,
         message="Alignement confirmé (+15% score bonifié). Modèle enrichi !" if req.is_aligned else "Avis marqué hors secteur (score neutralisé).",
         learned_terms_count=stats["learned_terms_count"]
     )
