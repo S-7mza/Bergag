@@ -1504,23 +1504,20 @@
 
 
                         <!-- Sorting Dropdown -->
-
                         <div class="flex items-center gap-2 text-xs">
-
                             <label class="text-slate-500 text-[11px] font-medium hidden sm:inline">Trier par :</label>
-
-                            <select x-model="sortBy" @change="fetchFeed()" class="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-2.5 py-2 outline-none focus:ring-1 focus:ring-emerald-500">
-
-                                <option value="score_desc">🎯 Score Décroissant</option>
-
-                                <option value="deadline_asc">⏳ Date Limite (Urgent)</option>
-
-                                <option value="items_desc">📦 Nombre d'Articles</option>
-
-                                <option value="id_desc">🆕 Plus Récents</option>
-
+                            <select x-model="sortBy" @change="sortLocalItems(); fetchFeed()" class="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-2.5 py-2 outline-none focus:ring-1 focus:ring-emerald-500">
+                                <option value="score_desc">🎯 Score Décroissant (Top Règle)</option>
+                                <option value="ai_score_desc">🤖 Score IA Décroissant (Top IA)</option>
+                                <option value="deadline_asc">⏳ Date Limite (Plus Urgent)</option>
+                                <option value="items_desc">📦 Nombre d'Articles (Max)</option>
+                                <option value="id_desc">🆕 Plus Récents (# ID)</option>
+                                <option value="ai_score_asc">🤖 Score IA Croissant</option>
+                                <option value="score_asc">🎯 Score Croissant</option>
+                                <option value="deadline_desc">⏳ Date Limite (Plus Lointain)</option>
+                                <option value="items_asc">📦 Moins d'Articles (Min)</option>
+                                <option value="id_asc">👴 Plus Anciens (# ID)</option>
                             </select>
-
                         </div>
 
 
@@ -1860,23 +1857,93 @@
                         <table class="w-full table-fixed text-left border-collapse text-xs">
 
                             <thead>
-
                                 <tr class="bg-slate-950/80 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
+                                    <th class="py-2.5 px-3 w-[16%] select-none">
+                                        <div class="flex flex-col gap-1.5">
+                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Score & Décision</span>
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <!-- Sort by Rule / Cascade Match Score -->
+                                                <button type="button"
+                                                        @click.stop="toggleSort('score')"
+                                                        :class="isSortActive('score') ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/30 font-black' : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'"
+                                                        class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border transition-all inline-flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95"
+                                                        title="Trier par Score Réglementaire (Décroissant / Croissant)">
+                                                    <span>🎯 Score</span>
+                                                    <span x-show="sortBy === 'score_desc'" class="text-emerald-400 font-black">▼</span>
+                                                    <span x-show="sortBy === 'score_asc'" class="text-emerald-400 font-black">▲</span>
+                                                    <span x-show="!isSortActive('score')" class="text-slate-500 text-[9px] opacity-60">⇅</span>
+                                                </button>
+                                                <!-- Sort by Deep AI Diagnosis Score -->
+                                                <button type="button"
+                                                        @click.stop="toggleSort('ai_score')"
+                                                        :class="isSortActive('ai_score') ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400/60 shadow-sm ring-1 ring-indigo-500/50 font-black' : 'bg-slate-900/90 text-slate-400 hover:text-indigo-300 border-slate-800 hover:border-indigo-500/40'"
+                                                        class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border transition-all inline-flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95"
+                                                        title="Trier par Score IA / Profil Web & Data (Top IA Décroissant / Croissant)">
+                                                    <span>🤖 Top IA</span>
+                                                    <span x-show="sortBy === 'ai_score_desc'" class="text-indigo-300 font-black">▼</span>
+                                                    <span x-show="sortBy === 'ai_score_asc'" class="text-indigo-300 font-black">▲</span>
+                                                    <span x-show="!isSortActive('ai_score')" class="text-slate-500 text-[9px] opacity-60">⇅</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </th>
 
-                                    <th class="py-3 px-3 w-[14%]">Score & Décision</th>
+                                    <th class="py-2.5 px-2 w-[9%] select-none align-top">
+                                        <button type="button"
+                                                @click.stop="toggleSort('id')"
+                                                :class="isSortActive('id') ? 'text-emerald-400 font-black' : 'text-slate-400 hover:text-slate-200'"
+                                                class="group inline-flex items-center gap-1 text-[11px] uppercase tracking-wider font-bold transition-colors cursor-pointer pt-0.5"
+                                                title="Trier par identifiant consultation (# ID)">
+                                            <span>ID & Réf</span>
+                                            <span x-show="sortBy === 'id_desc'" class="text-emerald-400 font-black">▼</span>
+                                            <span x-show="sortBy === 'id_asc'" class="text-emerald-400 font-black">▲</span>
+                                            <span x-show="!isSortActive('id')" class="text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                        </button>
+                                    </th>
 
-                                    <th class="py-3 px-2 w-[10%]">ID & Réf</th>
+                                    <th class="py-2.5 px-3 w-[39%] select-none align-top">
+                                        <div class="flex items-center justify-between gap-2 pt-0.5">
+                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Objet de la Consultation</span>
+                                            <button type="button"
+                                                    @click.stop="toggleSort('items')"
+                                                    :class="isSortActive('items') ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm font-bold' : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'"
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                    title="Trier par nombre d'articles au devis">
+                                                <span>📦 Articles</span>
+                                                <span x-show="sortBy === 'items_desc'" class="text-emerald-400 font-black">▼</span>
+                                                <span x-show="sortBy === 'items_asc'" class="text-emerald-400 font-black">▲</span>
+                                                <span x-show="!isSortActive('items')" class="text-slate-600 text-[9px]">⇅</span>
+                                            </button>
+                                        </div>
+                                    </th>
 
-                                    <th class="py-3 px-3 w-[40%]">Objet de la Consultation</th>
+                                    <th class="py-2.5 px-3 w-[17%] align-top">
+                                        <div class="pt-0.5">
+                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Acheteur Public & Lieu</span>
+                                        </div>
+                                    </th>
 
-                                    <th class="py-3 px-3 w-[18%]">Acheteur Public & Lieu</th>
+                                    <th class="py-2.5 px-2 w-[10%] text-center select-none align-top">
+                                        <div class="pt-0.5">
+                                            <button type="button"
+                                                    @click.stop="toggleSort('deadline')"
+                                                    :class="isSortActive('deadline') ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'"
+                                                    class="group inline-flex items-center gap-1 text-[11px] uppercase tracking-wider font-bold transition-colors cursor-pointer"
+                                                    title="Trier par date limite / échéance">
+                                                <span>Échéance</span>
+                                                <span x-show="sortBy === 'deadline_asc'" class="text-amber-400 font-black">▲</span>
+                                                <span x-show="sortBy === 'deadline_desc'" class="text-amber-400 font-black">▼</span>
+                                                <span x-show="!isSortActive('deadline')" class="text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                            </button>
+                                        </div>
+                                    </th>
 
-                                    <th class="py-3 px-2 w-[9%] text-center">Échéance</th>
-
-                                    <th class="py-3 px-3 w-[9%] text-right">Actions</th>
-
+                                    <th class="py-2.5 px-3 w-[9%] text-right align-top">
+                                        <div class="pt-0.5">
+                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Actions</span>
+                                        </div>
+                                    </th>
                                 </tr>
-
                             </thead>
 
                             <tbody class="divide-y divide-slate-800/70">
@@ -1915,8 +1982,9 @@
                                                     <span :class="{
                                                         'bg-indigo-500/15 text-indigo-300 border-indigo-500/40': item.ai_matching.matching_rate >= 70,
                                                         'bg-sky-500/10 text-sky-300 border-sky-500/30': item.ai_matching.matching_rate >= 45 && item.ai_matching.matching_rate < 70,
-                                                        'bg-slate-800/80 text-slate-400 border-slate-700': item.ai_matching.matching_rate < 45
-                                                    }" class="px-2 py-0.5 rounded-full font-mono font-bold border inline-flex items-center gap-1 text-[10px]" :title="'Diagnostic IA Profil Web/Dev/Data: ' + item.ai_matching.primary_domain">
+                                                        'bg-slate-800/80 text-slate-400 border-slate-700': item.ai_matching.matching_rate < 45,
+                                                        'ring-1 ring-indigo-400 shadow-sm font-black': isSortActive('ai_score') && item.ai_matching.matching_rate >= 50
+                                                    }" class="px-2 py-0.5 rounded-full font-mono font-bold border inline-flex items-center gap-1 text-[10px] transition-all" :title="'Diagnostic IA Profil Web/Dev/Data: ' + item.ai_matching.primary_domain">
                                                         <span>🤖</span>
                                                         <span x-text="'AI: ' + item.ai_matching.matching_rate.toFixed(0) + '% ' + (item.ai_matching.rating_label === 'EXCELLENT_MATCH' ? 'TOP' : item.ai_matching.rating_label.replace('_MATCH',''))"></span>
                                                     </span>
@@ -7110,7 +7178,8 @@
                         </div>
 
                         <!-- Editor Content -->
-                        <div x-show="!sectorLoading && currentSectorDetail" class="space-y-5">
+                        <template x-if="!sectorLoading && currentSectorDetail">
+                            <div class="space-y-5">
                             
                             <!-- Sector Profile General Info -->
                             <div class="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 space-y-3">
@@ -7263,6 +7332,7 @@
                             </div>
 
                         </div>
+                        </template>
 
                     </div>
 
@@ -7397,7 +7467,14 @@
                 availableProfiles: [],
                 sectorModalOpen: false,
                 selectedSectorId: 'it_hardware',
-                currentSectorDetail: null,
+                currentSectorDetail: {
+                    icon: '🏷️',
+                    profile_name: '',
+                    description: '',
+                    macro_filters: { categories: ['Fournitures', 'Services', 'Travaux'] },
+                    catalog: [],
+                    negative_constraints: { keywords: [] }
+                },
                 sectorLoading: false,
                 sectorSaving: false,
                 newSectorModalOpen: false,
@@ -8280,6 +8357,21 @@
 
                     if (this.alignmentFilter === 'unreviewed') chips.push({ key: 'alignmentFilter', label: '⏳ Non évalués' });
 
+                    if (this.sortBy && this.sortBy !== 'score_desc') {
+                        const sortLabels = {
+                            'ai_score_desc': 'Tri: 🤖 Top Score IA (Décroissant)',
+                            'ai_score_asc': 'Tri: 🤖 Score IA (Croissant)',
+                            'score_asc': 'Tri: 🎯 Score Réglementaire (Croissant)',
+                            'deadline_asc': 'Tri: ⏳ Plus Urgent',
+                            'deadline_desc': 'Tri: ⏳ Plus Lointain',
+                            'items_desc': 'Tri: 📦 Nombre d\'Articles (Max)',
+                            'items_asc': 'Tri: 📦 Moins d\'Articles (Min)',
+                            'id_desc': 'Tri: 🆕 Plus Récents (# ID)',
+                            'id_asc': 'Tri: 👴 Plus Anciens (# ID)'
+                        };
+                        chips.push({ key: 'sortBy', label: sortLabels[this.sortBy] || ('Tri: ' + this.sortBy) });
+                    }
+
                     return chips;
 
                 },
@@ -8287,6 +8379,11 @@
 
 
                 removeFilterChip(key) {
+
+                    if (key === 'sortBy') {
+                        this.sortBy = 'score_desc';
+                        this.sortLocalItems();
+                    }
 
                     if (key === 'search') this.searchQuery = '';
 
@@ -8563,6 +8660,7 @@
                         const alignedHeader = res.headers.get('x-count-aligned');
 
                         this.items = await res.json();
+                        this.sortLocalItems();
 
                         this.displayLimit = 50;
 
@@ -8600,6 +8698,69 @@
 
                     }
 
+                },
+
+                sortLocalItems() {
+                    if (!this.items || !this.items.length) return;
+                    const getAi = (it) => {
+                        if (!it || !it.ai_matching) return 0;
+                        return Number(it.ai_matching.matching_rate) || 0;
+                    };
+                    const getDeadline = (it) => {
+                        if (!it || !it.deadline_at) return 0;
+                        const parts = it.deadline_at.split(/[\s/:]+/);
+                        if (parts.length >= 5) {
+                            return new Date(parts[2], parts[1] - 1, parts[0], parts[3], parts[4]).getTime();
+                        }
+                        return new Date(it.deadline_at).getTime() || 0;
+                    };
+
+                    if (this.sortBy === 'ai_score_desc') {
+                        this.items.sort((a, b) => (getAi(b) - getAi(a)) || ((b.match_score || 0) - (a.match_score || 0)) || (b.portal_id - a.portal_id));
+                    } else if (this.sortBy === 'ai_score_asc') {
+                        this.items.sort((a, b) => (getAi(a) - getAi(b)) || ((a.match_score || 0) - (b.match_score || 0)) || (a.portal_id - b.portal_id));
+                    } else if (this.sortBy === 'score_asc') {
+                        this.items.sort((a, b) => ((a.match_score || 0) - (b.match_score || 0)) || (getAi(a) - getAi(b)) || (a.portal_id - b.portal_id));
+                    } else if (this.sortBy === 'score_desc') {
+                        this.items.sort((a, b) => ((b.match_score || 0) - (a.match_score || 0)) || (getAi(b) - getAi(a)) || (b.portal_id - a.portal_id));
+                    } else if (this.sortBy === 'deadline_asc') {
+                        this.items.sort((a, b) => getDeadline(a) - getDeadline(b));
+                    } else if (this.sortBy === 'deadline_desc') {
+                        this.items.sort((a, b) => getDeadline(b) - getDeadline(a));
+                    } else if (this.sortBy === 'items_desc') {
+                        this.items.sort((a, b) => ((b.line_item_count || 0) - (a.line_item_count || 0)) || ((b.match_score || 0) - (a.match_score || 0)));
+                    } else if (this.sortBy === 'items_asc') {
+                        this.items.sort((a, b) => ((a.line_item_count || 0) - (b.line_item_count || 0)) || ((a.match_score || 0) - (b.match_score || 0)));
+                    } else if (this.sortBy === 'id_desc') {
+                        this.items.sort((a, b) => b.portal_id - a.portal_id);
+                    } else if (this.sortBy === 'id_asc') {
+                        this.items.sort((a, b) => a.portal_id - b.portal_id);
+                    }
+                },
+
+                toggleSort(col) {
+                    if (col === 'ai_score') {
+                        this.sortBy = this.sortBy === 'ai_score_desc' ? 'ai_score_asc' : 'ai_score_desc';
+                    } else if (col === 'score') {
+                        this.sortBy = this.sortBy === 'score_desc' ? 'score_asc' : 'score_desc';
+                    } else if (col === 'id') {
+                        this.sortBy = this.sortBy === 'id_desc' ? 'id_asc' : 'id_desc';
+                    } else if (col === 'deadline') {
+                        this.sortBy = this.sortBy === 'deadline_asc' ? 'deadline_desc' : 'deadline_asc';
+                    } else if (col === 'items') {
+                        this.sortBy = this.sortBy === 'items_desc' ? 'items_asc' : 'items_desc';
+                    }
+                    this.sortLocalItems();
+                    this.fetchFeed();
+                },
+
+                isSortActive(col) {
+                    if (col === 'ai_score') return this.sortBy === 'ai_score_desc' || this.sortBy === 'ai_score_asc';
+                    if (col === 'score') return this.sortBy === 'score_desc' || this.sortBy === 'score_asc';
+                    if (col === 'id') return this.sortBy === 'id_desc' || this.sortBy === 'id_asc';
+                    if (col === 'deadline') return this.sortBy === 'deadline_asc' || this.sortBy === 'deadline_desc';
+                    if (col === 'items') return this.sortBy === 'items_desc' || this.sortBy === 'items_asc';
+                    return false;
                 },
 
 
@@ -8656,7 +8817,11 @@
                     try {
                         const res = await fetch(`/api/profiles/${encodeURIComponent(sectorId)}`);
                         if (res.ok) {
-                            this.currentSectorDetail = await res.json();
+                            const data = await res.json();
+                            if (!data.macro_filters) data.macro_filters = { categories: [] };
+                            if (!data.catalog) data.catalog = [];
+                            if (!data.negative_constraints) data.negative_constraints = { keywords: [] };
+                            this.currentSectorDetail = data;
                         } else {
                             this.showToast('Erreur chargement secteur', 'error');
                         }

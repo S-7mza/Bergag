@@ -315,7 +315,7 @@ async def get_tender_feed(
     status_filter: Optional[str] = Query("all", description="Status filter: 'all', 'open' (eliminate closed), 'closed'"),
     alignment_filter: Optional[str] = Query("all", description="Filter by expert alignment: 'all', 'aligned' (confirmés alignés), 'misaligned', 'unreviewed')"),
     exclude_closed: bool = Query(False, description="Whether to eliminate closed/expired offers"),
-    sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, deadline_asc, items_desc, id_desc)"),
+    sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, score_asc, ai_score_desc, ai_score_asc, deadline_asc, deadline_desc, items_desc, items_asc, id_desc, id_asc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
     limit: int = Query(2500, ge=1, le=5000),
     session: AsyncSession = Depends(get_db_session)
@@ -646,15 +646,43 @@ async def get_tender_feed(
         # Default 'all': filter by effective minimum score
         feed_items = [item for item in scored_items if item.match_score >= effective_min_score]
 
+    # Helper extractors for multi-criteria sorting
+    def get_ai_score(item) -> float:
+        if item.ai_matching:
+            if hasattr(item.ai_matching, "matching_rate"):
+                return float(item.ai_matching.matching_rate or 0.0)
+            elif isinstance(item.ai_matching, dict):
+                return float(item.ai_matching.get("matching_rate", 0.0) or 0.0)
+        return 0.0
+
+    def parse_deadline_dt(item) -> datetime:
+        try:
+            return datetime.strptime(item.deadline_at, "%d/%m/%Y %H:%M")
+        except Exception:
+            return datetime.max
+
     # Sorting
-    if sort_by == "deadline_asc":
-        feed_items.sort(key=lambda x: x.deadline_at)
+    if sort_by == "ai_score_desc":
+        # Top AI score first, with tie-break on rule match_score and portal_id
+        feed_items.sort(key=lambda x: (get_ai_score(x), x.match_score, x.portal_id), reverse=True)
+    elif sort_by == "ai_score_asc":
+        feed_items.sort(key=lambda x: (get_ai_score(x), x.match_score, x.portal_id))
+    elif sort_by == "score_asc":
+        feed_items.sort(key=lambda x: (x.match_score, get_ai_score(x), x.portal_id))
+    elif sort_by == "deadline_asc":
+        feed_items.sort(key=parse_deadline_dt)
+    elif sort_by == "deadline_desc":
+        feed_items.sort(key=parse_deadline_dt, reverse=True)
     elif sort_by == "items_desc":
-        feed_items.sort(key=lambda x: x.line_item_count, reverse=True)
+        feed_items.sort(key=lambda x: (x.line_item_count, x.match_score), reverse=True)
+    elif sort_by == "items_asc":
+        feed_items.sort(key=lambda x: (x.line_item_count, x.match_score))
     elif sort_by == "id_desc":
         feed_items.sort(key=lambda x: x.portal_id, reverse=True)
-    else:  # "score_desc"
-        feed_items.sort(key=lambda x: x.match_score, reverse=True)
+    elif sort_by == "id_asc":
+        feed_items.sort(key=lambda x: x.portal_id)
+    else:  # default "score_desc"
+        feed_items.sort(key=lambda x: (x.match_score, get_ai_score(x), x.portal_id), reverse=True)
 
     return feed_items[:limit]
 
