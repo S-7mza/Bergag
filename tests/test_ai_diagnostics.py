@@ -360,3 +360,98 @@ async def test_direct_db_sync_method():
     assert len(result["top_opportunities"]) == 1
     assert result["top_opportunities"][0]["matching_rate"] >= 70.0
 
+
+def test_diagnose_false_positive_regressions():
+    """
+    Regression suite for real-world active avis false positives identified in ledger audit:
+    - #410803: 'correction de la vue' must NOT trigger Vue.js / Web & Portails
+    - #409380: 'Adobe Creative Cloud' must NOT trigger Cloud & DevOps 100%
+    - #409833: 'imprimantes et logiciel anti virus' must NOT trigger Génie Logiciel 100% / Cloud 75%
+    - #411216: 'photocopieuses' must be flagged as HIGH hardware and 0% software
+    - #409542: 'travaux d'aménagement' must be vetoed as non-IT
+    - #410919: 'tableaux magnétiques' must be vetoed as non-IT
+    - #411071: 'développement humain (INDH)' must NOT trigger Génie Logiciel
+    """
+    # 1. #410803 - Lunettes de correction de la vue
+    diag_vue = AIAvisDiagnostician.diagnose_tender({
+        "portal_id": 410803,
+        "title": "Achat de lunettes de correction de la vue pour les personnes indigentes",
+        "main_category": "Fournitures",
+        "line_items": [{"designation": "Lunettes médicales de correction de la vue", "technical_specs": "Monture + verres"}]
+    })
+    assert diag_vue.matching_rate == 0.0
+    assert diag_vue.sub_scores["web_development"] == 0.0
+    assert diag_vue.verdict == "NO-GO"
+
+    # 2. #409380 - Adobe Creative Cloud
+    diag_adobe = AIAvisDiagnostician.diagnose_tender({
+        "portal_id": 409380,
+        "title": "Achat d'un Abonnement Adobe Creative Cloud « Tout Creative Cloud » pour une année",
+        "main_category": "Fournitures",
+        "line_items": [
+            {"designation": "Abonnement Adobe Creative Cloud", "technical_specs": "Licence Creative Cloud 1 an"}
+        ]
+    })
+    assert diag_adobe.sub_scores["cloud_devops"] == 0.0
+    assert diag_adobe.matching_rate <= 25.0
+    assert diag_adobe.verdict in ("NO-GO", "CONSIDER")
+
+    # 3. #409833 - Imprimantes + Antivirus
+    diag_av = AIAvisDiagnostician.diagnose_tender({
+        "portal_id": 409833,
+        "title": "ACHAT D'IMPRIMANTES ET DE LOGICIEL ANTI VIRUS",
+        "main_category": "Fournitures",
+        "line_items": [
+            {"designation": "Imprimante laser", "technical_specs": "Imprimante réseau"},
+            {"designation": "Logiciel anti virus", "technical_specs": "Licence antivirus 1 an"}
+        ]
+    })
+    assert diag_av.sub_scores["software_programming"] < 30.0
+    assert diag_av.sub_scores["cloud_devops"] == 0.0
+    assert diag_av.matching_rate <= 25.0
+
+    # 4. #411216 - Photocopieuses
+    diag_photo = AIAvisDiagnostician.diagnose_tender({
+        "portal_id": 411216,
+        "title": "Achat des photocopieuses pour la circonscription judiciaire de Tétouan",
+        "main_category": "Fournitures",
+        "line_items": [
+            {"designation": "Photocopieuse multifonction", "technical_specs": "Compatibilité cloud et impression mobile"}
+        ]
+    })
+    assert diag_photo.hardware_dependency == "HIGH"
+    assert diag_photo.sub_scores["software_programming"] == 0.0
+    assert diag_photo.sub_scores["cloud_devops"] == 0.0
+    assert diag_photo.verdict == "NO-GO"
+
+    # 5. #409542 - Travaux d'aménagement
+    diag_btp = AIAvisDiagnostician.diagnose_tender({
+        "portal_id": 409542,
+        "title": "Travaux d'aménagement au profit du CHP Fkih ben Salah",
+        "main_category": "Travaux",
+        "line_items": [{"designation": "Aménagement des locaux", "technical_specs": "Cloisons et peinture"}]
+    })
+    assert diag_btp.matching_rate == 0.0
+    assert diag_btp.verdict == "NO-GO"
+
+    # 6. #410919 - Tableaux magnétiques
+    diag_tab = AIAvisDiagnostician.diagnose_tender({
+        "portal_id": 410919,
+        "title": "Achat de tableaux magnétiques destinés au programme de lutte contre l'analphabétisme",
+        "main_category": "Fournitures",
+        "line_items": [{"designation": "Tableau magnétique blanc", "technical_specs": "Dimensions 120x240"}]
+    })
+    assert diag_tab.matching_rate == 0.0
+    assert diag_tab.verdict == "NO-GO"
+
+    # 7. #411071 - Sessions de formation INDH (développement humain != génie logiciel)
+    diag_indh = AIAvisDiagnostician.diagnose_tender({
+        "portal_id": 411071,
+        "title": "Organisation des sessions de formation au profit de l'écosystème de l'INDH",
+        "main_category": "Services",
+        "line_items": [{"designation": "Formation et développement humain", "technical_specs": "Ateliers de renforcement des capacités"}]
+    })
+    assert diag_indh.sub_scores["software_programming"] == 0.0
+    assert diag_indh.matching_rate < 20.0
+
+

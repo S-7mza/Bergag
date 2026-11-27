@@ -44,39 +44,47 @@ class AIAvisDiagnostician:
             "weight": 1.0,
             "patterns": [
                 r"\bweb\b", r"\bsite\s+web\b", r"\bportail\b", r"\bportails?\s+web\b",
-                r"\bintranet\b", r"\bextranet\b", r"\bcms\b", r"\bwordpress\b", r"\bdrupal\b",
-                r"\breact\b", r"\bvue(?:\.js)?\b", r"\bangular\b", r"\bnode(?:\.js)?\b",
+                r"\bintranet\b", r"\bextranet\b", r"\bwordpress\b", r"\bdrupal\b",
+                r"\b(?:cms\s+(?:wordpress|drupal|joomla|headless|web)|système\s+de\s+gestion\s+de\s+contenu)\b",
+                r"\breact\b", r"\b(?:vue\.js|vuejs)\b", r"\bangular\b", r"\bnode(?:\.js)?\b",
                 r"\bnext(?:\.js)?\b", r"\blaravel\b", r"\bsymfony\b", r"\bdjango\b",
                 r"\bflask\b", r"\bfastapi\b", r"\bphp\b", r"\bjavascript\b", r"\btypescript\b",
-                r"\bfrontend\b", r"\bfront-end\b", r"\bui\s*/\s*ux\b", r"\bergonomie\b",
+                r"\bfrontend\b", r"\bfront-end\b", r"\bui\s*/\s*ux\b",
+                r"\bergonomie\s+(?:web|applicative|numérique|ui|ux|d['’]interface)\b",
                 r"\bresponsive(?:\s+design)?\b", r"\bhtml5?\b", r"\bcss3?\b", r"\btailwind\b",
                 r"\brest\s+api\b", r"\bapi\s+rest\b", r"\bgraphql\b", r"\bguichet\s+unique\b",
-                r"\bplateforme\s+en\s+ligne\b", r"\brefonte\s+(?:du\s+)?site\b"
+                r"\bplateforme\s+(?:en\s+ligne|web)\b", r"\brefonte\s+(?:du\s+)?site\b",
+                r"\bapplications?\s+web\b"
             ],
             "display_terms": {
-                "react": "React.js", "vue": "Vue.js", "angular": "Angular", "node": "Node.js",
-                "next": "Next.js", "laravel": "Laravel", "symfony": "Symfony", "django": "Django",
-                "fastapi": "FastAPI", "wordpress": "WordPress", "drupal": "Drupal", "php": "PHP",
-                "typescript": "TypeScript", "javascript": "JavaScript", "graphql": "GraphQL",
-                "portail": "Portail Web", "intranet": "Intranet", "cms": "CMS", "ui": "UI/UX"
+                "react": "React.js", "vue.js": "Vue.js", "vuejs": "Vue.js", "angular": "Angular",
+                "node": "Node.js", "next": "Next.js", "laravel": "Laravel", "symfony": "Symfony",
+                "django": "Django", "fastapi": "FastAPI", "wordpress": "WordPress", "drupal": "Drupal",
+                "php": "PHP", "typescript": "TypeScript", "javascript": "JavaScript", "graphql": "GraphQL",
+                "portail": "Portail Web", "intranet": "Intranet", "ui/ux": "UI/UX"
             }
         },
         "software_programming": {
             "label": "Génie Logiciel & Programmation",
             "weight": 1.0,
             "patterns": [
-                r"\blogiciel\b", r"\bdéveloppement\b", r"\bdeveloppement\b", r"\bprogiciel\b",
+                r"\blogiciel\s+(?:sur\s+mesure|métier|de\s+gestion|intégré|applicatif)\b",
+                r"\b(?:développement|developpement)\s+(?:logiciel|applicatif|informatique|web|mobile|full[\s-]*stack|back[\s-]*end|front[\s-]*end|sur\s+mesure|d['’]applications?|de\s+logiciels?|de\s+plateforme|de\s+portail|de\s+système|api)\b",
+                r"\bconception\s+et\s+(?:développement|developpement)\b",
+                r"\bprogiciel\b",
                 r"\bapplication\s+(?:métier|mobile|web|informatique|de\s+gestion)\b", r"\bsur\s+mesure\b", r"\bgénie\s+logiciel\b",
                 r"\bcode\s+source\b", r"\bbackend\b", r"\bback-end\b", r"\bmicroservices?\b",
-                r"\bpython\b", r"\bjava\b", r"\bspring\s+boot\b", r"\bc#\b", r"\b\.net\b",
-                r"\bgolang\b", r"\bflutter\b", r"\breact\s+native\b", r"\bios\b", r"\bandroid\b",
-                r"\btma\b", r"\btierce\s+maintenance\b", r"\bmaintenance\s+applicative\b",
-                r"\bnumérisation\b", r"\bdématérialisation\b", r"\bsystème\s+d['’]information\b",
+                r"\bpython\b", r"\bjava\b", r"\bspring\s+boot\b", r"\bc#\b", r"\basp\.net\b",
+                r"\bgolang\b", r"\bflutter\b", r"\breact\s+native\b",
+                r"\b(?:application|développement)\s+(?:mobile\s+)?(?:ios|android)\b",
+                r"\btma\b", r"\btierce\s+maintenance\b", r"\bmaintenance\s+(?:applicative|de\s+logiciels?)\b",
+                r"\bdématérialisation\b",
+                r"\b(?:mise\s+en\s+place|développement|refonte|maintenance|conception)\s+(?:d['’]un\s+|du\s+)?système\s+d['’]information\b",
                 r"\binteropérabilité\b", r"\bgestion\s+électronique\s+des\s+documents\b", r"\bged\b"
             ],
             "display_terms": {
                 "python": "Python", "java": "Java", "spring": "Spring Boot", "c#": "C# / .NET",
-                "flutter": "Flutter", "android": "Android", "ios": "iOS Mobile", "microservice": "Microservices",
+                "flutter": "Flutter", "react native": "React Native", "microservice": "Microservices",
                 "tma": "TMA / Tierce Maintenance", "ged": "GED / Dématérialisation",
                 "progiciel": "Progiciel Métier", "application métier": "Application Sur Mesure",
                 "application mobile": "Application Mobile"
@@ -86,12 +94,14 @@ class AIAvisDiagnostician:
             "label": "Ingénierie de Données & Décisionnel (BI)",
             "weight": 0.95,
             "patterns": [
-                r"\bbusiness\s+intelligence\b", r"\bbi\b", r"\bdécisionnel\b", r"\bdecisionnel\b",
-                r"\btableau\s+de\s+bord\b", r"\bdashboard\b", r"\bentrepôt\s+de\s+données\b",
+                r"\bbusiness\s+intelligence\b", r"\b(?:solution|outil|plateforme|projet)\s+bi\b",
+                r"\bdécisionnel\b", r"\bdecisionnel\b",
+                r"\btableaux?\s+de\s+bord\b", r"\bdashboards?\b", r"\bentrepôt\s+de\s+données\b",
                 r"\bdata\s+warehouse\b", r"\bdatamart\b", r"\betl\b", r"\belt\b",
                 r"\bpipeline\s+(?:de\s+données|data|etl)\b",
                 r"\bsql\b", r"\bpostgresql\b", r"\bmysql\b", r"\boracle\b", r"\bpower\s*bi\b",
-                r"\btableau\s+software\b", r"\bsuperset\b", r"\bmetabase\b", r"\breporting\b",
+                r"\btableau\s+software\b", r"\bsuperset\b", r"\bmetabase\b",
+                r"\b(?:outil|plateforme|système|solution)\s+de\s+reporting\b|\breporting\s+(?:bi|décisionnel|automatisé|statistique)\b",
                 r"\banalytics?\b", r"\bmigration\s+de\s+données\b", r"\bgouvernance\s+des\s+données\b",
                 r"\bqualité\s+des\s+données\b", r"\btraitement\s+de\s+données\b", r"\bbig\s+data\b"
             ],
@@ -106,15 +116,19 @@ class AIAvisDiagnostician:
             "label": "Intelligence Artificielle & Automatisation",
             "weight": 0.90,
             "patterns": [
-                r"\bintelligence\s+artificielle\b", r"\bia\b", r"\bai\b", r"\bmachine\s+learning\b",
+                r"\bintelligence\s+artificielle\b",
+                r"\b(?:solution|plateforme|modèle|système|agent|outil)s?\s+d['’]?ia\b|\bia\s+générative\b",
+                r"\bmachine\s+learning\b",
                 r"\bapprentissage\s+automatique\b", r"\bdeep\s+learning\b", r"\bnlp\b",
-                r"\btraitement\s+automatique\s+du\s+langage\b", r"\bocr\b",
+                r"\btraitement\s+automatique\s+du\s+langage\b",
+                r"\b(?:moteur|solution|module|logiciel|système)\s+ocr\b",
                 r"\breconnaissance\s+(?:optique\s+de\s+)?caractères\b", r"\brpa\b",
                 r"\bautomatisation\s+des\s+processus\b", r"\bchatbot\b", r"\bagent\s+conversationnel\b",
                 r"\bllm\b", r"\bvision\s+par\s+ordinateur\b", r"\bmodèle\s+prédictif\b"
             ],
             "display_terms": {
-                "ia": "Intelligence Artificielle", "ocr": "OCR / Reconnaissance Optique",
+                "intelligence artificielle": "Intelligence Artificielle",
+                "reconnaissance optique": "OCR / Reconnaissance Optique",
                 "chatbot": "Chatbot / Agent IA", "rpa": "Automatisation RPA",
                 "machine learning": "Machine Learning", "llm": "LLM / Traitement Langage"
             }
@@ -123,43 +137,57 @@ class AIAvisDiagnostician:
             "label": "Cloud, DevOps & Hébergement",
             "weight": 0.85,
             "patterns": [
-                r"\bcloud\b", r"\bdevops\b", r"\bdocker\b", r"\bkubernetes\b", r"\bk8s\b",
-                r"\bconteneurisation\b", r"\bci\s*/\s*cd\b", r"\bhébergement(?:\s+web)?\b",
+                r"(?<!creative\s)\bcloud\s+(?:computing|architecture|infrastructure|hébergement|hybride|privé|public|native|aws|azure|gcp)\b|\binfrastructure\s+cloud\b|\bmigration\s+(?:vers\s+le\s+)?cloud\b",
+                r"\bdevops\b", r"\bdocker\b", r"\bkubernetes\b", r"\bk8s\b",
+                r"\bconteneurisation\b", r"\bci\s*/\s*cd\b",
+                r"\bhébergement\s+(?:web|applicatif|cloud|serveur|plateforme|site|données)\b",
                 r"\bserveur\s+web\b", r"\bnginx\b", r"\bapache\b", r"\baws\b", r"\bazure\b",
-                r"\bgcp\b", r"\blinux\b", r"\bsécurité\s+applicative\b"
+                r"\bgcp\b", r"\b(?:serveur|administration|environnement|système)\s+linux\b",
+                r"\bsécurité\s+applicative\b"
             ],
             "display_terms": {
-                "docker": "Docker", "kubernetes": "Kubernetes", "cloud": "Cloud Architecture",
-                "ci/cd": "CI/CD DevOps", "hébergement": "Hébergement Web", "azure": "Microsoft Azure", "aws": "AWS"
+                "docker": "Docker", "kubernetes": "Kubernetes", "devops": "DevOps",
+                "ci/cd": "CI/CD DevOps", "hébergement web": "Hébergement Web",
+                "azure": "Microsoft Azure", "aws": "AWS"
             }
         }
     }
 
+    # Off-the-shelf (COTS) software / license purchases without custom development
+    COTS_LICENSE_PATTERNS = [
+        r"\banti[\s-]*virus\b", r"\badobe\s+creative\s+cloud\b", r"\bphotoshop\b",
+        r"\bmicrosoft\s+(?:office|365)\b", r"\boffice\s+365\b", r"\bwindows\s+(?:10|11|server)\b",
+        r"\bautocad\b", r"\barcgis\b", r"\bsage\s+frp\b", r"\bfoxta\b", r"\barticulate\s+360\b",
+        r"\bedr\b", r"\bkaspersky\b", r"\bfortinet\b"
+    ]
+
     # Physical hardware indicators that dilute software match
     HARDWARE_PATTERNS = [
-        (r"\bimprimante\b", "Imprimantes"),
-        (r"\bphotocopieur\b", "Photocopieurs"),
-        (r"\bduplicopieur\b", "Duplicopieurs"),
-        (r"\bscanner\b", "Scanners"),
-        (r"\btoner\b|\bcartouche\b", "Consommables d'impression"),
-        (r"\bmatériel\s+de\s+bureau\b|\bmobilier\s+de\s+bureau\b", "Matériel & mobilier de bureau"),
-        (r"\bserveur\s+(?:rack|en\s+baie|physique)\b", "Serveurs physiques en rack"),
+        (r"\bimprimantes?\b", "Imprimantes"),
+        (r"\bphotocopieurs?\b|\bphotocopieuses?\b", "Photocopieurs"),
+        (r"\bduplicopieurs?\b", "Duplicopieurs"),
+        (r"\bscanners?\b", "Scanners"),
+        (r"\btoners?\b|\bcartouches?\b", "Consommables d'impression"),
+        (r"\bmatériels?\s+de\s+bureau\b|\bmobilier\s+de\s+bureau\b", "Matériel & mobilier de bureau"),
+        (r"\bserveurs?\s+(?:rack|en\s+baie|physiques?)\b", "Serveurs physiques en rack"),
         (r"\bcâblage\s+(?:informatique|réseau|rj45|cuivre)\b", "Câblage physique / Courants faibles"),
         (r"\barmoire\s+de\s+brassage\b", "Armoire de brassage physique"),
-        (r"\bordinateur(?:\s+de\s+bureau|\s+portable)?\b|\blaptop\b|\bpc\s+de\s+bureau\b", "Postes de travail / PC portables"),
-        (r"\bécrans?\s+d['’]affichage\b|\bvideoprojecteur\b|\bvidéoprojecteur\b", "Matériel de projection"),
-        (r"\bcaméra(?:\s+ip|\s+de\s+surveillance)?\b", "Vidéosurveillance"),
-        (r"\bswitch\b|\brouteur\b|\bpare-feu\s+physique\b", "Équipements réseau physiques")
+        (r"\bordinateurs?(?:\s+de\s+bureau|\s+portables?)?\b|\blaptops?\b|\bpc\s+de\s+bureau\b|\btablettes?\b", "Postes de travail / PC / Tablettes"),
+        (r"\bmatériels?\s+informatiques?\b|\bdisques?\s+durs?\b|\bonduleurs?\b", "Matériel informatique physique"),
+        (r"\bécrans?\s+d['’]affichage\b|\bvideoprojecteurs?\b|\bvidéoprojecteurs?\b", "Matériel de projection"),
+        (r"\bcaméras?(?:\s+ip|\s+de\s+surveillance)?\b", "Vidéosurveillance"),
+        (r"\bswitchs?\b|\brouteurs?\b|\bpare-feu\s+physique\b", "Équipements réseau physiques")
     ]
 
     # Non-IT strictly incompatible indicators (Stage 1 drop, checked on intent/title/designations)
     NON_IT_VETO_PATTERNS = [
-        (r"\b(?:camion|engin|tracteur|benne|voiture|ambulance|véhicule|vehicule|vidange|pneus?|gasoil|carburant)\b", "Véhicules, transport ou carburants"),
-        (r"\b(?:génie\s+civil|travaux\s+de\s+construction|maçonnerie|peinture|plomberie|étanchéité|bâtiment)\b", "Travaux de BTP & Construction civile"),
+        (r"\b(?:camion|engin|tracteur|benne|voiture|ambulance|véhicule|vehicule|vidange|pneus?|gasoil|carburant|matériel\s+de\s+transport)\b", "Véhicules, transport ou carburants"),
+        (r"\b(?:génie\s+civil|travaux\s+de\s+construction|travaux\s+d['’](?:aménagement|réhabilitation|réfection|rénovation)|maçonnerie|peinture|plomberie|étanchéité|bâtiment)\b", "Travaux de BTP, aménagement & construction civile"),
         (r"\b(?:gardiennage|nettoyage\s+des\s+locaux|sécurité\s+gardiennage|restauration|traiteur|pause\s+café)\b", "Services généraux, gardiennage ou traiteur"),
-        (r"\b(?:médicaments?|réactifs?\s+de\s+laboratoire|dispositifs?\s+médicaux|chirurgie|dentaire|radiologie)\b", "Médical, laboratoire ou pharmacie"),
+        (r"\b(?:médicaments?|réactifs?\s+de\s+laboratoire|dispositifs?\s+médicaux|fongibles\s+médicaux|fils\s+chirurgicaux|chirurgie|dentaire|radiologie|lunettes\s+de\s+correction)\b", "Médical, optique, laboratoire ou pharmacie"),
         (r"\b(?:dératisation|désinsectisation|désinfection|espaces?\s+verts?|jardinage|engrais|semences|aliments?\s+de\s+bétail)\b", "Hygiène, espaces verts ou agriculture"),
-        (r"\b(?:habillement|tenues?\s+de\s+travail|chaussures\s+de\s+sécurité|mobilier\s+scolaire|billetterie\s+aérienne|hébergement\s+hôtelier)\b", "Habillement, mobilier scolaire ou voyages"),
+        (r"\b(?:habillement|tenues?\s+de\s+(?:travail|protection)|chaussures\s+de\s+sécurité|mobilier\s+scolaire|billetterie\s+aérienne|hébergement\s+hôtelier)\b", "Habillement, mobilier scolaire ou voyages"),
+        (r"\b(?:fournitures?\s+(?:de\s+bureau|scolaires?|pédagogiques?|d['’]enseignement)|tableaux?\s+magnétiques?|petit\s+outillage|dossier\s+topographique)\b", "Fournitures de bureau/scolaires, outillage ou topographie"),
     ]
 
     @classmethod
@@ -296,43 +324,75 @@ class AIAvisDiagnostician:
         # clauses inside hardware datasheets do not trigger software pillars.
         scoring_corpus = intent_corpus if (hardware_dep == "HIGH" and software_items_count == 0) else full_corpus
 
+        # Detect COTS (off-the-shelf license) purchases without custom development signals
+        has_cots_signal = any(
+            re.search(pat, intent_corpus, re.IGNORECASE)
+            for pat in cls.COTS_LICENSE_PATTERNS
+        )
+        has_custom_dev_signal = any(
+            re.search(pat, intent_corpus, re.IGNORECASE)
+            for pat in [
+                r"\b(?:développement|developpement)\s+(?:logiciel|applicatif|web|mobile|sur\s+mesure|d['’]applications?)\b",
+                r"\bsur\s+mesure\b", r"\bcode\s+source\b", r"\brefonte\b",
+                r"\bportail\s+web\b", r"\bsite\s+web\b", r"\bapplications?\s+web\b",
+                r"\btma\b", r"\bmaintenance\s+applicative\b", r"\bapi\s+rest\b", r"\brest\s+api\b"
+            ]
+        )
+        is_cots_only = has_cots_signal and not has_custom_dev_signal
+
         pillar_results: Dict[str, PillarScore] = {}
         all_detected_techs = set()
 
         for pillar_id, conf in cls.PILLARS.items():
-            matches = []
+            matched_keywords: List[str] = []
+            effective_hits = 0.0
             for pat in conf["patterns"]:
-                found = re.findall(pat, scoring_corpus, re.IGNORECASE)
-                if found:
-                    matches.extend(found)
+                in_intent = re.search(pat, intent_corpus, re.IGNORECASE)
+                in_scoring = in_intent or re.search(pat, scoring_corpus, re.IGNORECASE)
+                if in_intent:
+                    effective_hits += 1.5
+                    matched_keywords.append(in_intent.group(0))
+                elif in_scoring:
+                    effective_hits += 1.0
+                    matched_keywords.append(in_scoring.group(0))
 
             # Map to display terms using strict word boundaries
             for term_key, display_label in conf["display_terms"].items():
                 if re.search(rf"\b{re.escape(term_key)}\b", scoring_corpus, re.IGNORECASE):
                     all_detected_techs.add(display_label)
 
-            # Compute normalized score for this pillar (0-100)
-            raw_count = len(matches)
-            if raw_count >= 5:
+            # Compute normalized score for this pillar (0-100) from distinct weighted concepts
+            if effective_hits >= 5.0:
                 p_score = 100.0
-            elif raw_count == 4:
-                p_score = 90.0
-            elif raw_count == 3:
-                p_score = 75.0
-            elif raw_count == 2:
-                p_score = 55.0
-            elif raw_count == 1:
-                p_score = 35.0
+            elif effective_hits >= 4.0:
+                p_score = 85.0
+            elif effective_hits >= 3.0:
+                p_score = 70.0
+            elif effective_hits >= 2.0:
+                p_score = 50.0
+            elif effective_hits >= 1.0:
+                p_score = 30.0
             else:
                 p_score = 0.0
 
-            pillar_results[pillar_id] = PillarScore(score=p_score, matched_keywords=matches)
+            # Dampen sub-scores when tender is hardware-dominated or COTS-only
+            if hardware_dep == "HIGH":
+                p_score = round(p_score * (0.0 if software_items_count == 0 else 0.25), 1)
+            elif hardware_dep == "MEDIUM":
+                p_score = round(p_score * 0.70, 1)
+
+            if is_cots_only:
+                p_score = round(p_score * 0.25, 1)
+
+            pillar_results[pillar_id] = PillarScore(score=p_score, matched_keywords=matched_keywords)
 
         # 5. Determine Primary Domain
         best_pillar = max(pillar_results.keys(), key=lambda k: pillar_results[k].score)
         best_pillar_score = pillar_results[best_pillar].score
 
-        if best_pillar_score < 20.0 and hardware_dep == "HIGH":
+        if is_cots_only and best_pillar_score < 30.0:
+            primary_domain = "Licences & Progiciels Standards (COTS)"
+        elif best_pillar_score < 20.0 and hardware_dep == "HIGH":
             primary_domain = "Fourniture de Matériel Pur (Sans Dév)"
         elif best_pillar_score < 20.0:
             primary_domain = "Informatique Générale / Non Spécifié"
@@ -366,9 +426,13 @@ class AIAvisDiagnostician:
         elif hardware_dep == "MEDIUM":
             raw_match_rate = raw_match_rate * 0.80
 
-        # Prestation type boost
-        if "maintenance de logiciels" in prestation.lower() or "études, conseil" in prestation.lower() or "développement" in prestation.lower():
-            raw_match_rate = min(100.0, raw_match_rate + 10.0)
+        if is_cots_only:
+            raw_match_rate = min(25.0, raw_match_rate * 0.35)
+
+        # Prestation type boost (only when not hardware-dominated or COTS-only)
+        if not is_cots_only and hardware_dep != "HIGH":
+            if "maintenance de logiciels" in prestation.lower() or "études, conseil" in prestation.lower() or "développement" in prestation.lower():
+                raw_match_rate = min(100.0, raw_match_rate + 10.0)
 
         matching_rate = round(max(0.0, min(100.0, raw_match_rate)), 1)
 
@@ -391,6 +455,8 @@ class AIAvisDiagnostician:
 
         # 8. Red Flags, Operational Risks & Gaps
         red_flags: List[str] = []
+        if is_cots_only:
+            red_flags.append("Achat de licences/progiciels standards (COTS) sans développement sur mesure")
         if hardware_dep == "HIGH":
             red_flags.append(f"Marché à forte dominance matérielle : {', '.join(detected_hardware_types[:3])}")
         elif hardware_dep == "MEDIUM":
