@@ -234,13 +234,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception:
         pass
 
-    # Root emergency credentials fallback
-    if plain_password in ["rootpassword", "AdminBergag2026!"] and (
-        hashed_password == SYSTEM_USERS["admin@bergag.ma"]["password_hash"]
-        or hashed_password == SYSTEM_USERS["admin@bergag.ma"].get("bcrypt_hash")
-    ):
-        return True
-
     return False
 
 def create_session_token(email: str, role: str) -> str:

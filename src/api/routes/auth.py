@@ -73,7 +73,13 @@ async def get_me(user: User = Depends(get_current_user)):
 
 @router.post("/switch-demo-role", response_model=LoginResponse)
 async def switch_demo_role(req: SwitchRoleRequest):
-    """Allows instant previewing of role-based views (Admin, Analyst, Viewer)"""
+    """Allows instant previewing of role-based views ONLY when ALLOW_ANONYMOUS_DEV_ADMIN=true."""
+    from src.config.settings import settings
+    if not settings.allow_anonymous_dev_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Le changement de rôle démo est désactivé en production. Veuillez utiliser /api/auth/login."
+        )
     role_map = {
         "admin": "admin@bergag.ma",
         "analyst": "analyst@bergag.ma",

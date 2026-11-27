@@ -249,6 +249,8 @@ def test_agent_diagnose_endpoints_with_mock_db(client):
     mock_session.execute.return_value = mock_res
 
     app.dependency_overrides[get_db_session] = lambda: mock_session
+    from src.api.auth import create_session_token
+    admin_headers = {"Authorization": f"Bearer {create_session_token('admin@bergag.ma', 'admin')}"}
 
     try:
         # 1. Test single avis diagnosis endpoint
@@ -264,7 +266,7 @@ def test_agent_diagnose_endpoints_with_mock_db(client):
             "limit": 5,
             "open_only": False,
             "force_refresh": True
-        })
+        }, headers=admin_headers)
         assert batch_res.status_code == 200
         batch_data = batch_res.json()
         assert batch_data["success"] is True
@@ -279,7 +281,7 @@ def test_agent_diagnose_endpoints_with_mock_db(client):
         assert report_data["success"] is True
 
         # 4. Test feed includes ai_matching
-        feed_res = client.get("/api/feed?profile_name=software_data&limit=5")
+        feed_res = client.get("/api/feed?profile_name=software_data&limit=5", headers=admin_headers)
         assert feed_res.status_code == 200
         items = feed_res.json()
         assert len(items) == 1
@@ -289,14 +291,14 @@ def test_agent_diagnose_endpoints_with_mock_db(client):
         assert items[0]["ai_matching"]["primary_domain"] != ""
 
         # 5. Test detail includes ai_matching
-        detail_res = client.get("/api/tenders/777001?profile_name=software_data")
+        detail_res = client.get("/api/tenders/777001?profile_name=software_data", headers=admin_headers)
         assert detail_res.status_code == 200
         detail_data = detail_res.json()
         assert "ai_matching" in detail_data
         assert detail_data["ai_matching"]["matching_rate"] >= 70.0
 
         # 6. Test direct database sync endpoint (POST /api/agent/sync-db)
-        sync_res = client.post("/api/agent/sync-db?limit=5&force_refresh=true")
+        sync_res = client.post("/api/agent/sync-db?limit=5&force_refresh=true", headers=admin_headers)
         assert sync_res.status_code == 200
         sync_data = sync_res.json()
         assert sync_data["success"] is True

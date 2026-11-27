@@ -42,7 +42,7 @@ class Settings(BaseSettings):
         alias="JWT_SECRET_KEY"
     )
     token_validity_seconds: int = Field(default=86400 * 7, alias="TOKEN_VALIDITY_SECONDS")
-    allow_anonymous_dev_admin: bool = Field(default=True, alias="ALLOW_ANONYMOUS_DEV_ADMIN")
+    allow_anonymous_dev_admin: bool = Field(default=False, alias="ALLOW_ANONYMOUS_DEV_ADMIN")
 
     model_config = SettingsConfigDict(
         env_file=".env",

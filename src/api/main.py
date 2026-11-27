@@ -34,13 +34,32 @@ app = FastAPI(
     version="2.2.0"
 )
 
+from src.config.settings import settings
+
+_allowed_origins = list(dict.fromkeys([
+    settings.app_url.rstrip("/"),
+    "https://bergag.nexenflow.com",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
 
 # Route registrations
 app.include_router(auth_router)

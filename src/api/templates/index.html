@@ -119,6 +119,69 @@
 
 
 
+        <!-- Standalone Authentication Gate (Visible ONLY when not connected) -->
+        <div x-show="!isAuthenticated" x-cloak class="min-h-screen flex items-center justify-center bg-[#0a0c10] px-4 py-10">
+            <div class="w-full max-w-md bg-slate-900/95 border border-slate-800 rounded-3xl shadow-2xl p-7 space-y-6">
+                <div class="flex items-center gap-3.5 border-b border-slate-800/90 pb-4">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center font-bold text-base text-zinc-950 tracking-tight shrink-0">
+                        B
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold text-white tracking-tight">Bergag Procurement Intelligence</h1>
+                        <p class="text-xs text-slate-400">Connexion requise pour accéder à l'espace de veille</p>
+                    </div>
+                </div>
+
+                <form @submit.prevent="submitLogin()" class="space-y-4">
+                    <div x-show="loginError" x-cloak class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium" x-text="loginError"></div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Nom d'utilisateur ou Email</label>
+                        <input type="text"
+                               x-model="loginForm.username_or_email"
+                               required
+                               autocomplete="username"
+                               placeholder="ex: hamza ou admin@bergag.ma"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm text-white placeholder-slate-600">
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Mot de passe</label>
+                        <div class="relative">
+                            <input :type="showLoginPassword ? 'text' : 'password'"
+                                   x-model="loginForm.password"
+                                   required
+                                   autocomplete="current-password"
+                                   placeholder="••••••••••••"
+                                   class="w-full px-3.5 py-2.5 pr-11 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm text-white placeholder-slate-600">
+                            <button type="button"
+                                    @click="showLoginPassword = !showLoginPassword"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                                    :title="showLoginPassword ? 'Masquer' : 'Afficher'">
+                                <svg x-show="!showLoginPassword" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <svg x-show="showLoginPassword" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                            :disabled="loginLoading"
+                            class="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-sm transition-colors shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2">
+                        <span x-show="loginLoading" class="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin"></span>
+                        <span x-text="loginLoading ? 'Vérification...' : 'Se connecter'"></span>
+                    </button>
+                </form>
+
+                <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Accès sécurisé · RBAC</span>
+                    <span class="font-mono">Décret 2-22-431</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authenticated Application Shell (Hidden when not connected) -->
+        <div x-show="isAuthenticated" x-cloak class="flex-1 flex flex-col">
+
         <!-- Top App Bar -->
         <header class="bg-[#0e1117]/95 backdrop-blur-sm border-b border-white/[0.07] sticky top-0 z-40">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap justify-between items-center gap-4">
@@ -7527,9 +7590,9 @@
             </div>
         </div>
 
-        <!-- Authentication & Persona Switcher Modal -->
+        <!-- Authentication & Persona Switcher Modal (Authenticated users only) -->
 
-        <div x-show="authModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div x-show="isAuthenticated && authModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
 
             <div @click.away="if (isAuthenticated) authModalOpen = false" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full p-6 space-y-5">
 
@@ -8064,6 +8127,8 @@
                 </div>
             </div>
         </div>
+
+        </div> <!-- End Authenticated Application Shell -->
 
     </div>
 
@@ -8657,11 +8722,11 @@
 
                 init() {
 
-                    // Restore persisted session from localStorage
+                    // Restore persisted session from localStorage & handle global 401 -> login
                     if (!window.__bergagFetchWrapped) {
                         window.__bergagFetchWrapped = true;
                         const origFetch = window.fetch.bind(window);
-                        window.fetch = (input, init = {}) => {
+                        window.fetch = async (input, init = {}) => {
                             const url = typeof input === 'string' ? input : (input?.url || '');
                             const token = localStorage.getItem('bergag_token');
                             if (token && url.startsWith('/api/')) {
@@ -8671,7 +8736,11 @@
                                 }
                                 init = { ...init, headers };
                             }
-                            return origFetch(input, init);
+                            const res = await origFetch(input, init);
+                            if (res.status === 401 && url.startsWith('/api/') && !url.includes('/api/auth/login') && this.isAuthenticated) {
+                                this.logout(true);
+                            }
+                            return res;
                         };
                     }
 
@@ -8683,6 +8752,7 @@
                             this.currentUser = JSON.parse(savedUser);
                             this.isAuthenticated = true;
                             this.showLoginForm = false;
+                            this.authModalOpen = false;
                             if (this.currentUser?.default_profile) {
                                 this.selectedProfile = this.currentUser.default_profile;
                             }
@@ -8690,31 +8760,22 @@
                         } catch(e) {
                             this.isAuthenticated = false;
                             this.showLoginForm = true;
-                            this.authModalOpen = true;
+                            this.authModalOpen = false;
                         }
                     } else {
                         this.isAuthenticated = false;
                         this.showLoginForm = true;
-                        this.authModalOpen = true;
+                        this.authModalOpen = false;
                     }
 
-
-
                     // Start ticking clock for 48h BDC countdown
-
                     setInterval(() => {
-
                         this.nowTimestamp = Date.now();
-
                     }, 1000);
 
-
-
-                    // Support direct deep-linking to Fiche 60s (e.g. #tender=410170 from alerts)
-
-                    this.checkUrlHash();
-
-                    window.addEventListener('hashchange', () => this.checkUrlHash());
+                    window.addEventListener('hashchange', () => {
+                        if (this.isAuthenticated) this.checkUrlHash();
+                    });
 
                     // Keyboard shortcuts for Active Learning Swipe & Tune Studio
                     window.addEventListener('keydown', (e) => {
@@ -8756,6 +8817,14 @@
 
 
 
+                    // Do not fetch protected dashboard data until authenticated
+                    if (!this.isAuthenticated) {
+                        return;
+                    }
+
+                    // Support direct deep-linking to Fiche 60s (e.g. #tender=410170 from alerts)
+                    this.checkUrlHash();
+
                     // 0. Load available sector profiles dynamically
                     this.fetchProfiles();
 
@@ -8770,7 +8839,7 @@
                     if (this.currentUser?.role === 'admin') {
                         this.startHeartbeatPolling();
                         setTimeout(() => {
-                            if (this.currentUser?.role === 'admin') {
+                            if (this.isAuthenticated && this.currentUser?.role === 'admin') {
                                 this.runActiveAudit();
                             }
                         }, 3000);
@@ -9367,8 +9436,17 @@
 
                         await this.fetchProfiles();
                         await this.fetchFeed();
-                        if (this.currentUser?.role === 'admin' && typeof this.fetchTeamUsers === 'function') {
-                            this.fetchTeamUsers();
+                        this.fetchPipeline();
+                        this.recalcStudioPricing();
+                        this.checkUrlHash();
+                        if (this.currentUser?.role === 'admin') {
+                            if (typeof this.fetchTeamUsers === 'function') this.fetchTeamUsers();
+                            this.startHeartbeatPolling();
+                            setTimeout(() => {
+                                if (this.isAuthenticated && this.currentUser?.role === 'admin') {
+                                    this.runActiveAudit();
+                                }
+                            }, 1500);
                         }
 
                         if ((this.activeModule === 'crawler' || (this.activeModule === 'admin' && this.adminSection === 'crawler')) && !this.hasPermission('crawler:telemetry')) {
@@ -9399,10 +9477,13 @@
                         title: 'Non connecté',
                         permissions: ['feed:view']
                     };
-                    if (this.activeModule === 'admin' || this.activeModule === 'crawler') {
+                    this.items = [];
+                    this.activeTender = null;
+                    this.modalOpen = false;
+                    if (this.activeModule === 'admin' || this.activeModule === 'crawler' || this.activeModule === 'market_radar') {
                         this.activeModule = 'feed';
                     }
-                    this.authModalOpen = true;
+                    this.authModalOpen = false;
                     if (!silent) {
                         this.showToast('Session déconnectée.', 'info');
                     }

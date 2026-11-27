@@ -7,6 +7,7 @@ from src.database.session import get_db_session
 from src.engine.ai_matching_agent import ai_matching_agent
 from src.engine.ai_diagnostician import AIMatchingDiagnosis
 from src.api.schemas import DiagnoseBatchRequest, DiagnoseBatchResponse
+from src.api.auth import User, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,8 @@ async def diagnose_single_avis_endpoint(
 @router.post("/diagnose-batch", response_model=DiagnoseBatchResponse)
 async def diagnose_batch_avis_endpoint(
     request: DiagnoseBatchRequest,
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_role(["admin", "analyst"]))
 ):
     """
     Agent Avis-After-Avis Batch Runner:
@@ -90,7 +92,8 @@ async def get_diagnostics_report(
 async def sync_avis_diagnoses_to_database(
     limit: int = Query(2500, ge=1, le=5000, description="Max tenders to diagnose and sync"),
     force_refresh: bool = Query(False, description="Whether to re-evaluate cached entries"),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_role(["admin"]))
 ):
     """
     Direct Database Sync:
