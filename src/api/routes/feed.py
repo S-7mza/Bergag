@@ -369,7 +369,7 @@ async def get_tender_feed(
 
     # RBAC Enforcement: Viewers only see curated high-confidence opportunities (>=75% GO),
     # unless an explicit search query is provided (user direct keyword search is mandatory)
-    effective_min_score = min_score if (search and search.strip()) else (max(min_score, 75.0) if role == "viewer" else min_score)
+    effective_min_score = min_score if (search and search.strip()) else (max(min_score, 75.0) if effective_role == "viewer" else min_score)
 
     # Build candidate selection query
     stmt = (

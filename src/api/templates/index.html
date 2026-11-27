@@ -1,95 +1,78 @@
 <!DOCTYPE html>
-
-<html lang="fr" class="dark h-full bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950">
-
+<html lang="fr" class="dark h-full bg-[#0a0c10] text-slate-100 selection:bg-emerald-500/30 selection:text-emerald-200">
 <head>
-
     <meta charset="utf-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Bergag &bull; Moroccan Procurement Intelligence Command Center</title>
-
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    <title>Bergag &bull; Veille Marchés Publics Maroc</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%2310b981%22/><text x=%2216%22 y=%2222%22 font-family=%22Inter,sans-serif%22 font-weight=%22700%22 font-size=%2218%22 fill=%22%2309090b%22 text-anchor=%22middle%22>B</text></svg>">
 
     <!-- Tailwind CSS CDN -->
-
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
 
     <!-- Alpine.js CDN -->
-
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <!-- Chart.js CDN for Executive Visualizations -->
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    
 
     <style>
         :root {
             color-scheme: dark;
         }
-
+        body {
+            font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+            background-color: #0a0c10;
+        }
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
         select {
             color-scheme: dark;
         }
-
         select option {
-            background-color: #0f172a !important;
-            color: #f8fafc !important;
+            background-color: #11141b !important;
+            color: #f1f5f9 !important;
         }
-
         select option:checked,
         select option:hover {
-            background-color: #1e293b !important;
-            color: #38bdf8 !important;
+            background-color: #1e2430 !important;
+            color: #34d399 !important;
         }
-
         [x-cloak] { display: none !important; }
-
         ::-webkit-scrollbar { width: 6px; height: 6px; }
-
-        ::-webkit-scrollbar-track { background: #020617; }
-
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-
-        .ambient-glow {
-
-            background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.08), transparent 70%);
-
-        }
-
+        ::-webkit-scrollbar-track { background: #0a0c10; }
+        ::-webkit-scrollbar-thumb { background: #262c3a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b4459; }
         @keyframes shimmer {
-
             0% { background-position: -200% 0; }
-
             100% { background-position: 200% 0; }
-
         }
-
         .skeleton {
-
-            background: linear-gradient(90deg, #0f172a 25%, #1e293b 50%, #0f172a 75%);
-
+            background: linear-gradient(90deg, #11141b 25%, #191e29 50%, #11141b 75%);
             background-size: 200% 100%;
-
             animation: shimmer 1.5s infinite;
-
         }
-
     </style>
-
 </head>
-
-<body class="h-full font-sans antialiased bg-slate-950 text-slate-100 ambient-glow" 
-
-      x-data="dashboardApp()" 
-
+<body class="h-full font-sans antialiased bg-[#0a0c10] text-slate-200"
+      x-data="dashboardApp()"
       x-init="init()"
-
       @keydown.window="handleGlobalKeydown($event)">
 
 
@@ -137,35 +120,21 @@
 
 
         <!-- Top App Bar -->
+        <header class="bg-[#0e1117]/95 backdrop-blur-sm border-b border-white/[0.07] sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap justify-between items-center gap-4">
 
-        <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-40">
-
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap justify-between items-center gap-4">
-
-                
-
-                <!-- Brand & System Badge -->
-
+                <!-- Brand -->
                 <div class="flex items-center gap-3">
-
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center font-black text-xl text-slate-950 shadow-lg shadow-emerald-500/20">
-
-                        ⚡
-
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-sm text-zinc-950 tracking-tight">
+                        B
                     </div>
-
                     <div>
-
                         <div class="flex items-center gap-2">
-
-                            <h1 class="text-lg font-black tracking-tight text-white">BERGAG <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">100/100 PRO</span></h1>
-
+                            <h1 class="text-sm font-semibold tracking-tight text-white">Bergag</h1>
+                            <span class="text-[11px] text-slate-500 font-normal hidden sm:inline">&bull; Portail Marocain des Marchés Publics</span>
                         </div>
-
-                        <p class="text-[11px] text-slate-400">Portail Marocain des Marchés Publics &bull; Décret 2-22-431</p>
-
+                        <p class="text-[11px] text-slate-500 sm:hidden">Portail Marocain des Marchés Publics</p>
                     </div>
-
                 </div>
 
 
@@ -233,17 +202,17 @@
                                         </button>
                                     </template>
                                 </div>
-                                <div class="pt-1.5 mt-1 border-t border-slate-800/80">
+                                <div x-show="currentUser.role === 'admin'" class="pt-1.5 mt-1 border-t border-slate-800/80">
                                     <button type="button" @click="sectorDropdownOpen = false; openSectorManager()"
                                             class="w-full text-center px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 text-xs font-medium transition-colors flex items-center justify-center gap-1.5">
-                                        <span>⚙️</span> Gérer les Secteurs & Mots-clés
+                                        <span>⚙️</span> Gérer les Secteurs &amp; Mots-clés
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Button to open Sector & Keyword Manager -->
-                        <button @click="openSectorManager()" title="Gérer les secteurs, catalogues de mots-clés et pondérations de priorités"
+                        <!-- Button to open Sector & Keyword Manager (Admin only) -->
+                        <button x-show="currentUser.role === 'admin'" @click="openSectorManager()" title="Gérer les secteurs, catalogues de mots-clés et pondérations de priorités"
                                 class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-950/20 text-slate-400 hover:text-emerald-400 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm">
                             <span>⚙️</span>
                             <span class="hidden md:inline">Gérer Mots-Clés</span>
@@ -303,119 +272,70 @@
 
 
         <!-- Sub-Nav Modules Bar -->
-
-        <div class="bg-slate-900 border-b border-slate-800/80 px-4 sm:px-6 lg:px-8">
-
-            <div class="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto py-2 gap-4">
-
-                <nav class="flex items-center gap-1.5 text-xs font-semibold">
-
-                    <button @click="activeModule = 'feed'" :class="activeModule === 'feed' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
-
-                        <span>🎯</span> Opportunités BDC & AO
-
-                        <span class="px-1.5 py-0.2 bg-slate-950 text-slate-400 text-[10px] rounded-full font-mono" x-text="feedStats.total || items.length"></span>
-
+        <div class="bg-[#0e1117] border-b border-white/[0.06] px-4 sm:px-6 lg:px-8">
+            <div class="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto py-1.5 gap-4">
+                <nav class="flex items-center gap-1 text-xs font-medium">
+                    <button @click="activeModule = 'feed'"
+                            :class="activeModule === 'feed' ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+                        <span>Opportunités</span>
+                        <span class="px-1.5 py-0.5 bg-white/[0.06] text-slate-300 text-[10px] rounded font-mono tabular-nums" x-text="feedStats.total || items.length"></span>
                     </button>
 
-                    <button @click="activeModule = 'tuner'; initTuner()" :class="activeModule === 'tuner' ? 'bg-indigo-600/25 text-indigo-300 border border-indigo-500/40 shadow-sm' : 'text-slate-400 hover:text-indigo-300'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
-
-                        <span>🧠</span> Swipe & Tune IA
-
-                        <span class="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 text-[10px] rounded-full font-bold border border-indigo-500/30">RLHF</span>
-
+                    <button @click="activeModule = 'pipeline'; fetchPipeline()"
+                            :class="activeModule === 'pipeline' ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h6M8 17h4"/></svg>
+                        <span>Mes Dossiers</span>
+                        <span class="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-300 text-[10px] rounded font-mono tabular-nums" x-text="pipelineItems.length"></span>
                     </button>
 
-
-
-                    <button @click="activeModule = 'market_radar'; fetchMarketRadar()" :class="activeModule === 'market_radar' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
-
-                        <span>📊</span> Radar & Concurrence
-
+                    <button x-show="hasPermission('radar:view_all') || hasPermission('radar:view_competitors')"
+                            @click="activeModule = 'market_radar'; fetchMarketRadar()"
+                            :class="activeModule === 'market_radar' ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V8M17 16v-8"/></svg>
+                        <span>Radar & Concurrence</span>
                     </button>
 
-
-
-                    <button @click="activeModule = 'admin'; adminSection = 'profiles'" :class="(activeModule === 'admin' && adminSection === 'profiles') || activeModule === 'profiles' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
-
-                        <span>📁</span> Studio Profils YAML
-
+                    <button x-show="currentUser.role !== 'viewer'"
+                            @click="activeModule = 'tuner'; initTuner()"
+                            :class="activeModule === 'tuner' ? 'bg-indigo-500/15 text-indigo-200' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg>
+                        <span>Swipe &amp; Tune</span>
                     </button>
 
-
-
-                    <button @click="activeModule = 'admin'; adminSection = 'crawler'; fetchCrawlerStatus()" :class="(activeModule === 'admin' && adminSection === 'crawler') || activeModule === 'crawler' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
-
-                        <span>⚙️</span> Centre Crawler
-
-                        <span class="relative flex h-2 w-2">
-
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-
-                        </span>
-
+                    <button x-show="hasPermission('tender:pricing_calculator')"
+                            @click="activeModule = 'pricing'"
+                            :class="activeModule === 'pricing' ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>
+                        <span>Chiffrage & Devis</span>
                     </button>
-
-
-
-                    <button @click="activeModule = 'admin'; adminSection = 'team'; fetchTeamUsers()" :class="(activeModule === 'admin' && adminSection === 'team') || activeModule === 'team' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
-
-                        <span>👥</span> Équipe & RBAC
-
-                    </button>
-
-
-
-                    <button @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()" :class="(activeModule === 'admin' && adminSection === 'ingestion') || activeModule === 'ingestion' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
-
-                        <span>⚡</span> Lots & Ingestion
-
-                        <span class="px-1.5 py-0.2 bg-amber-500/20 text-amber-400 text-[10px] rounded-full font-bold border border-amber-500/30">Admin</span>
-
-                        <span x-show="ingestionData?.active_batch" class="relative flex h-2 w-2 ml-0.5">
-
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-
-                        </span>
-
-                    </button>
-
-
-
-                    <button @click="activeModule = 'pipeline'; fetchPipeline()" :class="activeModule === 'pipeline' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
-
-                        <span>📋</span> Mes Dossiers
-
-                        <span class="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full font-bold font-mono" x-text="pipelineItems.length"></span>
-
-                    </button>
-
-
-
-                    <button @click="activeModule = 'pricing'" :class="activeModule === 'pricing' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
-
-                        <span>💰</span> Chiffrage & Devis
-
-                    </button>
-
                 </nav>
 
+                <!-- Right Controls: Discreet Freshness Indicator + Unified Admin Console Entry -->
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <div @click="currentUser.role === 'admin' ? (activeModule = 'admin', adminSection = 'ingestion', fetchIngestionDashboard()) : null"
+                         :class="currentUser.role === 'admin' ? 'cursor-pointer hover:bg-white/[0.06]' : ''"
+                         class="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.07] text-[11px] font-medium text-slate-400 tabular-nums">
+                        <span class="w-1.5 h-1.5 rounded-full"
+                              :class="(activeAudit?.total_unimported_count > 0) ? 'bg-amber-400' : 'bg-emerald-400'"></span>
+                        <span x-text="activeAudit?.db_total_active ? (activeAudit.db_total_active + ' avis actifs') : 'Base à jour'"></span>
+                    </div>
 
-
-                <!-- Keyboard Shortcut Hint Pill -->
-
-                <div class="hidden xl:flex items-center gap-3 text-[11px] text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-xl border border-slate-800">
-
-                    <span>Raccourcis : <strong class="text-slate-200">J/K</strong> Défiler &bull; <strong class="text-slate-200">Entrée</strong> Fiche 60s &bull; <strong class="text-emerald-400">S</strong> Retenir &bull; <strong class="text-rose-400">X</strong> Ignorer</span>
-
+                    <button x-show="currentUser.role === 'admin'"
+                            @click="activeModule = 'admin'; if (!['ingestion','profiles','crawler','team'].includes(adminSection)) adminSection = 'ingestion'; fetchIngestionDashboard()"
+                            :class="activeModule === 'admin' ? 'bg-white/[0.10] text-white border-white/20' : 'bg-white/[0.03] text-slate-300 border-white/[0.08] hover:bg-white/[0.07] hover:text-white'"
+                            class="px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors flex items-center gap-2 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+                        <span>Administration</span>
+                        <span x-show="ingestionData?.active_batch" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    </button>
                 </div>
-
             </div>
-
         </div>
 
 
@@ -428,7 +348,7 @@
 
             <!-- IDLE INGESTION STATUS & QUICK TRIGGER BAR (Visible on Feed or Ingestion module when idle) -->
 
-            <div x-show="(!ingestionData?.active_batch && !remediating && !reconcilingMissing) && (activeModule === 'feed' || ((activeModule === 'admin' || activeModule === 'ingestion') && adminSection === 'ingestion'))"
+            <div x-show="currentUser.role === 'admin' && (!ingestionData?.active_batch && !remediating && !reconcilingMissing) && ((activeModule === 'admin' || activeModule === 'ingestion') && adminSection === 'ingestion')"
 
                  class="mb-6 rounded-2xl bg-slate-900/90 border border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl backdrop-blur-sm">
 
@@ -750,73 +670,30 @@
 
                 
 
-                <!-- High Priority Market Opportunity Alert (Zero Loss Guarantee) -->
-
-                <div x-show="activeAudit?.missing_count > 0" x-cloak
-
-                     class="p-4 rounded-2xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-rose-950/40 border-2 border-amber-500/60 shadow-xl shadow-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
-
-                    <div class="flex items-center gap-3">
-
-                        <span class="text-2xl">🚨</span>
-
-                        <div>
-
-                            <h4 class="text-xs sm:text-sm font-black text-amber-300 tracking-tight flex items-center gap-2">
-
-                                <span>Alerte Marché Actif :</span>
-
-                                <span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono font-bold text-xs border border-rose-500/30"
-
-                                      x-text="(activeAudit?.total_unimported_count || activeAudit?.missing_count || 0) + ' avis ouverts au dépôt manquent en base'"></span>
-
-                            </h4>
-
-                            <p class="text-[11px] text-slate-300 mt-0.5">
-
-                                Des consultations dont la date limite de soumission n'est pas encore échue existent sur le portail TGR mais ne sont pas dans votre base locale.
-
-                            </p>
-
-                        </div>
-
+                <!-- Admin-Only Compact Market Sync Strip (Hidden from regular users for a clean workspace) -->
+                <div x-show="currentUser.role === 'admin' && (activeAudit?.missing_count > 0 || activeAudit?.total_unimported_count > 0)" x-cloak
+                     class="px-4 py-2.5 rounded-xl bg-slate-900/90 border border-amber-500/30 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5 text-xs">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <span class="font-bold text-amber-300">Couverture TGR :</span>
+                        <span class="text-slate-300" x-text="(activeAudit?.total_unimported_count || activeAudit?.missing_count || 0) + ' avis ouverts manquants en base'"></span>
                     </div>
-
-                    <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
-
-                        <button @click="reconcileActiveTenders()" :disabled="reconcilingActive"
-
-                                x-show="activeAudit?.immediate_missing_count > 0 || (activeAudit?.missing_portal_ids?.length > 0)"
-
-                                class="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 active:scale-95 disabled:opacity-50 transition-all">
-
-                            <span x-show="!reconcilingActive">⚡</span>
-
-                            <span x-show="reconcilingActive" class="animate-spin text-xs">⚙️</span>
-
-                            <span x-text="reconcilingActive ? 'Importation...' : ('Rapatrier ' + (activeAudit?.immediate_missing_count || activeAudit?.missing_portal_ids?.length || 0) + ' avis récents')"></span>
-
+                    <div class="flex items-center gap-2">
+                        <button type="button" @click="showFeedAuditControls = !showFeedAuditControls"
+                                class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-[11px] font-semibold transition-all">
+                            <span x-text="showFeedAuditControls ? 'Masquer Audit' : 'Détails Audit'"></span>
                         </button>
-
-                        <button @click="triggerFullActiveSync()" :disabled="remediating"
-
-                                class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/25 flex items-center gap-2 active:scale-95 disabled:opacity-50 transition-all">
-
-                            <span>🛡️</span>
-
-                            <span x-text="'Synchroniser à 100% (' + (activeAudit?.total_unimported_count || ((activeAudit?.portal_total_active || 1850) - (activeAudit?.db_total_active || 407))) + ' restants)'"></span>
-
+                        <button type="button" @click="triggerFullActiveSync()" :disabled="remediating"
+                                class="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50">
+                            <span x-show="!remediating">🛡️</span>
+                            <span x-show="remediating" class="animate-spin">⚙️</span>
+                            <span x-text="remediating ? 'Sync...' : ('Sync 100% (' + (activeAudit?.total_unimported_count || activeAudit?.missing_count || 0) + ')')"></span>
                         </button>
-
                     </div>
-
                 </div>
 
-
-
-                <!-- Interactive Calendar & Exhaustiveness Confidence Controller -->
-
-                <div class="bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 rounded-2xl border border-slate-800 p-4 shadow-xl space-y-3">
+                <!-- Interactive Calendar & Exhaustiveness Confidence Controller (Admin-only, collapsible) -->
+                <div x-show="currentUser.role === 'admin' && showFeedAuditControls" x-cloak class="bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 rounded-2xl border border-slate-800 p-4 shadow-xl space-y-3">
 
                     
 
@@ -1463,96 +1340,62 @@
 
 
                         <!-- Score Threshold Segmented Controls -->
-
-                        <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs w-full md:w-auto">
-
-                            <button @click="minScore = 0; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 0 && alignmentFilter === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
-
+                        <div class="flex items-center bg-[#0a0c10] p-1 rounded-lg border border-white/[0.07] text-xs w-full md:w-auto tabular-nums">
+                            <button @click="minScore = 0; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 0 && alignmentFilter === 'all' ? 'bg-white/[0.09] text-white font-medium' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-md transition-colors flex-1 md:flex-initial">
                                 Tous (<span x-text="feedStats.total || items.length"></span>)
-
                             </button>
-
-                            <button @click="minScore = 50; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 50 && alignmentFilter === 'all' ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
-
-                                ⚠️ &ge; 50% <span x-show="feedStats.ge50 > 0" class="ml-1 text-[11px] opacity-80" x-text="'(' + feedStats.ge50 + ')'"></span>
-
+                            <button @click="minScore = 50; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 50 && alignmentFilter === 'all' ? 'bg-amber-500/15 text-amber-300 font-medium' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-md transition-colors flex-1 md:flex-initial">
+                                &ge; 50% <span x-show="feedStats.ge50 > 0" class="ml-1 text-[11px] opacity-75" x-text="'(' + feedStats.ge50 + ')'"></span>
                             </button>
-
-                            <button @click="minScore = 80; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 80 && alignmentFilter === 'all' ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial">
-
-                                🎯 &ge; 80% (GO) <span x-show="feedStats.ge80 > 0" class="ml-1 text-[11px] opacity-80" x-text="'(' + feedStats.ge80 + ')'"></span>
-
+                            <button @click="minScore = 80; alignmentFilter = 'all'; fetchFeed()" :class="minScore === 80 && alignmentFilter === 'all' ? 'bg-emerald-500/15 text-emerald-300 font-medium' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-md transition-colors flex-1 md:flex-initial">
+                                &ge; 80% GO <span x-show="feedStats.ge80 > 0" class="ml-1 text-[11px] opacity-75" x-text="'(' + feedStats.ge80 + ')'"></span>
                             </button>
-
-                            <button @click="alignmentFilter = (alignmentFilter === 'aligned' ? 'all' : 'aligned'); minScore = 0; fetchFeed()" :class="alignmentFilter === 'aligned' ? 'bg-teal-500/25 text-teal-300 font-bold border border-teal-500/40 shadow-sm ring-1 ring-teal-500/30' : 'text-slate-400 hover:text-teal-300'" class="px-3 py-1.5 rounded-lg transition-all flex-1 md:flex-initial flex items-center justify-center gap-1.5">
-
-                                <span>✅ Confirmés Alignés</span>
-                                <span x-show="feedStats.aligned > 0" class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-teal-500/30 text-teal-200 font-bold" x-text="feedStats.aligned"></span>
-
+                            <button @click="alignmentFilter = (alignmentFilter === 'aligned' ? 'all' : 'aligned'); minScore = 0; fetchFeed()" :class="alignmentFilter === 'aligned' ? 'bg-teal-500/15 text-teal-300 font-medium' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-md transition-colors flex-1 md:flex-initial flex items-center justify-center gap-1.5">
+                                <span>Confirmés</span>
+                                <span x-show="feedStats.aligned > 0" class="px-1.5 py-0.2 text-[10px] rounded bg-teal-500/20 text-teal-300 font-mono" x-text="feedStats.aligned"></span>
                             </button>
-
                         </div>
 
-
-
-                        <!-- Quick Filter: Éliminer Clôturés -->
-
+                        <!-- Quick Filter: Actifs uniquement -->
                         <button @click="statusFilter = (statusFilter === 'open' ? 'all' : 'open'); fetchFeed()"
-
-                                :class="statusFilter === 'open' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'"
-
-                                class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap">
-
-                            <span :class="statusFilter === 'open' ? 'text-emerald-400' : 'text-slate-500'">⚡</span>
-
-                            <span x-text="statusFilter === 'open' ? '🟢 Clôturés Éliminés' : 'Masquer Clôturés'"></span>
-
+                                :class="statusFilter === 'open' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-[#0a0c10] text-slate-400 border-white/[0.07] hover:text-slate-200'"
+                                class="px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
+                            <span class="w-1.5 h-1.5 rounded-full" :class="statusFilter === 'open' ? 'bg-emerald-400' : 'bg-slate-600'"></span>
+                            <span x-text="statusFilter === 'open' ? 'Actifs uniquement' : 'Masquer clôturés'"></span>
                         </button>
-
-
 
                         <!-- Sorting Dropdown -->
                         <div class="flex items-center gap-2 text-xs">
-                            <label class="text-slate-500 text-[11px] font-medium hidden sm:inline">Trier par :</label>
-                            <select x-model="sortBy" @change="sortLocalItems(); fetchFeed()" class="bg-slate-950 border border-slate-800 text-slate-300 text-xs rounded-xl px-2.5 py-2 outline-none focus:ring-1 focus:ring-emerald-500">
-                                <option value="score_desc">🎯 Score Décroissant (Top Règle)</option>
-                                <option value="ai_score_desc">🤖 Score IA Décroissant (Top IA)</option>
-                                <option value="deadline_asc">⏳ Date Limite (Plus Urgent)</option>
-                                <option value="items_desc">📦 Nombre d'Articles (Max)</option>
-                                <option value="id_desc">🆕 Plus Récents (# ID)</option>
-                                <option value="ai_score_asc">🤖 Score IA Croissant</option>
-                                <option value="score_asc">🎯 Score Croissant</option>
-                                <option value="deadline_desc">⏳ Date Limite (Plus Lointain)</option>
-                                <option value="items_asc">📦 Moins d'Articles (Min)</option>
-                                <option value="id_asc">👴 Plus Anciens (# ID)</option>
+                            <label class="text-slate-500 text-[11px] font-medium hidden sm:inline">Tri :</label>
+                            <select x-model="sortBy" @change="sortLocalItems(); fetchFeed()" class="bg-[#0a0c10] border border-white/[0.08] text-slate-200 text-xs rounded-lg px-2.5 py-1.5 outline-none focus:border-emerald-500">
+                                <option value="score_desc">Score décroissant (Profil)</option>
+                                <option value="ai_score_desc">Score IA décroissant (Top IA)</option>
+                                <option value="deadline_asc">Échéance (Plus urgent)</option>
+                                <option value="items_desc">Nombre d'articles (Max)</option>
+                                <option value="id_desc">Plus récents (# ID)</option>
+                                <option value="ai_score_asc">Score IA croissant</option>
+                                <option value="score_asc">Score croissant</option>
+                                <option value="deadline_desc">Échéance (Plus lointain)</option>
+                                <option value="items_asc">Moins d'articles (Min)</option>
+                                <option value="id_asc">Plus anciens (# ID)</option>
                             </select>
                         </div>
 
-
-
                         <!-- View Mode Switcher -->
-
-                        <div class="hidden sm:flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-
-                            <button @click="viewMode = 'table'" :class="viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'" class="p-1.5 rounded-lg">
-
-                                ☰ Table
-
+                        <div class="hidden sm:flex items-center bg-[#0a0c10] p-1 rounded-lg border border-white/[0.07] text-xs">
+                            <button @click="viewMode = 'table'" :class="viewMode === 'table' ? 'bg-white/[0.09] text-white font-medium' : 'text-slate-500 hover:text-slate-300'" class="px-2.5 py-1 rounded-md transition-colors">
+                                Table
                             </button>
-
-                            <button @click="viewMode = 'cards'" :class="viewMode === 'cards' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'" class="p-1.5 rounded-lg">
-
-                                ☷ Cartes
-
+                            <button @click="viewMode = 'cards'" :class="viewMode === 'cards' ? 'bg-white/[0.09] text-white font-medium' : 'text-slate-500 hover:text-slate-300'" class="px-2.5 py-1 rounded-md transition-colors">
+                                Cartes
                             </button>
-
                         </div>
 
-                        <!-- Direct AI DB Sync Trigger Button -->
-                        <button @click="triggerAiDbSync()" :disabled="aiSyncing"
-                                class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                        <!-- Direct AI DB Sync Trigger Button (Analyst/Admin only) -->
+                        <button x-show="currentUser.role !== 'viewer'" @click="triggerAiDbSync()" :disabled="aiSyncing"
+                                class="px-3 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
                                 title="Diagnostiquer tous les avis sans API externe et mettre à jour directement les taux en base de données">
-                            <span :class="{'animate-spin inline-block': aiSyncing}">🤖</span>
+                            <svg class="w-3.5 h-3.5" :class="{'animate-spin': aiSyncing}" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14.9-4M20 12a8 8 0 0 1-14.9 4"/></svg>
                             <span x-text="aiSyncing ? 'Diagnostic en cours...' : 'Diagnostic IA BD'"></span>
                         </button>
 
@@ -3323,106 +3166,152 @@
 
             <!-- ========================================== -->
 
-            <div x-show="activeModule === 'admin' || ['ingestion', 'crawler', 'team', 'profiles'].includes(activeModule)" x-cloak class="space-y-6">
+            <div x-show="activeModule === 'admin' || ['ingestion', 'crawler', 'team', 'profiles'].includes(activeModule)" x-cloak class="flex flex-col lg:flex-row gap-6 items-start">
 
-                <!-- Admin Sub-Navigation Pills -->
-
-                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex items-center justify-between gap-2 overflow-x-auto shadow-lg">
-
-                    <div class="flex items-center gap-1.5 text-xs font-semibold">
-
-                        <button @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()" :class="adminSection === 'ingestion' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
-
-                            <span>⚡</span> Lots & Ingestion
-
-                        </button>
-
-                        <button @click="activeModule = 'admin'; adminSection = 'team'; fetchTeamUsers()" :class="adminSection === 'team' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
-
-                            <span>👥</span> Équipe & RBAC
-
-                        </button>
-
-                        <button @click="activeModule = 'admin'; adminSection = 'crawler'; fetchCrawlerStatus()" :class="adminSection === 'crawler' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
-
-                            <span>🛰️</span> Crawler TGR
-
-                        </button>
-
-                        <button @click="activeModule = 'admin'; adminSection = 'profiles'" :class="adminSection === 'profiles' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold shadow' : 'text-slate-400 hover:text-white'" class="px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-2">
-
-                            <span>📁</span> Profils Métier YAML
-
-                        </button>
-
+                <!-- Structured Admin Console Left Sidebar -->
+                <aside class="w-full lg:w-60 shrink-0 bg-[#11141b] border border-white/[0.07] rounded-xl p-2.5 space-y-1 lg:sticky lg:top-20">
+                    <div class="px-2.5 py-2 border-b border-white/[0.06] mb-1.5">
+                        <div class="text-xs font-semibold text-white tracking-tight">Administration</div>
+                        <div class="text-[11px] text-slate-500 mt-0.5">Système &bull; Décret 2-22-431</div>
                     </div>
 
-                    <span class="text-[11px] font-mono text-amber-400/80 px-3 hidden md:inline">Administration Système • Décret 2-22-431</span>
+                    <button type="button" @click="activeModule = 'admin'; adminSection = 'ingestion'; fetchIngestionDashboard()"
+                            :class="adminSection === 'ingestion' ? 'bg-white/[0.08] text-white font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2.5">
+                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                            Couverture &amp; Lots TGR
+                        </span>
+                        <span x-show="activeAudit?.total_unimported_count > 0" class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10px] font-mono tabular-nums" x-text="activeAudit?.total_unimported_count"></span>
+                    </button>
 
-                </div>
+                    <button type="button" @click="activeModule = 'admin'; adminSection = 'profiles'; fetchProfiles()"
+                            :class="adminSection === 'profiles' ? 'bg-white/[0.08] text-white font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center gap-2.5">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                        Profils YAML &amp; IA
+                    </button>
 
+                    <button type="button" @click="activeModule = 'admin'; adminSection = 'team'; fetchTeamUsers()"
+                            :class="adminSection === 'team' ? 'bg-white/[0.08] text-white font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center gap-2.5">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5c2.2.4 4 2.3 4 4.5"/></svg>
+                        Équipe, RBAC &amp; Accès
+                    </button>
 
+                    <button type="button" @click="activeModule = 'admin'; adminSection = 'crawler'; fetchCrawlerStatus()"
+                            :class="adminSection === 'crawler' ? 'bg-white/[0.08] text-white font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2.5">
+                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
+                            Centre Crawler
+                        </span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    </button>
+
+                    <div class="pt-2 mt-2 border-t border-white/[0.06]">
+                        <button type="button" @click="activeModule = 'feed'"
+                                class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.04] text-slate-400 hover:text-white text-xs font-medium transition-colors flex items-center gap-2">
+                            <span>&larr;</span> Retour aux Opportunités
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- Admin Console Main Content Area -->
+                <div class="flex-1 min-w-0 w-full space-y-6">
 
                 <!-- Admin Sub-Section 4: Profiles -->
 
                 <div x-show="adminSection === 'profiles'" x-cloak class="space-y-6">
 
-                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl">
+                <div class="bg-[#11141b] rounded-xl border border-white/[0.07] p-6 space-y-6">
 
-                    <h2 class="text-base font-bold text-white mb-1">Studio des Profils Métier Déclaratifs (YAML)</h2>
-
-                    <p class="text-xs text-slate-400 mb-6">Moteur de règles d'élimination et taxonomies de correspondance</p>
-
-
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-base font-semibold text-white mb-1">
+                                Studio des Profils Métier Déclaratifs (YAML) &amp; Scoring IA
+                            </h2>
+                            <p class="text-xs text-slate-400">
+                                Moteur dynamique de règles d'élimination, taxonomies de correspondance et pondérations hybrides IA + Cascade
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button type="button" @click="fetchProfiles()" class="px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/[0.08] text-xs font-medium transition-colors">
+                                Actualiser YAML
+                            </button>
+                            <button type="button" x-show="currentUser.role === 'admin'" @click="newSectorModalOpen = true" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors">
+                                + Nouveau Profil YAML
+                            </button>
+                        </div>
+                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <template x-for="prof in availableProfiles.filter(p => p.id !== 'all')" :key="prof.id">
+                            <div class="bg-slate-950 p-5 rounded-xl border transition-all space-y-3.5"
+                                 :class="selectedProfile === prof.id ? 'border-emerald-500/60 ring-1 ring-emerald-500/20' : 'border-slate-800 hover:border-slate-700'">
 
-                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-3">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="font-bold text-sm flex items-center gap-2"
+                                             :class="prof.scoring_mode === 'hybrid' ? 'text-amber-300' : 'text-emerald-400'">
+                                            <span x-text="prof.icon || '🏷️'"></span>
+                                            <span class="truncate" x-text="prof.profile_name"></span>
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                            <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono" x-text="prof.file_name || (prof.id + '.yaml')"></span>
+                                            <span class="text-[10px] px-2 py-0.5 rounded font-bold border"
+                                                  :class="prof.scoring_mode === 'hybrid' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'"
+                                                  x-text="prof.scoring_mode === 'hybrid' ? '⚡ Hybride IA + Cascade' : '📊 Cascade Secteur'"></span>
+                                        </div>
+                                    </div>
+                                    <span x-show="selectedProfile === prof.id" class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold shrink-0">Actif</span>
+                                </div>
 
-                            <div class="flex items-center justify-between">
+                                <div class="text-xs text-slate-400 space-y-1.5">
+                                    <div>
+                                        <strong class="text-slate-300">Catégories autorisées :</strong>
+                                        <span x-text="(prof.categories || []).join(', ') || 'Toutes'"></span>
+                                    </div>
+                                    <div>
+                                        <strong class="text-emerald-400">Mots-clés positifs (<span x-text="prof.keywords_count || 0"></span>) :</strong>
+                                        <span x-text="(prof.positive_keywords_sample || []).join(', ') || 'Définis dans le catalogue'"></span>
+                                    </div>
+                                    <div>
+                                        <strong class="text-rose-400">Veto négatif (<span x-text="prof.negative_keywords_count || 0"></span>) :</strong>
+                                        <span x-text="(prof.negative_keywords_sample || []).join(', ') || 'Aucun veto'"></span>
+                                    </div>
+                                </div>
 
-                                <span class="font-bold text-emerald-400 text-sm">📹 Vidéosurveillance & Sécurité Physique</span>
+                                <!-- AI & Cascade Scoring Weights Summary -->
+                                <div class="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800/80 text-[11px] text-slate-300 flex flex-wrap items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2 font-mono">
+                                        <template x-if="prof.scoring_mode === 'hybrid'">
+                                            <span>🧠 IA: <strong class="text-amber-300" x-text="Math.round((prof.scoring_weights?.ai_engine_weight ?? 0.5) * 100) + '%'"></strong> &bull; Cascade: <strong class="text-emerald-300" x-text="Math.round((prof.scoring_weights?.cascade_weight ?? 0.5) * 100) + '%'"></strong></span>
+                                        </template>
+                                        <template x-if="prof.scoring_mode !== 'hybrid'">
+                                            <span>📦 Devis: <strong class="text-emerald-300" x-text="Math.round((prof.scoring_weights?.line_item_coverage ?? 0.4) * 100) + '%'"></strong> &bull; Sémantique: <strong class="text-indigo-300" x-text="Math.round((prof.scoring_weights?.semantic_similarity ?? 0.3) * 100) + '%'"></strong></span>
+                                        </template>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400" x-text="prof.catalog_count + ' concepts'"></span>
+                                </div>
 
-                                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">cctv_security.yaml</span>
-
+                                <!-- Dynamic Action Controls -->
+                                <div class="flex flex-wrap items-center gap-2 pt-1">
+                                    <button type="button" @click="selectedProfile = prof.id; activeModule = 'feed'; fetchFeed()"
+                                            class="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold transition-all">
+                                        🎯 Activer
+                                    </button>
+                                    <button type="button" x-show="currentUser.role === 'admin'" @click="selectedSectorId = prof.id; openSectorManager()"
+                                            class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-semibold transition-all">
+                                        ✏️ Éditer Règles &amp; Poids
+                                    </button>
+                                    <button type="button" @click="tunerProfileId = prof.id; activeModule = 'tuner'; initTuner()"
+                                            class="px-2.5 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold transition-all">
+                                        🧠 Swipe &amp; Tune
+                                    </button>
+                                </div>
                             </div>
-
-                            <div class="text-xs text-slate-400 space-y-1.5">
-
-                                <div><strong>Catégories autorisées :</strong> Fournitures, Services</div>
-
-                                <div><strong>Mots-clés positifs :</strong> camera, nvr, dvr, switch poe, videosurveillance, disque dur</div>
-
-                                <div><strong>Veto négatif :</strong> gardiennage, securite privee, extincteur, alarme incendie</div>
-
-                            </div>
-
-                        </div>
-
-
-
-                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-3">
-
-                            <div class="flex items-center justify-between">
-
-                                <span class="font-bold text-indigo-400 text-sm">💻 Logiciel, Programmation & Données</span>
-
-                                <span class="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">software_data.yaml</span>
-
-                            </div>
-
-                            <div class="text-xs text-slate-400 space-y-1.5">
-
-                                <div><strong>Catégories autorisées :</strong> Services, Fournitures</div>
-
-                                <div><strong>Mots-clés positifs :</strong> logiciel, application web, api, base de donnees, dashboard, devops</div>
-
-                                <div><strong>Veto négatif :</strong> maconnerie, plomberie, electricite batiment, mobilier de bureau</div>
-
-                            </div>
-
-                        </div>
-
+                        </template>
                     </div>
 
                 </div>
@@ -6391,7 +6280,9 @@
 
                                     <th class="py-3 px-4">Rôle</th>
 
-                                    <th class="py-3 px-4">Périmètre & Permissions</th>
+                                    <th class="py-3 px-4">Profil Défaut &amp; Accès</th>
+
+                                    <th class="py-3 px-4">Périmètre &amp; Permissions</th>
 
                                 </tr>
 
@@ -6415,22 +6306,28 @@
 
                                         <td class="py-3 px-4">
 
-                                            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono"
+                                            <select x-model="u.role" @change="updateUserAccess(u)"
+                                                    class="bg-slate-950 border border-slate-700 text-xs font-bold rounded-lg px-2 py-1 uppercase font-mono focus:border-indigo-500 outline-none"
+                                                    :class="{
+                                                        'text-emerald-400': u.role === 'admin',
+                                                        'text-indigo-400': u.role === 'analyst',
+                                                        'text-amber-400': u.role === 'viewer'
+                                                    }">
+                                                <option value="admin">admin</option>
+                                                <option value="analyst">analyst</option>
+                                                <option value="viewer">viewer</option>
+                                            </select>
 
-                                                  :class="{
+                                        </td>
 
-                                                    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30': u.role === 'admin',
-
-                                                    'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30': u.role === 'analyst',
-
-                                                    'bg-amber-500/10 text-amber-400 border border-amber-500/30': u.role === 'viewer'
-
-                                                  }"
-
-                                                  x-text="u.role">
-
-                                            </span>
-
+                                        <td class="py-3 px-4 space-y-1.5">
+                                            <select x-model="u.default_profile" @change="updateUserAccess(u)"
+                                                    class="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 focus:border-emerald-500 outline-none max-w-[190px]">
+                                                <template x-for="prof in availableProfiles.filter(x => x.id !== 'all')" :key="prof.id">
+                                                    <option :value="prof.id" x-text="(prof.icon || '🏷️') + ' ' + prof.id"></option>
+                                                </template>
+                                            </select>
+                                            <div class="text-[10px] text-slate-400 font-mono" x-text="'Accès: ' + ((u.allowed_profiles || ['*']).join(', '))"></div>
                                         </td>
 
                                         <td class="py-3 px-4">
@@ -6462,6 +6359,8 @@
             </div>
 
 
+
+                </div> <!-- End of Admin Main Content Area -->
 
             <!-- End of Admin Control Center Container -->
 
@@ -7782,6 +7681,7 @@
                 tunerDragX: 0,
                 tunerStartX: 0,
                 tunerIsDragging: false,
+                showFeedAuditControls: false,
 
                 availableProfiles: [],
                 sectorModalOpen: false,
@@ -8295,12 +8195,33 @@
                 init() {
 
                     // Restore persisted session from localStorage
+                    if (!window.__bergagFetchWrapped) {
+                        window.__bergagFetchWrapped = true;
+                        const origFetch = window.fetch.bind(window);
+                        window.fetch = (input, init = {}) => {
+                            const url = typeof input === 'string' ? input : (input?.url || '');
+                            const token = localStorage.getItem('bergag_token');
+                            if (token && url.startsWith('/api/')) {
+                                const headers = new Headers(init.headers || (typeof input !== 'string' ? input.headers : undefined) || {});
+                                if (!headers.has('Authorization')) {
+                                    headers.set('Authorization', `Bearer ${token}`);
+                                }
+                                init = { ...init, headers };
+                            }
+                            return origFetch(input, init);
+                        };
+                    }
 
                     const savedUser = localStorage.getItem('bergag_user');
 
                     if (savedUser) {
 
-                        try { this.currentUser = JSON.parse(savedUser); } catch(e) {}
+                        try {
+                            this.currentUser = JSON.parse(savedUser);
+                            if (this.currentUser?.default_profile) {
+                                this.selectedProfile = this.currentUser.default_profile;
+                            }
+                        } catch(e) {}
 
                     }
 
@@ -8936,9 +8857,13 @@
 
                         localStorage.setItem('bergag_token', data.token);
 
+                        if (data.user?.default_profile) {
+                            this.selectedProfile = data.user.default_profile;
+                        }
 
+                        await this.fetchProfiles();
 
-                        this.showToast(`Bascule vers le rôle : ${data.user.title}`, 'info');
+                        this.showToast(`Bascule vers le rôle : ${data.user.title} (${this.selectedProfile})`, 'info');
 
 
 
@@ -11743,6 +11668,33 @@
                             await this.loadTunerCards();
                         }
                     } catch (e) {}
+                },
+
+                async updateUserAccess(u) {
+                    try {
+                        const allowed = u.role === 'admin' ? ['*'] : (u.allowed_profiles && u.allowed_profiles.length && !u.allowed_profiles.includes('*') ? u.allowed_profiles : [u.default_profile || 'special_ai_hybrid']);
+                        const res = await fetch(`/api/auth/users/${encodeURIComponent(u.email)}/access`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                role: u.role,
+                                is_active: u.is_active !== false,
+                                default_profile: u.default_profile || 'special_ai_hybrid',
+                                allowed_profiles: allowed
+                            })
+                        });
+                        if (res.ok) {
+                            const updated = await res.json();
+                            u.permissions = updated.permissions;
+                            u.allowed_profiles = updated.allowed_profiles;
+                            this.showToast(`Accès mis à jour pour ${u.full_name} (${u.role} • ${u.default_profile})`, 'success');
+                        } else {
+                            const err = await res.json();
+                            this.showToast(err.detail || 'Erreur mise à jour accès', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur réseau : ' + e, 'error');
+                    }
                 },
 
                 get filteredBatches() {
