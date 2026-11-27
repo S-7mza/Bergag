@@ -134,3 +134,46 @@ def test_admin_can_update_user_profile_access(client):
         },
         headers={"Authorization": f"Bearer {admin_token}"},
     )
+
+
+def test_login_form_ui_and_username_password_role_resolution(client):
+    from unittest.mock import AsyncMock, MagicMock
+    from src.database.session import get_db_session
+
+    mock_res = MagicMock()
+    mock_res.scalar_one_or_none.return_value = None
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_res
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    try:
+        # 1. Verify UI renders the username/password login form
+        page = client.get("/")
+        assert page.status_code == 200
+        assert "submitLogin()" in page.text
+        assert "loginForm.username_or_email" in page.text
+        assert "loginForm.password" in page.text
+
+        # 2. Authenticate with username + password for each role
+        for uname, pwd, expected_role in [
+            ("hamza", "AdminBergag2026!", "admin"),
+            ("analyst", "Analyst2026!", "analyst"),
+            ("viewer", "Viewer2026!", "viewer"),
+        ]:
+            login_res = client.post(
+                "/api/auth/login",
+                json={"username_or_email": uname, "password": pwd},
+            )
+            assert login_res.status_code == 200
+            payload = login_res.json()
+            assert payload["user"]["role"] == expected_role
+            assert payload["token"]
+
+            me_res = client.get(
+                "/api/auth/me",
+                headers={"Authorization": f"Bearer {payload['token']}"},
+            )
+            assert me_res.status_code == 200
+            assert me_res.json()["role"] == expected_role
+    finally:
+        app.dependency_overrides.pop(get_db_session, None)

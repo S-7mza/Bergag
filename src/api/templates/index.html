@@ -221,37 +221,46 @@
 
 
 
-                    <!-- User Account / Role Pill -->
+                    <!-- User Account / Authentication Pill -->
 
-                    <button @click="authModalOpen = true" class="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all">
+                    <button @click="authModalOpen = true; showLoginForm = !isAuthenticated" class="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all">
 
                         <div class="w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs uppercase shadow-sm"
 
                              :class="{
 
-                                'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': currentUser.role === 'admin',
+                                'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': isAuthenticated && currentUser.role === 'admin',
 
-                                'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30': currentUser.role === 'analyst',
+                                'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30': isAuthenticated && currentUser.role === 'analyst',
 
-                                'bg-amber-500/20 text-amber-400 border border-amber-500/30': currentUser.role === 'viewer'
+                                'bg-amber-500/20 text-amber-400 border border-amber-500/30': isAuthenticated && currentUser.role === 'viewer',
+
+                                'bg-slate-800 text-slate-300 border border-slate-700': !isAuthenticated
 
                              }"
 
-                             x-text="currentUser.full_name ? currentUser.full_name.substring(0, 2) : 'US'">
+                             x-text="isAuthenticated && currentUser.full_name ? currentUser.full_name.substring(0, 2) : '🔐'">
 
                         </div>
 
                         <div class="text-left text-xs hidden sm:block">
 
-                            <div class="font-bold text-white text-[12px] leading-tight" x-text="currentUser.full_name"></div>
+                            <div class="font-bold text-white text-[12px] leading-tight" x-text="isAuthenticated ? currentUser.full_name : 'Connexion'"></div>
 
                             <div class="text-[10px] text-slate-400 flex items-center gap-1">
 
-                                <span class="capitalize font-semibold text-emerald-400" x-text="currentUser.role"></span>
+                                <span class="uppercase font-semibold"
+                                      :class="{
+                                          'text-emerald-400': isAuthenticated && currentUser.role === 'admin',
+                                          'text-indigo-400': isAuthenticated && currentUser.role === 'analyst',
+                                          'text-amber-400': isAuthenticated && currentUser.role === 'viewer',
+                                          'text-slate-400': !isAuthenticated
+                                      }"
+                                      x-text="isAuthenticated ? currentUser.role : 'Non connecté'"></span>
 
                                 <span>&bull;</span>
 
-                                <span class="text-slate-400">Changer de rôle</span>
+                                <span class="text-slate-400" x-text="isAuthenticated ? 'Compte' : 'S\'identifier'"></span>
 
                             </div>
 
@@ -7522,70 +7531,107 @@
 
         <div x-show="authModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
 
-            <div @click.away="authModalOpen = false" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full p-6 space-y-4">
+            <div @click.away="if (isAuthenticated) authModalOpen = false" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full p-6 space-y-5">
 
-                <div class="flex justify-between items-center">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3">
 
-                    <h3 class="font-bold text-white text-base">Profil & Contrôle d'Accès (RBAC)</h3>
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-lg">🔐</span>
+                        <div>
+                            <h3 class="font-bold text-white text-base" x-text="(!isAuthenticated || showLoginForm) ? 'Authentification Bergag' : 'Session & Contrôle d\'Accès'"></h3>
+                            <p class="text-[11px] text-slate-400" x-text="(!isAuthenticated || showLoginForm) ? 'Identifiez-vous pour déterminer votre rôle (Admin, Analyste, Lecteur)' : 'Session active vérifiée par jeton signé'"></p>
+                        </div>
+                    </div>
 
-                    <button @click="authModalOpen = false" class="text-slate-400 hover:text-white">&times;</button>
+                    <button @click="authModalOpen = false" class="text-slate-400 hover:text-white text-lg px-1">&times;</button>
 
                 </div>
 
-                
+                <!-- Login Form -->
+                <form x-show="!isAuthenticated || showLoginForm" @submit.prevent="submitLogin()" class="space-y-4">
+                    <div x-show="loginError" x-cloak class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium" x-text="loginError"></div>
 
-                <p class="text-xs text-slate-400">Basculez instantanément de profil utilisateur pour tester les différentes vues professionnelles :</p>
+                    <div class="space-y-1.5">
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Nom d'utilisateur ou Email</label>
+                        <input type="text"
+                               x-model="loginForm.username_or_email"
+                               required
+                               autocomplete="username"
+                               placeholder="ex: hamza ou admin@bergag.ma"
+                               class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm text-white placeholder-slate-600">
+                    </div>
 
-
-
-                <div class="space-y-2 pt-2">
-
-                    <button @click="switchRole('admin'); authModalOpen = false" class="w-full text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center justify-between">
-
-                        <div>
-
-                            <div class="font-bold text-emerald-400 text-xs">👑 Hamza Senhaji (Fondateur / Admin)</div>
-
-                            <div class="text-[10px] text-slate-400">Accès intégral : Feed, Alerte Art. 91, Télémétrie & Crawler Live</div>
-
+                    <div class="space-y-1.5">
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Mot de passe</label>
+                        <div class="relative">
+                            <input :type="showLoginPassword ? 'text' : 'password'"
+                                   x-model="loginForm.password"
+                                   required
+                                   autocomplete="current-password"
+                                   placeholder="••••••••••••"
+                                   class="w-full px-3.5 py-2.5 pr-11 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-sm text-white placeholder-slate-600">
+                            <button type="button"
+                                    @click="showLoginPassword = !showLoginPassword"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+                                    :title="showLoginPassword ? 'Masquer' : 'Afficher'">
+                                <span x-text="showLoginPassword ? '🙈' : '👁️'"></span>
+                            </button>
                         </div>
+                    </div>
 
-                        <span class="text-xs">→</span>
-
+                    <button type="submit"
+                            :disabled="loginLoading"
+                            class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm transition-colors shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2">
+                        <span x-show="loginLoading" class="animate-spin">⏳</span>
+                        <span x-text="loginLoading ? 'Vérification...' : 'Se connecter'"></span>
                     </button>
 
+                    <div x-show="isAuthenticated" class="pt-1 text-center">
+                        <button type="button" @click="showLoginForm = false; loginError = ''" class="text-xs text-slate-400 hover:text-white underline">
+                            ← Retour au profil actuel
+                        </button>
+                    </div>
+                </form>
 
-
-                    <button @click="switchRole('analyst'); authModalOpen = false" class="w-full text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center justify-between">
-
-                        <div>
-
-                            <div class="font-bold text-indigo-400 text-xs">📊 Yassine El Amrani (Ingénieur Chiffrage)</div>
-
-                            <div class="text-[10px] text-slate-400">Accès Feed, Simulateur de Marge, Bordereau Excel & Historique</div>
-
+                <!-- Authenticated Session Summary -->
+                <div x-show="isAuthenticated && !showLoginForm" class="space-y-4">
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-3.5">
+                        <div class="w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm uppercase shrink-0"
+                             :class="{
+                                'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30': currentUser.role === 'admin',
+                                'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30': currentUser.role === 'analyst',
+                                'bg-amber-500/20 text-amber-400 border border-amber-500/30': currentUser.role === 'viewer'
+                             }"
+                             x-text="currentUser.full_name ? currentUser.full_name.substring(0, 2) : 'US'">
                         </div>
-
-                        <span class="text-xs">→</span>
-
-                    </button>
-
-
-
-                    <button @click="switchRole('viewer'); authModalOpen = false" class="w-full text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center justify-between">
-
-                        <div>
-
-                            <div class="font-bold text-amber-400 text-xs">👁️ Sara Bennani (Responsable Commerciale)</div>
-
-                            <div class="text-[10px] text-slate-400">Vue épurée : Tenders qualifiés GO (≥75%) & Fiche simplifiée</div>
-
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold text-white text-sm truncate" x-text="currentUser.full_name"></div>
+                            <div class="text-xs text-slate-400 truncate" x-text="(currentUser.username ? '@' + currentUser.username + ' • ' : '') + currentUser.email"></div>
+                            <div class="mt-1.5 flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase border"
+                                      :class="{
+                                        'bg-emerald-500/15 text-emerald-300 border-emerald-500/30': currentUser.role === 'admin',
+                                        'bg-indigo-500/15 text-indigo-300 border-indigo-500/30': currentUser.role === 'analyst',
+                                        'bg-amber-500/15 text-amber-300 border-amber-500/30': currentUser.role === 'viewer'
+                                      }"
+                                      x-text="'Rôle : ' + currentUser.role"></span>
+                                <span class="text-[10px] text-slate-500 truncate" x-text="currentUser.title"></span>
+                            </div>
                         </div>
+                    </div>
 
-                        <span class="text-xs">→</span>
-
-                    </button>
-
+                    <div class="flex gap-2.5">
+                        <button type="button"
+                                @click="showLoginForm = true; loginError = ''; loginForm = { username_or_email: '', password: '' }"
+                                class="flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors border border-slate-700">
+                            🔄 Changer de compte
+                        </button>
+                        <button type="button"
+                                @click="logout()"
+                                class="flex-1 py-2.5 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 font-semibold text-xs transition-colors border border-rose-500/30">
+                            🚪 Se déconnecter
+                        </button>
+                    </div>
                 </div>
 
             </div>
@@ -8565,27 +8611,31 @@
 
 
 
+                isAuthenticated: false,
+                showLoginForm: true,
+                showLoginPassword: false,
+                loginLoading: false,
+                loginError: '',
+                loginForm: {
+                    username_or_email: '',
+                    password: ''
+                },
+
                 currentUser: {
 
-                    id: 'usr-admin-01',
+                    id: 'guest',
 
-                    email: 'admin@bergag.ma',
+                    email: '',
 
-                    full_name: 'Hamza Senhaji',
+                    username: '',
 
-                    role: 'admin',
+                    full_name: 'Invité',
 
-                    title: 'Fondateur & Directeur Exécutif',
+                    role: 'viewer',
 
-                    permissions: [
+                    title: 'Non connecté',
 
-                        'feed:view', 'feed:export', 'tender:action', 'tender:pricing_calculator',
-
-                        'radar:view_all', 'radar:article91_alarms', 'profiles:manage',
-
-                        'crawler:trigger', 'crawler:telemetry', 'users:manage'
-
-                    ]
+                    permissions: ['feed:view']
 
                 },
 
@@ -8626,16 +8676,26 @@
                     }
 
                     const savedUser = localStorage.getItem('bergag_user');
+                    const savedToken = localStorage.getItem('bergag_token');
 
-                    if (savedUser) {
-
+                    if (savedUser && savedToken) {
                         try {
                             this.currentUser = JSON.parse(savedUser);
+                            this.isAuthenticated = true;
+                            this.showLoginForm = false;
                             if (this.currentUser?.default_profile) {
                                 this.selectedProfile = this.currentUser.default_profile;
                             }
-                        } catch(e) {}
-
+                            this.verifyStoredSession();
+                        } catch(e) {
+                            this.isAuthenticated = false;
+                            this.showLoginForm = true;
+                            this.authModalOpen = true;
+                        }
+                    } else {
+                        this.isAuthenticated = false;
+                        this.showLoginForm = true;
+                        this.authModalOpen = true;
                     }
 
 
@@ -9249,6 +9309,104 @@
                 },
 
 
+
+                async verifyStoredSession() {
+                    try {
+                        const res = await fetch('/api/auth/me');
+                        if (!res.ok) {
+                            this.logout(true);
+                            return;
+                        }
+                        const user = await res.json();
+                        this.currentUser = user;
+                        this.isAuthenticated = true;
+                        this.showLoginForm = false;
+                        localStorage.setItem('bergag_user', JSON.stringify(user));
+                    } catch (e) {
+                        // Keep cached session if network offline
+                    }
+                },
+
+                async submitLogin() {
+                    this.loginError = '';
+                    const identifier = (this.loginForm.username_or_email || '').trim();
+                    const password = this.loginForm.password || '';
+                    if (!identifier || !password) {
+                        this.loginError = 'Veuillez saisir votre nom d\'utilisateur et votre mot de passe.';
+                        return;
+                    }
+
+                    this.loginLoading = true;
+                    try {
+                        const res = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                username_or_email: identifier,
+                                password: password
+                            })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            this.loginError = data.detail || 'Identifiants incorrects.';
+                            return;
+                        }
+
+                        this.currentUser = data.user;
+                        this.isAuthenticated = true;
+                        this.showLoginForm = false;
+                        this.authModalOpen = false;
+                        this.loginForm = { username_or_email: '', password: '' };
+
+                        localStorage.setItem('bergag_user', JSON.stringify(data.user));
+                        localStorage.setItem('bergag_token', data.token);
+
+                        if (data.user?.default_profile) {
+                            this.selectedProfile = data.user.default_profile;
+                        }
+
+                        await this.fetchProfiles();
+                        await this.fetchFeed();
+                        if (this.currentUser?.role === 'admin' && typeof this.fetchTeamUsers === 'function') {
+                            this.fetchTeamUsers();
+                        }
+
+                        if ((this.activeModule === 'crawler' || (this.activeModule === 'admin' && this.adminSection === 'crawler')) && !this.hasPermission('crawler:telemetry')) {
+                            this.activeModule = 'feed';
+                        }
+
+                        this.showToast(`Bienvenue ${data.user.full_name} — Rôle : ${data.user.role.toUpperCase()}`, 'success');
+                    } catch (e) {
+                        this.loginError = 'Erreur réseau lors de la connexion.';
+                    } finally {
+                        this.loginLoading = false;
+                    }
+                },
+
+                logout(silent = false) {
+                    localStorage.removeItem('bergag_token');
+                    localStorage.removeItem('bergag_user');
+                    this.isAuthenticated = false;
+                    this.showLoginForm = true;
+                    this.loginError = '';
+                    this.loginForm = { username_or_email: '', password: '' };
+                    this.currentUser = {
+                        id: 'guest',
+                        email: '',
+                        username: '',
+                        full_name: 'Invité',
+                        role: 'viewer',
+                        title: 'Non connecté',
+                        permissions: ['feed:view']
+                    };
+                    if (this.activeModule === 'admin' || this.activeModule === 'crawler') {
+                        this.activeModule = 'feed';
+                    }
+                    this.authModalOpen = true;
+                    if (!silent) {
+                        this.showToast('Session déconnectée.', 'info');
+                    }
+                },
 
                 async switchRole(roleName) {
 
