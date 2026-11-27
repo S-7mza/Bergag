@@ -70,6 +70,19 @@ async def get_awards_stats(
     auditor = AwardsAuditor(session)
     return await auditor.get_stats()
 
+@router.get("/monthly-coverage")
+async def get_awards_monthly_coverage(
+    year: Optional[int] = None,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_role(["admin", "analyst", "viewer"]))
+):
+    """
+    Returns a 12-month coverage breakdown for the selected year (DB counts,
+    date range covered per month, and local offline export counts if present).
+    """
+    auditor = AwardsAuditor(session)
+    return await auditor.get_monthly_coverage(year=year)
+
 @router.get("/state")
 async def get_awards_sync_state(
     user: User = Depends(require_role(["admin", "analyst", "viewer"]))

@@ -2731,226 +2731,333 @@
 
             <!-- ========================================== -->
 
-            <div x-show="activeModule === 'market_radar'" x-cloak class="space-y-6">
+            <div x-show="activeModule === 'market_radar'" x-cloak class="space-y-5">
 
                 <!-- Header -->
-
-                <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-
+                <div class="bg-slate-900/95 rounded-2xl border border-slate-800/90 p-5 shadow-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-
-                        <div class="flex items-center gap-2">
-
-                            <span class="text-xl">📊</span>
-
-                            <h2 class="text-base font-bold text-white">Radar de Marché & Intelligence Concurrentielle</h2>
-
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                            </div>
+                            <h2 class="text-base font-bold text-white tracking-tight">Radar & Concurrence</h2>
                         </div>
-
-                        <p class="text-xs text-slate-400 mt-1">Analyse des prestataires leaders, historique des attributions et détection des futurs Appels d'Offres (AO)</p>
-
+                        <p class="text-xs text-slate-400 mt-1">Identifiez les attributaires actifs sur votre créneau, leur ticket moyen et la marge budgétaire restante des acheteurs (Art. 91).</p>
                     </div>
 
                     <div class="flex items-center gap-2.5 flex-wrap">
-
-                        <!-- Live Data Pill -->
-
                         <template x-if="awardsStats">
-
-                            <span class="px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-2"
-
-                                  :class="awardsStats.status_badge_class">
-
-                                <span class="w-2 h-2 rounded-full" :class="awardsStats.is_fallback_active ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'"></span>
-
-                                <span x-text="awardsStats.is_fallback_active ? 'Mode Simulation (Base vide)' : ('Données Réelles : ' + awardsStats.total_awards + ' attributions')"></span>
-
+                            <span class="px-3 py-1.5 rounded-xl text-xs font-mono font-semibold flex items-center gap-2 border"
+                                  :class="awardsStats.is_fallback_active ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'">
+                                <span class="w-1.5 h-1.5 rounded-full" :class="awardsStats.is_fallback_active ? 'bg-amber-400' : 'bg-emerald-400'"></span>
+                                <span class="tabular-nums" x-text="awardsStats.is_fallback_active ? 'Mode Benchmark (Base vide)' : (awardsStats.total_awards.toLocaleString('fr-FR') + ' attributions')"></span>
                             </span>
-
                         </template>
 
-
-
-                        <!-- Quick Sync Button directly in Market Radar -->
-
-                        <button @click="triggerAwardsSync(5)"
-
+                        <button x-show="currentUser.role === 'admin'"
+                                @click="triggerAwardsSync(5)"
                                 :disabled="awardsSyncState?.is_running"
-
-                                class="px-3.5 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2 disabled:opacity-50">
-
-                            <span x-show="!awardsSyncState?.is_running">⚡</span>
-
-                            <span x-show="awardsSyncState?.is_running" class="animate-spin text-xs">⚙️</span>
-
-                            <span x-text="awardsSyncState?.is_running ? 'Sync en cours...' : 'Synchroniser Attributions (5p)'"></span>
-
+                                class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50">
+                            <span x-text="awardsSyncState?.is_running ? 'Sync en cours...' : 'Synchroniser (5p)'"></span>
                         </button>
 
-
-
-                        <button @click="fetchMarketRadar()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all flex items-center gap-1.5">
-
-                            <span>🔄</span> Actualiser Données
-
+                        <button @click="fetchMarketRadar()"
+                                :disabled="loadingRadar"
+                                class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" :class="loadingRadar ? 'animate-spin' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                            <span>Actualiser</span>
                         </button>
-
                     </div>
-
                 </div>
 
+                <!-- Bidder Filter Bar -->
+                <div class="bg-slate-900/95 rounded-2xl border border-slate-800/90 p-4 shadow-lg space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-end">
+                        <!-- Keyword / Niche -->
+                        <div class="lg:col-span-3">
+                            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Objet / Créneau</label>
+                            <input type="text"
+                                   x-model="radarFilters.keyword"
+                                   @keydown.enter="fetchMarketRadar()"
+                                   placeholder="Ex: informatique, caméra, logiciel..."
+                                   class="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500/60 rounded-xl text-xs text-slate-100 placeholder-slate-500 outline-none transition-colors" />
+                        </div>
 
+                        <!-- Buyer / City -->
+                        <div class="lg:col-span-3">
+                            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Acheteur public / Ville</label>
+                            <input type="text"
+                                   x-model="radarFilters.buyer"
+                                   @keydown.enter="fetchMarketRadar()"
+                                   placeholder="Ex: Commune, Université, Taza..."
+                                   class="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500/60 rounded-xl text-xs text-slate-100 placeholder-slate-500 outline-none transition-colors" />
+                        </div>
+
+                        <!-- Period -->
+                        <div class="lg:col-span-2">
+                            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Période</label>
+                            <select x-model="radarFilters.period" @change="fetchMarketRadar()"
+                                    class="w-full px-2.5 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500/60 rounded-xl text-xs text-slate-200 outline-none cursor-pointer">
+                                <option value="3m">3 derniers mois</option>
+                                <option value="6m">6 derniers mois</option>
+                                <option value="12m">12 derniers mois</option>
+                                <option value="year_2026">Année 2026</option>
+                                <option value="all">Tout l'historique</option>
+                            </select>
+                        </div>
+
+                        <!-- Sort Competitors -->
+                        <div class="lg:col-span-2">
+                            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Trier concurrents</label>
+                            <select x-model="radarFilters.sortBy" @change="fetchMarketRadar()"
+                                    class="w-full px-2.5 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500/60 rounded-xl text-xs text-slate-200 outline-none cursor-pointer">
+                                <option value="amount">Total adjugé (DH)</option>
+                                <option value="wins">Nombre de victoires</option>
+                                <option value="avg_amount">Ticket moyen (DH)</option>
+                                <option value="competition">Densité devis</option>
+                            </select>
+                        </div>
+
+                        <!-- Buyer Art 91 Filter -->
+                        <div class="lg:col-span-2">
+                            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Plafond Art. 91</label>
+                            <select x-model="radarFilters.buyerAlert" @change="fetchMarketRadar()"
+                                    class="w-full px-2.5 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500/60 rounded-xl text-xs text-slate-200 outline-none cursor-pointer">
+                                <option value="all">Tous les acheteurs</option>
+                                <option value="ao_imminent">Alerte AO (≥ 80%)</option>
+                                <option value="warning">En approche (50–79%)</option>
+                                <option value="available">Marge dispo (&lt; 60%)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                        <div class="flex items-center gap-1.5 flex-wrap text-[11px]">
+                            <span class="text-slate-500">Raccourcis :</span>
+                            <button type="button" @click="radarFilters.keyword = 'informatique'; fetchMarketRadar()" class="px-2 py-0.5 rounded-md bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors">Informatique</button>
+                            <button type="button" @click="radarFilters.keyword = 'videosurveillance'; fetchMarketRadar()" class="px-2 py-0.5 rounded-md bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors">Vidéosurveillance</button>
+                            <button type="button" @click="radarFilters.keyword = 'logiciel'; fetchMarketRadar()" class="px-2 py-0.5 rounded-md bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors">Logiciel</button>
+                            <button type="button" @click="radarFilters.keyword = 'imprimante'; fetchMarketRadar()" class="px-2 py-0.5 rounded-md bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 transition-colors">Impression</button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    x-show="radarFilters.keyword || radarFilters.buyer || radarFilters.period !== '12m' || radarFilters.sortBy !== 'amount' || radarFilters.buyerAlert !== 'all'"
+                                    @click="resetRadarFilters()"
+                                    class="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl transition-colors">
+                                Réinitialiser
+                            </button>
+                            <button type="button" @click="fetchMarketRadar()"
+                                    class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs rounded-xl transition-colors">
+                                Filtrer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bidder KPI Summary Strip -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div class="bg-slate-900/95 border border-slate-800/90 rounded-2xl p-4">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Concurrents actifs</span>
+                        <span class="text-xl font-bold text-white tabular-nums mt-1 block" x-text="marketRadar.competitors.length"></span>
+                    </div>
+                    <div class="bg-slate-900/95 border border-slate-800/90 rounded-2xl p-4">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Ticket moyen adjugé</span>
+                        <span class="text-xl font-bold text-emerald-400 font-mono tabular-nums mt-1 block"
+                              x-text="marketRadar.competitors.length ? Math.round(marketRadar.competitors.reduce((s, c) => s + (c.avg_contract_mad || 0), 0) / marketRadar.competitors.length).toLocaleString('fr-FR') + ' DH' : '—'"></span>
+                    </div>
+                    <div class="bg-slate-900/95 border border-slate-800/90 rounded-2xl p-4">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Densité concurrence</span>
+                        <span class="text-xl font-bold text-sky-300 font-mono tabular-nums mt-1 block"
+                              x-text="marketRadar.competitors.length ? (marketRadar.competitors.reduce((s, c) => s + (c.avg_competition_density || 0), 0) / marketRadar.competitors.length).toFixed(1) + ' devis/BDC' : '—'"></span>
+                    </div>
+                    <div class="bg-slate-900/95 border border-slate-800/90 rounded-2xl p-4">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Acheteurs alerte AO (≥80%)</span>
+                        <span class="text-xl font-bold text-rose-400 tabular-nums mt-1 block"
+                              x-text="marketRadar.buyers.filter(b => b.upcoming_ao_signal).length"></span>
+                    </div>
+                </div>
 
                 <!-- 2 Main Cards: Top Competitors & Buyer Ceiling Alarms -->
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
                     <!-- Top Competitors Leaderboard -->
-
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
-
-                        <div class="flex items-center justify-between">
-
+                    <div class="bg-slate-900/95 rounded-2xl border border-slate-800/90 p-5 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between gap-2">
                             <div class="flex items-center gap-2">
-
-                                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-
-                                    <span>🏆</span> Top Prestataires Attributaires
-
-                                </h3>
-
-                                <span x-show="awardsStats?.is_fallback_active" class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono font-bold">Benchmark Référence</span>
-
-                                <span x-show="awardsStats && !awardsStats.is_fallback_active" class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-bold">Direct TGR</span>
-
+                                <h3 class="text-xs font-bold text-white uppercase tracking-wider">Top Prestataires Attributaires</h3>
+                                <span x-show="awardsStats?.is_fallback_active" class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono">Benchmark</span>
                             </div>
-
-                            <span class="text-[10px] text-slate-500 font-mono">Volume & Montants MAD</span>
-
+                            <span class="text-[10px] text-slate-400">Cliquer sur une entreprise pour voir ses marchés</span>
                         </div>
 
-                        <div class="overflow-x-auto">
+                        <div x-show="!loadingRadar && marketRadar.competitors.length === 0" class="py-10 text-center text-xs text-slate-400 bg-slate-950/60 rounded-xl border border-slate-800/70">
+                            Aucun attributaire trouvé pour ces critères. Essayez d'élargir la période ou le mot-clé.
+                        </div>
 
+                        <div x-show="marketRadar.competitors.length > 0" class="overflow-x-auto">
                             <table class="w-full text-left text-xs border-collapse">
-
                                 <thead>
-
-                                    <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
-
+                                    <tr class="bg-slate-950/90 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
                                         <th class="py-2.5 px-3">Entreprise</th>
-
-                                        <th class="py-2.5 px-3 text-center">Victoires</th>
-
-                                        <th class="py-2.5 px-3 text-right">Montant Adjugé</th>
-
-                                        <th class="py-2.5 px-3 text-center">Devis/BDC</th>
-
+                                        <th class="py-2.5 px-2 text-center">Victoires</th>
+                                        <th class="py-2.5 px-2 text-right">Ticket moy.</th>
+                                        <th class="py-2.5 px-2 text-right">Total adjugé</th>
+                                        <th class="py-2.5 px-2 text-center">Devis</th>
                                     </tr>
-
                                 </thead>
-
                                 <tbody class="divide-y divide-slate-800/60">
-
                                     <template x-for="c in marketRadar.competitors" :key="c.winner_name">
-
-                                        <tr class="hover:bg-slate-800/40">
-
+                                        <tr @click="openCompetitorDossier(c.winner_name)" class="hover:bg-slate-800/45 transition-colors cursor-pointer group">
                                             <td class="py-2.5 px-3">
-
-                                                <div class="font-bold text-white truncate max-w-[200px]" x-text="c.winner_name"></div>
-
+                                                <div class="font-semibold text-slate-100 group-hover:text-emerald-300 truncate max-w-[190px] transition-colors" :title="c.winner_name" x-text="c.winner_name"></div>
                                             </td>
-
-                                            <td class="py-2.5 px-3 text-center font-bold text-indigo-400 font-mono" x-text="c.total_wins"></td>
-
-                                            <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-400" x-text="Math.round(c.total_awarded_mad).toLocaleString('fr-FR') + ' DH'"></td>
-
-                                            <td class="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px]" x-text="c.avg_competition_density + ' devis'"></td>
-
+                                            <td class="py-2.5 px-2 text-center font-semibold text-indigo-300 font-mono tabular-nums" x-text="c.total_wins"></td>
+                                            <td class="py-2.5 px-2 text-right font-mono tabular-nums text-slate-300" x-text="Math.round(c.avg_contract_mad || 0).toLocaleString('fr-FR') + ' DH'"></td>
+                                            <td class="py-2.5 px-2 text-right font-mono tabular-nums font-semibold text-emerald-400" x-text="Math.round(c.total_awarded_mad || 0).toLocaleString('fr-FR') + ' DH'"></td>
+                                            <td class="py-2.5 px-2 text-center text-slate-400 font-mono tabular-nums text-[11px]" x-text="(c.avg_competition_density || 0)"></td>
                                         </tr>
-
                                     </template>
-
                                 </tbody>
-
                             </table>
-
                         </div>
-
                     </div>
-
-
 
                     <!-- Buyer Spending & Article 91 Alarms -->
-
-                    <div class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-4">
-
-                        <div class="flex items-center justify-between">
-
-                            <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-
-                                <span>🚨</span> Dépenses Acheteurs & Plafond Art. 91
-
-                            </h3>
-
-                            <span class="text-[10px] text-slate-500 font-mono">Seuil 500k MAD BDC</span>
-
+                    <div class="bg-slate-900/95 rounded-2xl border border-slate-800/90 p-5 shadow-xl space-y-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Dépenses Acheteurs & Plafond Art. 91</h3>
+                            <span class="text-[10px] text-slate-400 font-mono">Cap 500 000 DH / an</span>
                         </div>
 
-                        <div class="space-y-3">
+                        <div x-show="!loadingRadar && marketRadar.buyers.length === 0" class="py-10 text-center text-xs text-slate-400 bg-slate-950/60 rounded-xl border border-slate-800/70">
+                            Aucun acheteur ne correspond à ce filtre.
+                        </div>
 
+                        <div x-show="marketRadar.buyers.length > 0" class="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
                             <template x-for="b in marketRadar.buyers" :key="b.buyer_name">
-
-                                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
-
-                                    <div class="flex items-center justify-between">
-
-                                        <span class="font-bold text-xs text-white truncate max-w-[260px]" x-text="b.buyer_name"></span>
-
-                                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded" :class="b.upcoming_ao_signal ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-800 text-slate-300'" x-text="b.budget_exhaustion_pct + '% consommé'"></span>
-
+                                <div @click="radarFilters.buyer = b.buyer_name; fetchMarketRadar()"
+                                     title="Cliquer pour filtrer les concurrents sur cet acheteur"
+                                     class="bg-slate-950/80 hover:bg-slate-950 p-3.5 rounded-xl border border-slate-800 hover:border-indigo-500/40 space-y-2 transition-colors cursor-pointer">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-semibold text-xs text-slate-100 truncate" :title="b.buyer_name" x-text="b.buyer_name"></span>
+                                        <span class="text-[10px] font-mono tabular-nums font-semibold px-2 py-0.5 rounded shrink-0"
+                                              :class="b.upcoming_ao_signal ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : (b.budget_exhaustion_pct > 60 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/25')"
+                                              x-text="b.budget_exhaustion_pct + '% consommé'"></span>
                                     </div>
 
-                                    <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
-
-                                        <div class="h-full rounded-full transition-all duration-500" :style="'width: ' + Math.min(100, b.budget_exhaustion_pct) + '%'" :class="b.upcoming_ao_signal ? 'bg-rose-500' : (b.budget_exhaustion_pct > 60 ? 'bg-amber-400' : 'bg-emerald-400')"></div>
-
+                                    <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full rounded-full transition-all duration-500"
+                                             :style="'width: ' + Math.min(100, b.budget_exhaustion_pct) + '%'"
+                                             :class="b.upcoming_ao_signal ? 'bg-rose-500' : (b.budget_exhaustion_pct > 60 ? 'bg-amber-400' : 'bg-emerald-400')"></div>
                                     </div>
 
-                                    <div class="flex justify-between items-center text-[10px] text-slate-400">
-
-                                        <span x-text="Math.round(b.total_spent_mad).toLocaleString('fr-FR') + ' DH consommés'"></span>
-
-                                        <span x-show="b.upcoming_ao_signal" class="text-rose-400 font-bold">⚡ Appel d'Offres (AO) imminent !</span>
-
+                                    <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono tabular-nums">
+                                        <span>
+                                            <span class="text-slate-200 font-semibold" x-text="Math.round(b.total_spent_mad).toLocaleString('fr-FR') + ' DH'"></span>
+                                            <span class="text-slate-500" x-text="' (' + b.bdc_count + ' BDC)'"></span>
+                                        </span>
+                                        <span x-show="b.upcoming_ao_signal" class="text-rose-400 font-sans font-semibold">Alerte AO imminent</span>
+                                        <span x-show="!b.upcoming_ao_signal" class="text-emerald-400/90" x-text="'Reste ' + Math.max(0, Math.round(500000 - b.total_spent_mad)).toLocaleString('fr-FR') + ' DH'"></span>
                                     </div>
-
                                 </div>
-
                             </template>
-
                         </div>
-
                     </div>
-
                 </div>
 
-
-
                 <!-- Seasonality Insight Card -->
-
-                <div x-show="marketRadar.seasonality" class="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl flex items-center gap-4">
-
-                    <div class="text-3xl">📈</div>
-
-                    <div>
-
-                        <h4 class="text-xs font-bold text-white uppercase tracking-wider">Cycle Budgétaire des Marchés Publics</h4>
-
-                        <p class="text-xs text-slate-300 mt-1" x-text="marketRadar.seasonality?.seasonality_insight"></p>
-
+                <div x-show="marketRadar.seasonality" class="bg-slate-900/95 rounded-2xl border border-slate-800/90 p-5 shadow-lg flex items-center gap-4">
+                    <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
                     </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white uppercase tracking-wider">Cycle Budgétaire des Marchés Publics</h4>
+                        <p class="text-xs text-slate-300 mt-1" x-text="marketRadar.seasonality?.seasonality_insight"></p>
+                    </div>
+                </div>
 
+                <!-- Competitor Dossier Modal -->
+                <div x-show="competitorDossierOpen" x-cloak
+                     @keydown.escape.window="competitorDossierOpen = false"
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+                    <div @click.outside="competitorDossierOpen = false"
+                         class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+                        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-950/70">
+                            <div class="min-w-0">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-indigo-400 block">Dossier Concurrent</span>
+                                <h3 class="text-sm font-bold text-white truncate" x-text="competitorDossier?.winner_name || 'Chargement...'"></h3>
+                            </div>
+                            <button @click="competitorDossierOpen = false" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">✕</button>
+                        </div>
+
+                        <div class="p-5 overflow-y-auto space-y-4">
+                            <div x-show="competitorDossierLoading" class="py-8 text-center text-xs text-slate-400">
+                                Chargement de l'historique d'attribution...
+                            </div>
+
+                            <div x-show="!competitorDossierLoading && competitorDossier && !competitorDossier.found" class="py-6 text-center text-xs text-slate-400">
+                                Aucun historique détaillé enregistré en base pour ce prestataire.
+                            </div>
+
+                            <template x-if="!competitorDossierLoading && competitorDossier && competitorDossier.found">
+                                <div class="space-y-4">
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono">
+                                        <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                                            <span class="text-[10px] text-slate-500 block uppercase">Marchés gagnés</span>
+                                            <span class="text-base font-bold text-indigo-300 tabular-nums" x-text="competitorDossier.total_recorded_wins"></span>
+                                        </div>
+                                        <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                                            <span class="text-[10px] text-slate-500 block uppercase">Total adjugé</span>
+                                            <span class="text-base font-bold text-emerald-400 tabular-nums" x-text="Math.round(competitorDossier.total_awarded_mad || 0).toLocaleString('fr-FR') + ' DH'"></span>
+                                        </div>
+                                        <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                                            <span class="text-[10px] text-slate-500 block uppercase">Ticket moyen</span>
+                                            <span class="text-base font-bold text-slate-100 tabular-nums" x-text="Math.round(competitorDossier.avg_amount_mad || 0).toLocaleString('fr-FR') + ' DH'"></span>
+                                        </div>
+                                        <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                                            <span class="text-[10px] text-slate-500 block uppercase">Acheteurs clients</span>
+                                            <span class="text-base font-bold text-sky-300 tabular-nums" x-text="competitorDossier.unique_buyers_count"></span>
+                                        </div>
+                                    </div>
+
+                                    <div x-show="competitorDossier.top_client_buyers?.length" class="space-y-1.5">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Acheteurs récurrents</span>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <template x-for="cb in competitorDossier.top_client_buyers" :key="cb">
+                                                <button type="button"
+                                                        @click="radarFilters.buyer = cb; competitorDossierOpen = false; fetchMarketRadar()"
+                                                        class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-indigo-500/15 text-slate-300 hover:text-indigo-200 border border-slate-800 hover:border-indigo-500/30 text-[11px] transition-colors">
+                                                    <span x-text="cb"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1.5">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Derniers marchés remportés</span>
+                                        <div class="divide-y divide-slate-800/70 bg-slate-950/70 border border-slate-800 rounded-xl overflow-hidden">
+                                            <template x-for="w in competitorDossier.recent_wins" :key="w.reference + w.awarded_at">
+                                                <div class="px-3 py-2.5 flex items-center justify-between gap-3 text-xs">
+                                                    <div class="min-w-0">
+                                                        <div class="font-medium text-slate-100 truncate" :title="w.title" x-text="w.title"></div>
+                                                        <div class="text-[11px] text-slate-400 truncate mt-0.5">
+                                                            <span class="font-mono text-slate-300" x-text="w.reference"></span>
+                                                            <span> · </span>
+                                                            <span x-text="w.buyer"></span>
+                                                            <span> · </span>
+                                                            <span x-text="w.awarded_at"></span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="font-mono font-bold text-emerald-400 tabular-nums shrink-0" x-text="Math.round(w.amount_ttc || 0).toLocaleString('fr-FR') + ' DH'"></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
 
             </div>
@@ -3241,7 +3348,7 @@
 
                         </button>
 
-                        <button type="button" @click="ingestionDomain = 'awards'; fetchAwardsStats(); fetchAwardsState();"
+                        <button type="button" @click="ingestionDomain = 'awards'; fetchAwardsStats(); fetchAwardsState(); fetchAwardsMonthlyCoverage();"
 
                                 :class="ingestionDomain === 'awards' ? 'bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/40 shadow-sm' : 'text-slate-400 hover:text-white'"
 
@@ -5353,7 +5460,7 @@
 
                                 
 
-                                <button @click="fetchAwardsStats(); fetchAwardsState();"
+                                <button @click="fetchAwardsStats(); fetchAwardsState(); fetchAwardsMonthlyCoverage();"
 
                                         :disabled="loadingAwardsStats"
 
@@ -5435,6 +5542,123 @@
 
                         </div>
 
+                    </div>
+
+                    <!-- 1B. MONTHLY AWARDS COVERAGE MATRIX (By Year) -->
+                    <div class="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 shadow-xl space-y-5">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <div class="flex items-center gap-2.5">
+                                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                        <span>📅</span>
+                                        <span>Couverture Mensuelle des Attributions</span>
+                                    </h3>
+                                    <span x-show="awardsCoverage"
+                                          class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border"
+                                          :class="(awardsCoverage?.missing_months?.length === 0 && awardsCoverage?.partial_months?.length === 0)
+                                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                              : 'bg-amber-500/15 text-amber-300 border-amber-500/30'"
+                                          x-text="(awardsCoverage?.covered_months_count || 0) + '/12 mois couverts'"></span>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-1">
+                                    Visualisez le volume d'avis en base mois par mois pour l'année choisie afin d'identifier immédiatement les périodes manquantes ou partielles.
+                                </p>
+                            </div>
+
+                            <div class="flex items-center gap-2.5 flex-shrink-0">
+                                <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5">
+                                    <span class="text-[11px] font-mono text-slate-400">Année :</span>
+                                    <select x-model.number="awardsCoverageYear"
+                                            @change="fetchAwardsMonthlyCoverage()"
+                                            class="bg-transparent text-xs font-mono font-bold text-indigo-300 focus:outline-none cursor-pointer">
+                                        <template x-for="yr in (awardsCoverage?.available_years || [new Date().getFullYear()])" :key="yr">
+                                            <option :value="yr" x-text="yr" class="bg-slate-900 text-white"></option>
+                                        </template>
+                                    </select>
+                                </div>
+
+                                <button type="button"
+                                        @click="fetchAwardsMonthlyCoverage()"
+                                        :disabled="loadingAwardsCoverage"
+                                        class="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all disabled:opacity-50">
+                                    <span :class="loadingAwardsCoverage ? 'animate-spin' : ''">🔄</span>
+                                    <span x-text="loadingAwardsCoverage ? '...' : 'Vérifier'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 12-Month Grid -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                            <template x-for="m in (awardsCoverage?.months || [])" :key="m.month">
+                                <div @click="(m.status === 'empty' || m.status === 'partial') && prefillAwardsMonthPeriod(m)"
+                                     :title="(m.status === 'empty' || m.status === 'partial') ? 'Cliquer pour pré-remplir la période ' + m.date_start_input + ' → ' + m.date_end_input : m.full_label + ' ' + awardsCoverageYear"
+                                     class="rounded-2xl border p-3.5 transition-all flex flex-col justify-between gap-2.5"
+                                     :class="{
+                                         'bg-emerald-950/15 border-emerald-500/30': m.status === 'complete',
+                                         'bg-amber-950/20 border-amber-500/40 hover:border-amber-400 cursor-pointer': m.status === 'partial',
+                                         'bg-rose-950/20 border-rose-500/35 hover:border-rose-400 cursor-pointer': m.status === 'empty',
+                                         'bg-slate-950/40 border-slate-800/60 opacity-50': m.status === 'future'
+                                     }">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="text-xs font-bold text-white" x-text="m.label + ' ' + String(awardsCoverageYear).slice(-2)"></span>
+                                        <span class="px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase"
+                                              :class="{
+                                                  'bg-emerald-500/20 text-emerald-300': m.status === 'complete',
+                                                  'bg-amber-500/20 text-amber-300': m.status === 'partial',
+                                                  'bg-rose-500/20 text-rose-300': m.status === 'empty',
+                                                  'bg-slate-800 text-slate-400': m.status === 'future'
+                                              }"
+                                              x-text="m.status_label"></span>
+                                    </div>
+
+                                    <div>
+                                        <div class="flex items-baseline gap-1">
+                                            <span class="font-mono font-black text-base"
+                                                  :class="m.db_count > 0 ? 'text-white' : 'text-rose-400/80'"
+                                                  x-text="m.db_count.toLocaleString('fr-FR')"></span>
+                                            <span class="text-[10px] text-slate-400">avis</span>
+                                        </div>
+                                        <!-- Proportional Volume Bar -->
+                                        <div class="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden mt-1.5">
+                                            <div class="h-full rounded-full transition-all duration-500"
+                                                 :class="{
+                                                     'bg-emerald-400': m.status === 'complete',
+                                                     'bg-amber-400': m.status === 'partial',
+                                                     'bg-rose-500/50': m.status === 'empty',
+                                                     'bg-slate-700': m.status === 'future'
+                                                 }"
+                                                 :style="'width: ' + (m.db_count > 0 ? Math.max(6, Math.round((m.db_count / (awardsCoverage?.max_month_count || 1)) * 100)) : 0) + '%'"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-1">
+                                        <div class="text-[10px] font-mono truncate"
+                                             :class="m.status === 'partial' ? 'text-amber-300' : 'text-slate-400'"
+                                             x-text="m.db_count > 0 ? (m.min_day_label + ' → ' + m.max_day_label) : (m.status === 'future' ? 'Mois futur' : 'Aucune donnée')"></div>
+                                        <div x-show="m.offline_count > m.db_count"
+                                             class="text-[10px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 rounded px-1.5 py-0.5 truncate"
+                                             x-text="'📦 ' + m.offline_count.toLocaleString('fr-FR') + ' en local'"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Summary Footer -->
+                        <div x-show="awardsCoverage" class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs">
+                            <div class="flex items-center gap-4 font-mono">
+                                <span class="text-slate-400">Total <span x-text="awardsCoverageYear"></span> : <strong class="text-white" x-text="(awardsCoverage?.total_awards_year || 0).toLocaleString('fr-FR') + ' avis'"></strong></span>
+                                <span class="text-slate-600">|</span>
+                                <span class="text-slate-400">Volume : <strong class="text-emerald-400" x-text="formatMAD(awardsCoverage?.total_mad_year || 0)"></strong></span>
+                            </div>
+                            <div class="text-[11px] font-mono text-slate-400">
+                                <span x-show="awardsCoverage?.missing_months?.length > 0 || awardsCoverage?.partial_months?.length > 0" class="text-amber-300">
+                                    💡 Cliquez sur un mois Manquant ou Partiel pour pré-remplir la période de synchronisation ci-dessous.
+                                </span>
+                                <span x-show="awardsCoverage && awardsCoverage.missing_months.length === 0 && awardsCoverage.partial_months.length === 0" class="text-emerald-400">
+                                    ✓ Tous les mois écoulés de l'année sont couverts.
+                                </span>
+                            </div>
+                        </div>
                     </div>
 
 
@@ -7673,6 +7897,17 @@
                 loadingPipeline: false,
 
                 marketRadar: { competitors: [], buyers: [], seasonality: null },
+                radarFilters: {
+                    keyword: '',
+                    buyer: '',
+                    period: '12m',
+                    sortBy: 'amount',
+                    buyerAlert: 'all',
+                    limit: 15
+                },
+                competitorDossier: null,
+                competitorDossierOpen: false,
+                competitorDossierLoading: false,
 
                 loadingRadar: false,
 
@@ -7685,6 +7920,12 @@
                 awardsStats: null,
 
                 loadingAwardsStats: false,
+
+                awardsCoverage: null,
+
+                awardsCoverageYear: new Date().getFullYear(),
+
+                loadingAwardsCoverage: false,
 
                 awardsSyncState: { is_running: false, active_job: null, history: [] },
 
@@ -9689,12 +9930,38 @@
                     this.loadingRadar = true;
 
                     try {
+                        const compParams = new URLSearchParams({
+                            limit: String(this.radarFilters.limit || 15),
+                            sort_by: this.radarFilters.sortBy || 'amount'
+                        });
+                        const buyerParams = new URLSearchParams({
+                            alert: this.radarFilters.buyerAlert || 'all',
+                            limit: '30'
+                        });
+
+                        if (this.radarFilters.keyword && this.radarFilters.keyword.trim()) {
+                            compParams.set('keyword', this.radarFilters.keyword.trim());
+                            buyerParams.set('keyword', this.radarFilters.keyword.trim());
+                        }
+                        if (this.radarFilters.buyer && this.radarFilters.buyer.trim()) {
+                            compParams.set('buyer', this.radarFilters.buyer.trim());
+                            buyerParams.set('buyer', this.radarFilters.buyer.trim());
+                        }
+
+                        const period = this.radarFilters.period;
+                        if (period === '3m') compParams.set('months', '3');
+                        else if (period === '6m') compParams.set('months', '6');
+                        else if (period === '12m') compParams.set('months', '12');
+                        else if (period === 'year_2026') {
+                            compParams.set('year', '2026');
+                            buyerParams.set('year', '2026');
+                        }
 
                         const [compRes, buyerRes, seasRes] = await Promise.all([
 
-                            fetch('/api/analytics/competitors?limit=10'),
+                            fetch('/api/analytics/competitors?' + compParams.toString()),
 
-                            fetch('/api/analytics/buyers'),
+                            fetch('/api/analytics/buyers?' + buyerParams.toString()),
 
                             fetch('/api/analytics/seasonality')
 
@@ -9718,6 +9985,37 @@
 
                     }
 
+                },
+
+                resetRadarFilters() {
+                    this.radarFilters = {
+                        keyword: '',
+                        buyer: '',
+                        period: '12m',
+                        sortBy: 'amount',
+                        buyerAlert: 'all',
+                        limit: 15
+                    };
+                    this.fetchMarketRadar();
+                },
+
+                async openCompetitorDossier(winnerName) {
+                    if (!winnerName) return;
+                    this.competitorDossierOpen = true;
+                    this.competitorDossierLoading = true;
+                    this.competitorDossier = null;
+                    try {
+                        const res = await fetch('/api/analytics/competitors/' + encodeURIComponent(winnerName));
+                        if (res.ok) {
+                            this.competitorDossier = await res.json();
+                        } else {
+                            this.competitorDossier = { winner_name: winnerName, found: false, recent_wins: [] };
+                        }
+                    } catch (e) {
+                        this.competitorDossier = { winner_name: winnerName, found: false, recent_wins: [] };
+                    } finally {
+                        this.competitorDossierLoading = false;
+                    }
                 },
 
 
@@ -9745,6 +10043,46 @@
                         this.loadingAwardsStats = false;
 
                     }
+
+                },
+
+                async fetchAwardsMonthlyCoverage() {
+
+                    this.loadingAwardsCoverage = true;
+
+                    try {
+
+                        const yr = this.awardsCoverageYear || new Date().getFullYear();
+
+                        const res = await fetch(`/api/admin/ingestion/awards/monthly-coverage?year=${yr}`);
+
+                        if (res.ok) {
+
+                            this.awardsCoverage = await res.json();
+
+                        }
+
+                    } catch (e) {
+
+                        console.error('Error fetching awards monthly coverage:', e);
+
+                    } finally {
+
+                        this.loadingAwardsCoverage = false;
+
+                    }
+
+                },
+
+                prefillAwardsMonthPeriod(mObj) {
+
+                    if (!mObj) return;
+
+                    this.awardsSyncDateStart = mObj.date_start_input || '';
+
+                    this.awardsSyncDateEnd = mObj.date_end_input || '';
+
+                    this.showToast(`Période ${mObj.full_label} ${this.awardsCoverageYear} (${mObj.date_start_input} → ${mObj.date_end_input}) pré-remplie.`, 'info');
 
                 },
 

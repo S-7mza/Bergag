@@ -275,3 +275,80 @@ def test_awards_api_endpoints(client):
     res_abort = client.post("/api/admin/ingestion/awards/abort")
     assert res_abort.status_code == 200
     assert "status" in res_abort.json()
+
+
+@pytest.mark.asyncio
+async def test_awards_auditor_monthly_coverage():
+    mock_session = AsyncMock()
+
+    # 1. Available years query
+    years_res = MagicMock()
+    years_res.scalars.return_value.all.return_value = [2026, 2025]
+
+    # 2. Monthly aggregation query (May partial, June complete)
+    may_row = MagicMock(
+        mo=5, cnt=2812,
+        min_dt=datetime(2026, 5, 5, 9, 0, tzinfo=timezone.utc),
+        max_dt=datetime(2026, 5, 31, 18, 0, tzinfo=timezone.utc),
+        active_days=22, sum_mad=12500000.0
+    )
+    jun_row = MagicMock(
+        mo=6, cnt=4415,
+        min_dt=datetime(2026, 6, 1, 8, 30, tzinfo=timezone.utc),
+        max_dt=datetime(2026, 6, 30, 17, 45, tzinfo=timezone.utc),
+        active_days=26, sum_mad=22000000.0
+    )
+    monthly_res = MagicMock()
+    monthly_res.all.return_value = [may_row, jun_row]
+
+    mock_session.execute.side_effect = [years_res, monthly_res]
+
+    auditor = AwardsAuditor(mock_session)
+    cov = await auditor.get_monthly_coverage(year=2026)
+
+    assert cov["year"] == 2026
+    assert 2026 in cov["available_years"]
+    assert 2025 in cov["available_years"]
+    assert cov["total_awards_year"] == 2812 + 4415
+    assert cov["covered_months_count"] == 2
+    assert len(cov["months"]) == 12
+
+    m_by_num = {m["month"]: m for m in cov["months"]}
+    assert m_by_num[1]["status"] == "empty"
+    assert m_by_num[5]["status"] == "partial"
+    assert m_by_num[5]["min_day_label"] == "05/05"
+    assert m_by_num[6]["status"] == "complete"
+    assert m_by_num[12]["status"] == "future"
+
+
+def test_awards_monthly_coverage_endpoint(client):
+    from src.api.routes.auth import get_current_user
+    from src.database.session import get_db_session
+    from src.models.user import User
+
+    mock_admin = MagicMock(spec=User, id=1, role="admin", full_name="Test Admin", is_active=True)
+    app.dependency_overrides[get_current_user] = lambda: mock_admin
+    app.dependency_overrides[get_db_session] = lambda: AsyncMock()
+
+    sample_cov = {
+        "year": 2026,
+        "available_years": [2026],
+        "total_awards_year": 39662,
+        "total_mad_year": 150000000.0,
+        "covered_months_count": 11,
+        "missing_months": [],
+        "partial_months": [],
+        "max_month_count": 6032,
+        "months": []
+    }
+    try:
+        with patch.object(AwardsAuditor, "get_monthly_coverage", new_callable=AsyncMock) as mock_cov:
+            mock_cov.return_value = sample_cov
+            res = client.get("/api/admin/ingestion/awards/monthly-coverage?year=2026")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["year"] == 2026
+            assert data["total_awards_year"] == 39662
+            mock_cov.assert_awaited_once_with(year=2026)
+    finally:
+        app.dependency_overrides.clear()

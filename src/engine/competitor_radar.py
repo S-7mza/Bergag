@@ -1,6 +1,7 @@
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.tender import Award
 
@@ -8,15 +9,24 @@ logger = logging.getLogger(__name__)
 
 class CompetitorRadar:
     """
-    Analyzes the historical awards archive (~340,000 records) to extract
+    Analyzes the historical awards archive to extract
     strategic competitor intelligence: top winners, win rates, and price aggressiveness.
     """
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_top_competitors(self, limit: int = 15, title_keyword: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_top_competitors(
+        self,
+        limit: int = 15,
+        title_keyword: Optional[str] = None,
+        buyer_keyword: Optional[str] = None,
+        year: Optional[int] = None,
+        months: Optional[int] = None,
+        sort_by: str = "amount",
+    ) -> List[Dict[str, Any]]:
         """
-        Calculates the top winning suppliers by total volume and total contract value (MAD TTC).
+        Calculates the top winning suppliers filtered by object keyword, buyer/city,
+        time window, and sort metric (amount, wins, avg_amount, competition).
         """
         stmt = (
             select(
@@ -31,12 +41,31 @@ class CompetitorRadar:
             .where(Award.winner_name != "—")
         )
 
-        if title_keyword:
-            stmt = stmt.where(Award.title_raw.ilike(f"%{title_keyword}%"))
+        has_filters = any([title_keyword, buyer_keyword, year, months])
+
+        if title_keyword and title_keyword.strip():
+            stmt = stmt.where(Award.title_raw.ilike(f"%{title_keyword.strip()}%"))
+
+        if buyer_keyword and buyer_keyword.strip():
+            stmt = stmt.where(Award.buyer_name_raw.ilike(f"%{buyer_keyword.strip()}%"))
+
+        if year:
+            stmt = stmt.where(extract("year", Award.published_at) == year)
+        elif months and months > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
+            stmt = stmt.where(Award.published_at >= cutoff)
+
+        sort_map = {
+            "wins": desc("total_wins"),
+            "avg_amount": desc("avg_contract_mad"),
+            "competition": desc("avg_competition_density"),
+            "amount": desc("total_awarded_mad"),
+        }
+        order_col = sort_map.get(sort_by, desc("total_awarded_mad"))
 
         stmt = (
             stmt.group_by(Award.winner_name)
-            .order_by(desc("total_awarded_mad"))
+            .order_by(order_col, desc("total_wins"))
             .limit(limit)
         )
 
@@ -44,7 +73,9 @@ class CompetitorRadar:
         rows = res.all()
 
         if not rows:
-            # Moroccan Procurement market baseline (Fournitures, IT & Sécurité)
+            if has_filters:
+                return []
+            # Moroccan Procurement market baseline (Fournitures, IT & Sécurité) when DB is empty
             return [
                 {"winner_name": "OMNIDATA MAROC SA", "total_wins": 14, "total_awarded_mad": 4820000.0, "avg_contract_mad": 344285.0, "avg_competition_density": 3.2},
                 {"winner_name": "CBI (Compagnie Bur. Informatique)", "total_wins": 11, "total_awarded_mad": 3650000.0, "avg_contract_mad": 331818.0, "avg_competition_density": 2.8},

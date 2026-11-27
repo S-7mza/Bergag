@@ -15,6 +15,10 @@ router = APIRouter(prefix="/api/analytics", tags=["Market Intelligence Radar"])
 async def get_top_competitors(
     limit: int = Query(15, ge=1, le=100),
     keyword: Optional[str] = Query(None, description="Filter by title keyword"),
+    buyer: Optional[str] = Query(None, description="Filter by public buyer or city"),
+    year: Optional[int] = Query(None, description="Filter by award year"),
+    months: Optional[int] = Query(None, ge=1, le=60, description="Filter by last N months"),
+    sort_by: str = Query("amount", description="Sort by: amount, wins, avg_amount, competition"),
     session: AsyncSession = Depends(get_db_session)
 ) -> List[Dict[str, Any]]:
     """
@@ -22,7 +26,14 @@ async def get_top_competitors(
     total value (MAD TTC), and average pricing density.
     """
     radar = CompetitorRadar(session)
-    return await radar.get_top_competitors(limit=limit, title_keyword=keyword)
+    return await radar.get_top_competitors(
+        limit=limit,
+        title_keyword=keyword,
+        buyer_keyword=buyer,
+        year=year,
+        months=months,
+        sort_by=sort_by,
+    )
 
 @router.get("/competitors/{winner_name}")
 async def get_competitor_profile(
@@ -41,6 +52,10 @@ async def get_competitor_profile(
 @router.get("/buyers")
 async def get_buyer_spending_velocity(
     year: Optional[int] = Query(None, description="Fiscal year (defaults to current year)"),
+    buyer: Optional[str] = Query(None, description="Filter by buyer name or city"),
+    keyword: Optional[str] = Query(None, description="Filter by title keyword"),
+    alert: str = Query("all", description="Alert filter: all, ao_imminent, warning, available"),
+    limit: int = Query(30, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session)
 ) -> List[Dict[str, Any]]:
     """
@@ -48,7 +63,13 @@ async def get_buyer_spending_velocity(
     statutory limit, flagging upcoming formal Marchés Publics (Appels d'Offres).
     """
     radar = BuyerRadar(session)
-    return await radar.get_buyer_spending_velocity(year=year)
+    return await radar.get_buyer_spending_velocity(
+        year=year,
+        buyer_keyword=buyer,
+        title_keyword=keyword,
+        alert_filter=alert,
+        limit=limit,
+    )
 
 @router.get("/seasonality")
 async def get_seasonality_radar(
