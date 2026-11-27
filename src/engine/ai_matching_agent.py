@@ -52,22 +52,32 @@ class AIAvisMatchingAgent:
             logger.error(f"Failed to persist AI diagnoses ledger: {e}")
 
     def get_cached_diagnosis(self, portal_id: int) -> Optional[AIMatchingDiagnosis]:
-        """Returns cached diagnosis if available"""
+        """Returns cached diagnosis if available (with in-memory model instance cache)"""
+        if not hasattr(self, "_parsed_models_cache"):
+            self._parsed_models_cache: Dict[int, AIMatchingDiagnosis] = {}
+        if portal_id in self._parsed_models_cache:
+            return self._parsed_models_cache[portal_id]
         cached = self._diagnoses_cache.get(portal_id)
         if cached:
             try:
-                return AIMatchingDiagnosis(**cached)
+                model = AIMatchingDiagnosis(**cached)
+                self._parsed_models_cache[portal_id] = model
+                return model
             except Exception:
                 return None
         return None
 
-    def diagnose_tender_dict(self, tender_dict: Dict[str, Any]) -> AIMatchingDiagnosis:
+    def diagnose_tender_dict(self, tender_dict: Dict[str, Any], persist: bool = True) -> AIMatchingDiagnosis:
         """Diagnoses a raw tender dictionary and records the result"""
         portal_id = tender_dict.get("portal_id")
         diagnosis = AIAvisDiagnostician.diagnose_tender(tender_dict)
         if portal_id:
-            self._diagnoses_cache[int(portal_id)] = diagnosis.model_dump()
-            self._persist_ledger()
+            pid = int(portal_id)
+            self._diagnoses_cache[pid] = diagnosis.model_dump()
+            if hasattr(self, "_parsed_models_cache"):
+                self._parsed_models_cache[pid] = diagnosis
+            if persist:
+                self._persist_ledger()
         return diagnosis
 
     async def diagnose_single_avis(

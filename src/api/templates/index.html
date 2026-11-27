@@ -8114,13 +8114,15 @@
 
                     this.recalcStudioPricing();
 
-                    this.startHeartbeatPolling();
-
-                    // 2. Defer heavy background portal audits so initial feed load has 0ms latency
-                    setTimeout(() => {
-                        this.runActiveAudit();
-                        this.runPeriodAudit();
-                    }, 2500);
+                    // 2. Only run admin telemetry/audits when logged in as admin
+                    if (this.currentUser?.role === 'admin') {
+                        this.startHeartbeatPolling();
+                        setTimeout(() => {
+                            if (this.currentUser?.role === 'admin') {
+                                this.runActiveAudit();
+                            }
+                        }, 3000);
+                    }
 
                 },
 
@@ -8713,12 +8715,17 @@
 
 
                 async fetchFeed() {
+                    if (this._feedAbortController) {
+                        try { this._feedAbortController.abort(); } catch (e) {}
+                    }
+                    this._feedAbortController = new AbortController();
+                    const signal = this._feedAbortController.signal;
 
                     this.loading = true;
 
                     try {
 
-                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=2500`;
+                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=800`;
 
                         if (this.searchQuery) url += `&search=${encodeURIComponent(this.searchQuery)}`;
 
@@ -8736,7 +8743,7 @@
 
                         
 
-                        const res = await fetch(url);
+                        const res = await fetch(url, { signal });
 
                         const totalHeader = res.headers.get('x-total-count');
 
@@ -8777,11 +8784,17 @@
 
                     } catch (e) {
 
+                        if (e && e.name === 'AbortError') return;
+
                         console.error('Error fetching feed:', e);
 
                     } finally {
 
-                        this.loading = false;
+                        if (!this._feedAbortController || !this._feedAbortController.signal.aborted) {
+
+                            this.loading = false;
+
+                        }
 
                     }
 
@@ -10048,7 +10061,7 @@
 
                     this.heartbeatTimer = setInterval(async () => {
 
-                        if (this.activePollingTimer) return;
+                        if (this.activePollingTimer || this.currentUser?.role !== 'admin') return;
 
                         try {
 
@@ -10070,7 +10083,7 @@
 
                         } catch (e) {}
 
-                    }, 2500);
+                    }, 15000);
 
                 },
 

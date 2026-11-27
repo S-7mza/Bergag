@@ -324,7 +324,18 @@ URGENCY_RANGE_MAP: Dict[str, Tuple[int, Optional[int]]] = {
     "plus_1m": (30, None)
 }
 
+import os
+import time as _time
+
 urgency_range_map = URGENCY_RANGE_MAP
+
+# Fast 30-second TTL cache for scored feed pools (key -> (timestamp, scored_items))
+_FEED_SCORED_CACHE: Dict[tuple, Tuple[float, List[Any]]] = {}
+FEED_CACHE_TTL_SECONDS = 30.0
+
+
+def invalidate_feed_cache():
+    _FEED_SCORED_CACHE.clear()
 
 
 @router.get("/feed", response_model=List[TenderFeedItem])
@@ -371,289 +382,298 @@ async def get_tender_feed(
     # unless an explicit search query is provided (user direct keyword search is mandatory)
     effective_min_score = min_score if (search and search.strip()) else (max(min_score, 75.0) if effective_role == "viewer" else min_score)
 
-    # Build candidate selection query
-    stmt = (
-        select(Tender)
-        .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
-        .where(Tender.status == "active")
+    use_cache = not os.environ.get("PYTEST_CURRENT_TEST")
+    cache_key = (
+        profile_name,
+        (search or "").strip().lower(),
+        region or "all",
+        category or "all",
+        urgency or "all",
+        status_filter or "all",
+        bool(exclude_closed),
     )
 
-    if search and search.strip():
-        search_raw = search.strip()
-        clean_id_str = search_raw.lstrip('#').strip()
+    scored_items: Optional[List[TenderFeedItem]] = None
+    if use_cache and cache_key in _FEED_SCORED_CACHE:
+        ts, cached_list = _FEED_SCORED_CACHE[cache_key]
+        if (_time.monotonic() - ts) < FEED_CACHE_TTL_SECONDS:
+            scored_items = list(cached_list)
 
-        if clean_id_str.isdigit():
-            # Support direct portal ID or reference lookup
-            stmt = stmt.where(
-                or_(
-                    Tender.portal_id == int(clean_id_str),
-                    Tender.reference.ilike(f"%{clean_id_str}%")
+    if scored_items is None:
+        # Build candidate selection query
+        stmt = (
+            select(Tender)
+            .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
+            .where(Tender.status == "active")
+        )
+
+        if search and search.strip():
+            search_raw = search.strip()
+            clean_id_str = search_raw.lstrip('#').strip()
+
+            if clean_id_str.isdigit():
+                stmt = stmt.where(
+                    or_(
+                        Tender.portal_id == int(clean_id_str),
+                        Tender.reference.ilike(f"%{clean_id_str}%")
+                    )
                 )
-            )
-        else:
-            # Multi-word mandatory keyword search:
-            # Every keyword in the user query MUST be present in the tender (AND between words)
-            # across any candidate field: title, reference, location, buyer official name, or line items (OR across fields)
-            search_words = [w for w in search_raw.split() if w.strip()]
-            if search_words:
-                word_clauses = []
-                for w in search_words:
-                    w_pattern = f"%{w.lower()}%"
-                    word_clauses.append(
-                        or_(
-                            Tender.title.ilike(w_pattern),
-                            Tender.reference.ilike(w_pattern),
-                            Tender.execution_location.ilike(w_pattern),
-                            Tender.buyer.has(Buyer.official_name.ilike(w_pattern)),
-                            Tender.line_items.any(
-                                or_(
-                                    LineItem.designation.ilike(w_pattern),
-                                    LineItem.technical_specs.ilike(w_pattern)
+            else:
+                search_words = [w for w in search_raw.split() if w.strip()]
+                if search_words:
+                    word_clauses = []
+                    for w in search_words:
+                        w_pattern = f"%{w.lower()}%"
+                        word_clauses.append(
+                            or_(
+                                Tender.title.ilike(w_pattern),
+                                Tender.reference.ilike(w_pattern),
+                                Tender.execution_location.ilike(w_pattern),
+                                Tender.buyer.has(Buyer.official_name.ilike(w_pattern)),
+                                Tender.line_items.any(
+                                    or_(
+                                        LineItem.designation.ilike(w_pattern),
+                                        LineItem.technical_specs.ilike(w_pattern)
+                                    )
                                 )
                             )
                         )
-                    )
-                stmt = stmt.where(and_(*word_clauses))
-    elif not is_all_sectors:
-        # Pre-filter candidates by sector keywords so the cascade scoring evaluates
-        # genuine sector opportunities rather than arbitrary unrelated rows (food, fuel, cleaning).
-        candidate_kws = extract_profile_candidate_keywords(profile)
-        aligned_ids = list(feedback_manager.get_aligned_portal_ids(profile_name))
+                    stmt = stmt.where(and_(*word_clauses))
+        elif not is_all_sectors:
+            # Fast single-table keyword pre-filter (avoids slow correlated line_items subquery)
+            candidate_kws = extract_profile_candidate_keywords(profile)
+            aligned_ids = list(feedback_manager.get_aligned_portal_ids(profile_name))
 
-        if candidate_kws:
-            title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws[:40]]
-            prestation_conditions = [Tender.prestation_type.ilike(f"%{kw}%") for kw in candidate_kws[:40]]
-            line_conditions = [LineItem.designation.ilike(f"%{kw}%") for kw in candidate_kws[:15]]
-            match_conditions = [
-                *title_conditions,
-                *prestation_conditions,
-                Tender.line_items.any(or_(*line_conditions))
-            ]
-            # Ensure tenders confirmed as aligned by the user are ALWAYS included in candidates
-            if aligned_ids:
-                match_conditions.append(Tender.portal_id.in_(aligned_ids))
+            if candidate_kws:
+                title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws[:35]]
+                prestation_conditions = [Tender.prestation_type.ilike(f"%{kw}%") for kw in candidate_kws[:25]]
+                match_conditions = [
+                    *title_conditions,
+                    *prestation_conditions,
+                ]
+                if aligned_ids:
+                    match_conditions.append(Tender.portal_id.in_(aligned_ids))
 
-            stmt = stmt.where(or_(*match_conditions))
-        elif aligned_ids:
-            stmt = stmt.where(Tender.portal_id.in_(aligned_ids))
+                stmt = stmt.where(or_(*match_conditions))
+            elif aligned_ids:
+                stmt = stmt.where(Tender.portal_id.in_(aligned_ids))
 
-        # Dynamically exclude disjoint prestations only if they do not belong to the active profile
-        profile_prestation_str = " ".join(getattr(profile.macro_filters, "prestation_types", [])).lower()
-        profile_cat_str = " ".join([getattr(c, "label", "") for c in getattr(profile, "catalog", [])]).lower()
-        combined_profile_terms = f"{profile_prestation_str} {profile_cat_str}"
+            profile_prestation_str = " ".join(getattr(profile.macro_filters, "prestation_types", [])).lower()
+            profile_cat_str = " ".join([getattr(c, "label", "") for c in getattr(profile, "catalog", [])]).lower()
+            combined_profile_terms = f"{profile_prestation_str} {profile_cat_str}"
 
-        disjoint_candidates = ["transport", "engin", "citerne", "gardiennage", "denree", "denrée", "terrassement", "gardien"]
-        for dp in disjoint_candidates:
-            if dp not in combined_profile_terms:
-                stmt = stmt.where(~Tender.prestation_type.ilike(f"%{dp}%"))
+            disjoint_candidates = ["transport", "engin", "citerne", "gardiennage", "denree", "denrée", "terrassement", "gardien"]
+            for dp in disjoint_candidates:
+                if dp not in combined_profile_terms:
+                    stmt = stmt.where(~Tender.prestation_type.ilike(f"%{dp}%"))
 
-        # Explicit negative keywords SQL exclusion
-        neg_kws = getattr(profile.negative_constraints, "keywords", [])
-        if neg_kws:
-            for nkw in neg_kws[:15]:
-                if len(nkw) >= 4:
-                    stmt = stmt.where(~Tender.title.ilike(f"%{nkw}%"))
+            neg_kws = getattr(profile.negative_constraints, "keywords", [])
+            if neg_kws:
+                for nkw in neg_kws[:15]:
+                    if len(nkw) >= 4:
+                        stmt = stmt.where(~Tender.title.ilike(f"%{nkw}%"))
 
-    if region and region != "all":
-        region_list = [r.strip() for r in region.split(",") if r.strip() and r.strip().lower() != "all"]
-        if region_list:
-            stmt = stmt.where(or_(*[Tender.execution_location.ilike(f"%{r}%") for r in region_list]))
+        if region and region != "all":
+            region_list = [r.strip() for r in region.split(",") if r.strip() and r.strip().lower() != "all"]
+            if region_list:
+                stmt = stmt.where(or_(*[Tender.execution_location.ilike(f"%{r}%") for r in region_list]))
 
-    if category and category != "all":
-        cat_clean = category.lower().strip()
-        if cat_clean in ("both", "materiel_services", "fournitures_services", "materiel_service", "all_tech"):
-            # Include both Fournitures (Matériel) and Services, while excluding Travaux/Civil works
-            stmt = stmt.where(Tender.main_category.in_(["Fournitures", "Services"]))
-        elif "," in category:
-            cats = [c.strip() for c in category.split(",") if c.strip()]
-            stmt = stmt.where(or_(*[Tender.main_category.ilike(f"%{c}%") for c in cats]))
-        elif cat_clean in ("fournitures", "materiel", "matériel"):
-            # Matériel / Fournitures alone
-            stmt = stmt.where(or_(Tender.main_category.ilike("%Fourniture%"), Tender.main_category.ilike("%materiel%")))
-        elif cat_clean in ("services", "service"):
-            # Services alone
-            stmt = stmt.where(Tender.main_category.ilike("%Service%"))
-        elif cat_clean in ("travaux", "travail"):
-            # Travaux alone
-            stmt = stmt.where(Tender.main_category.ilike("%Travaux%"))
-        else:
-            stmt = stmt.where(Tender.main_category.ilike(f"%{category}%"))
+        if category and category != "all":
+            cat_clean = category.lower().strip()
+            if cat_clean in ("both", "materiel_services", "fournitures_services", "materiel_service", "all_tech"):
+                stmt = stmt.where(Tender.main_category.in_(["Fournitures", "Services"]))
+            elif "," in category:
+                cats = [c.strip() for c in category.split(",") if c.strip()]
+                stmt = stmt.where(or_(*[Tender.main_category.ilike(f"%{c}%") for c in cats]))
+            elif cat_clean in ("fournitures", "materiel", "matériel"):
+                stmt = stmt.where(or_(Tender.main_category.ilike("%Fourniture%"), Tender.main_category.ilike("%materiel%")))
+            elif cat_clean in ("services", "service"):
+                stmt = stmt.where(Tender.main_category.ilike("%Service%"))
+            elif cat_clean in ("travaux", "travail"):
+                stmt = stmt.where(Tender.main_category.ilike("%Travaux%"))
+            else:
+                stmt = stmt.where(Tender.main_category.ilike(f"%{category}%"))
 
-    now = datetime.now(timezone.utc)
-    is_open_only = (status_filter == "open" or exclude_closed)
+        now = datetime.now(timezone.utc)
+        is_open_only = (status_filter == "open" or exclude_closed)
 
-    if is_open_only:
-        stmt = stmt.where(
-            Tender.deadline_at > now,
-            Tender.status != "annule",
-            Tender.status != "cancelled",
-            ~Tender.title.ilike("%annulation%"),
-            ~Tender.title.ilike("%annule et remplace%"),
-            ~Tender.reference.ilike("DA%")
-        )
-    elif status_filter == "closed":
-        stmt = stmt.where(Tender.deadline_at <= now)
-    elif status_filter == "cancelled":
-        stmt = stmt.where(
-            or_(
-                Tender.status.in_(["annule", "cancelled"]),
-                Tender.title.ilike("%annulation%"),
-                Tender.title.ilike("%annule et remplace%"),
-                Tender.reference.ilike("DA%")
+        if is_open_only:
+            stmt = stmt.where(
+                Tender.deadline_at > now,
+                Tender.status != "annule",
+                Tender.status != "cancelled",
+                ~Tender.title.ilike("%annulation%"),
+                ~Tender.title.ilike("%annule et remplace%"),
+                ~Tender.reference.ilike("DA%")
             )
-        )
+        elif status_filter == "closed":
+            stmt = stmt.where(Tender.deadline_at <= now)
+        elif status_filter == "cancelled":
+            stmt = stmt.where(
+                or_(
+                    Tender.status.in_(["annule", "cancelled"]),
+                    Tender.title.ilike("%annulation%"),
+                    Tender.title.ilike("%annule et remplace%"),
+                    Tender.reference.ilike("DA%")
+                )
+            )
 
-    # Multi-selection support for urgency / deadline intervals (e.g. "1_2d,2_3d" or "1d,2d")
-    if urgency and urgency.strip() and urgency.strip().lower() != "all":
-        raw_keys = [k.strip() for k in urgency.split(",") if k.strip()]
-        valid_intervals = [URGENCY_RANGE_MAP[k] for k in raw_keys if k in URGENCY_RANGE_MAP]
+        if urgency and urgency.strip() and urgency.strip().lower() != "all":
+            raw_keys = [k.strip() for k in urgency.split(",") if k.strip()]
+            valid_intervals = [URGENCY_RANGE_MAP[k] for k in raw_keys if k in URGENCY_RANGE_MAP]
 
-        if valid_intervals:
-            interval_conditions = []
-            for min_days, max_days in valid_intervals:
-                min_boundary = now + timedelta(days=min_days) if min_days > 0 else now
-                if max_days is not None:
-                    max_boundary = now + timedelta(days=max_days)
-                    interval_conditions.append(
-                        and_(Tender.deadline_at > min_boundary, Tender.deadline_at <= max_boundary)
-                    )
-                else:
-                    interval_conditions.append(Tender.deadline_at > min_boundary)
+            if valid_intervals:
+                interval_conditions = []
+                for min_days, max_days in valid_intervals:
+                    min_boundary = now + timedelta(days=min_days) if min_days > 0 else now
+                    if max_days is not None:
+                        max_boundary = now + timedelta(days=max_days)
+                        interval_conditions.append(
+                            and_(Tender.deadline_at > min_boundary, Tender.deadline_at <= max_boundary)
+                        )
+                    else:
+                        interval_conditions.append(Tender.deadline_at > min_boundary)
 
-            if interval_conditions:
-                stmt = stmt.where(or_(*interval_conditions))
+                if interval_conditions:
+                    stmt = stmt.where(or_(*interval_conditions))
 
-    # Fetch candidate pool (sized to evaluate all active tenders in DB, up to 5000)
-    pool_limit = max(limit, 3000)
-    stmt = stmt.order_by(Tender.deadline_at.asc()).limit(pool_limit)
+        pool_limit = max(limit, 1500)
+        stmt = stmt.order_by(Tender.deadline_at.asc()).limit(pool_limit)
 
-    res = await session.execute(stmt)
-    tenders = res.scalars().all()
+        res = await session.execute(stmt)
+        tenders = res.scalars().all()
 
-    # Preload alignment feedback for all sectors or specific profile
-    if is_all_sectors:
-        aligned_ids = set()
-        misaligned_ids = set()
-        all_profs = [p.profile_id for p in load_all_profiles()] + ["all"]
-        for p_id in all_profs:
-            aligned_ids.update(feedback_manager.get_aligned_portal_ids(p_id))
-            misaligned_ids.update(feedback_manager.get_misaligned_portal_ids(p_id))
-    else:
-        aligned_ids = set(feedback_manager.get_aligned_portal_ids(profile_name))
-        misaligned_ids = set(feedback_manager.get_misaligned_portal_ids(profile_name))
-
-    # Score all candidates against profile
-    scored_items: List[TenderFeedItem] = []
-    for t in tenders:
-        tender_dict = {
-            "portal_id": t.portal_id,
-            "reference": t.reference,
-            "title": t.title,
-            "buyer_name": t.buyer.official_name if t.buyer else "Inconnu",
-            "execution_location": t.execution_location,
-            "main_category": t.main_category,
-            "prestation_type": t.prestation_type,
-            "published_at": t.published_at.isoformat() if t.published_at else "",
-            "deadline_at": t.deadline_at.isoformat() if t.deadline_at else "",
-            "status": t.status,
-            "line_items": [
-                {
-                    "item_order": item.item_order,
-                    "designation": item.designation,
-                    "technical_specs": item.technical_specs,
-                    "unit": item.unit,
-                    "quantity": float(item.quantity) if item.quantity is not None else 1.0,
-                    "tva_rate": float(item.tva_rate or 20.0),
-                    "warranty_required": item.warranty_required
-                }
-                for item in t.line_items
-            ]
-        }
-
-        # Deep AI diagnosis against Programming, Web, Data & AI profile
-        ai_diag = ai_matching_agent.get_cached_diagnosis(t.portal_id)
-        if ai_diag is None:
-            ai_diag = ai_matching_agent.diagnose_tender_dict(tender_dict)
-
+        # Preload alignment feedback for all sectors or specific profile
         if is_all_sectors:
-            hours_left = (t.deadline_at - now).total_seconds() / 3600.0 if t.deadline_at else 999.0
-            is_urgent = 0 < hours_left < 24.0
-
-            user_feedback = None
-            if t.portal_id in aligned_ids:
-                user_feedback = "aligned"
-            elif t.portal_id in misaligned_ids:
-                user_feedback = "misaligned"
-
-            if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
-                decision_verdict = "ANNULÉ"
-                overall_score = 0.0
-            elif hours_left <= 0:
-                decision_verdict = "CLÔTURÉ"
-                overall_score = 0.0
-            elif user_feedback == "misaligned":
-                decision_verdict = "NO-GO"
-                overall_score = 20.0
-            elif user_feedback == "aligned":
-                decision_verdict = "GO"
-                overall_score = 100.0
-            elif is_urgent:
-                decision_verdict = "CONSIDER"
-                overall_score = 75.0
-            else:
-                decision_verdict = "GO"
-                overall_score = 100.0
-
-            alignment_feedback = user_feedback
+            aligned_ids = set()
+            misaligned_ids = set()
+            all_profs = [p.profile_id for p in load_all_profiles()] + ["all"]
+            for p_id in all_profs:
+                aligned_ids.update(feedback_manager.get_aligned_portal_ids(p_id))
+                misaligned_ids.update(feedback_manager.get_misaligned_portal_ids(p_id))
         else:
-            cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
+            aligned_ids = set(feedback_manager.get_aligned_portal_ids(profile_name))
+            misaligned_ids = set(feedback_manager.get_misaligned_portal_ids(profile_name))
 
-            # Determine verdict: if officially cancelled or an annulation notice, verdict is ANNULÉ
-            decision_verdict = cascade_res.decision_recommendation
-            if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
-                decision_verdict = "ANNULÉ"
-                overall_score = 0.0
+        # Score all candidates against profile
+        scored_items = []
+        new_ai_computed = False
+        for t in tenders:
+            tender_dict = {
+                "portal_id": t.portal_id,
+                "reference": t.reference,
+                "title": t.title,
+                "buyer_name": t.buyer.official_name if t.buyer else "Inconnu",
+                "execution_location": t.execution_location,
+                "main_category": t.main_category,
+                "prestation_type": t.prestation_type,
+                "published_at": t.published_at.isoformat() if t.published_at else "",
+                "deadline_at": t.deadline_at.isoformat() if t.deadline_at else "",
+                "status": t.status,
+                "line_items": [
+                    {
+                        "item_order": item.item_order,
+                        "designation": item.designation,
+                        "technical_specs": item.technical_specs,
+                        "unit": item.unit,
+                        "quantity": float(item.quantity) if item.quantity is not None else 1.0,
+                        "tva_rate": float(item.tva_rate or 20.0),
+                        "warranty_required": item.warranty_required
+                    }
+                    for item in t.line_items
+                ]
+            }
+
+            # Deep AI diagnosis against Programming, Web, Data & AI profile (defer disk write until loop ends)
+            ai_diag = ai_matching_agent.get_cached_diagnosis(t.portal_id)
+            if ai_diag is None:
+                ai_diag = ai_matching_agent.diagnose_tender_dict(tender_dict, persist=False)
+                new_ai_computed = True
+
+            if is_all_sectors:
+                hours_left = (t.deadline_at - now).total_seconds() / 3600.0 if t.deadline_at else 999.0
+                is_urgent = 0 < hours_left < 24.0
+
+                user_feedback = None
+                if t.portal_id in aligned_ids:
+                    user_feedback = "aligned"
+                elif t.portal_id in misaligned_ids:
+                    user_feedback = "misaligned"
+
+                if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
+                    decision_verdict = "ANNULÉ"
+                    overall_score = 0.0
+                elif hours_left <= 0:
+                    decision_verdict = "CLÔTURÉ"
+                    overall_score = 0.0
+                elif user_feedback == "misaligned":
+                    decision_verdict = "NO-GO"
+                    overall_score = 20.0
+                elif user_feedback == "aligned":
+                    decision_verdict = "GO"
+                    overall_score = 100.0
+                elif is_urgent:
+                    decision_verdict = "CONSIDER"
+                    overall_score = 75.0
+                else:
+                    decision_verdict = "GO"
+                    overall_score = 100.0
+
+                alignment_feedback = user_feedback
             else:
-                overall_score = cascade_res.overall_score
-            alignment_feedback = cascade_res.alignment_feedback
+                cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
-        scored_items.append(
-            TenderFeedItem(
-                portal_id=t.portal_id,
-                reference=t.reference,
-                title=t.title,
-                buyer_name=t.buyer.official_name if t.buyer else "Acheteur Inconnu",
-                execution_location=t.execution_location or "Maroc (National)",
-                main_category=t.main_category,
-                published_at=t.published_at.strftime("%d/%m/%Y %H:%M"),
-                deadline_at=t.deadline_at.strftime("%d/%m/%Y %H:%M"),
-                status=t.status,
-                match_score=overall_score,
-                decision_verdict=decision_verdict,
-                line_item_count=len(t.line_items),
-                portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}",
-                alignment_feedback=alignment_feedback,
-                ai_matching=ai_diag
+                decision_verdict = cascade_res.decision_recommendation
+                if t.status in ("annule", "annulé", "cancelled") or is_cancellation_notice(t.title, t.reference):
+                    decision_verdict = "ANNULÉ"
+                    overall_score = 0.0
+                else:
+                    overall_score = cascade_res.overall_score
+                alignment_feedback = cascade_res.alignment_feedback
+
+            scored_items.append(
+                TenderFeedItem(
+                    portal_id=t.portal_id,
+                    reference=t.reference,
+                    title=t.title,
+                    buyer_name=t.buyer.official_name if t.buyer else "Acheteur Inconnu",
+                    execution_location=t.execution_location or "Maroc (National)",
+                    main_category=t.main_category,
+                    published_at=t.published_at.strftime("%d/%m/%Y %H:%M"),
+                    deadline_at=t.deadline_at.strftime("%d/%m/%Y %H:%M"),
+                    status=t.status,
+                    match_score=overall_score,
+                    decision_verdict=decision_verdict,
+                    line_item_count=len(t.line_items),
+                    portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}",
+                    alignment_feedback=alignment_feedback,
+                    ai_matching=ai_diag
+                )
             )
-        )
 
-    # Eliminate closed/expired or cancelled offers if requested
-    if is_open_only:
-        scored_items = [
-            item for item in scored_items 
-            if item.decision_verdict not in ("CLÔTURÉ", "ANNULÉ")
-            and not is_cancellation_notice(item.title, item.reference)
-        ]
-    elif status_filter == "closed":
-        scored_items = [
-            item for item in scored_items 
-            if item.decision_verdict == "CLÔTURÉ"
-        ]
-    elif status_filter == "cancelled":
-        scored_items = [
-            item for item in scored_items 
-            if item.decision_verdict == "ANNULÉ" or is_cancellation_notice(item.title, item.reference)
-        ]
+        if new_ai_computed:
+            ai_matching_agent._persist_ledger()
+
+        # Eliminate closed/expired or cancelled offers if requested
+        if is_open_only:
+            scored_items = [
+                item for item in scored_items
+                if item.decision_verdict not in ("CLÔTURÉ", "ANNULÉ")
+                and not is_cancellation_notice(item.title, item.reference)
+            ]
+        elif status_filter == "closed":
+            scored_items = [
+                item for item in scored_items
+                if item.decision_verdict == "CLÔTURÉ"
+            ]
+        elif status_filter == "cancelled":
+            scored_items = [
+                item for item in scored_items
+                if item.decision_verdict == "ANNULÉ" or is_cancellation_notice(item.title, item.reference)
+            ]
+
+        if use_cache:
+            _FEED_SCORED_CACHE[cache_key] = (_time.monotonic(), list(scored_items))
 
     # Compute comprehensive sector statistics across all scored candidate items
     total_candidates = len(scored_items)
