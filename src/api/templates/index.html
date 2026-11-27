@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bergag &bull; Veille Marchés Publics Maroc</title>
+    <!-- OG_META_PLACEHOLDER -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -9867,22 +9868,17 @@
 
                 checkUrlHash() {
 
+                    const pathMatch = window.location.pathname.match(/\/avis\/([0-9]+)/);
+                    const queryMatch = new URLSearchParams(window.location.search).get('tender');
                     const hash = window.location.hash;
+                    const hashMatch = hash ? (hash.match(/tender=([0-9]+)/) || hash.match(/#([0-9]+)/)) : null;
 
-                    if (!hash) return;
-
-                    const match = hash.match(/tender=([0-9]+)/) || hash.match(/#([0-9]+)/);
-
-                    if (match && match[1]) {
-
-                        const portalId = parseInt(match[1], 10);
-
+                    const rawId = (pathMatch && pathMatch[1]) || queryMatch || (hashMatch && hashMatch[1]);
+                    if (rawId) {
+                        const portalId = parseInt(rawId, 10);
                         if (portalId && (!this.activeTender || this.activeTender.portal_id !== portalId || !this.modalOpen)) {
-
                             this.openModal(portalId, false);
-
                         }
-
                     }
 
                 },
@@ -9920,7 +9916,7 @@
 
                     if (!this.activeTender) return;
 
-                    const shareUrl = window.location.origin + window.location.pathname + '#tender=' + this.activeTender.portal_id;
+                    const shareUrl = window.location.origin + '/avis/' + this.activeTender.portal_id;
 
                     if (navigator.clipboard && navigator.clipboard.writeText) {
 

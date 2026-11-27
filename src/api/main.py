@@ -1,9 +1,17 @@
 import logging
 from pathlib import Path
-from fastapi import FastAPI, Response
+from typing import Any, Dict, Optional
+from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from src.api.og_preview import generate_og_image, render_og_meta_tags
+from src.database.session import get_db_session
+from src.models.tender import Tender
 
 from src.api.routes.feed import router as feed_router
 from src.api.routes.analytics import router as analytics_router
@@ -177,7 +185,125 @@ async def favicon():
     """Returns empty 204 for browser favicon probe to avoid 404 noise"""
     return Response(status_code=204)
 
+
+def _get_public_base_url(request: Request) -> str:
+    """Resolves public base URL respecting reverse-proxy headers (Cloudflare / Nginx)."""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if host:
+        return f"{proto}://{host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+async def _resolve_tender_og_info(portal_id: int, session: AsyncSession) -> Optional[Dict[str, Any]]:
+    """Fetches tender metadata + AI match info for Open Graph link previews."""
+    from src.engine.ai_matching_agent import ai_matching_agent
+
+    tender = None
+    try:
+        stmt = (
+            select(Tender)
+            .options(selectinload(Tender.buyer))
+            .where(Tender.portal_id == portal_id)
+        )
+        res = await session.execute(stmt)
+        tender = res.scalar_one_or_none()
+    except Exception as e:
+        logger.debug(f"OG lookup DB fallback for #{portal_id}: {e}")
+
+    cached_diag = ai_matching_agent.get_cached_diagnosis(portal_id)
+
+    if tender:
+        dl_str = "En cours"
+        if tender.deadline_at:
+            dl_str = tender.deadline_at.strftime("%d/%m/%Y %H:%M")
+        return {
+            "portal_id": tender.portal_id,
+            "reference": tender.reference,
+            "source_type": tender.source_type,
+            "title": tender.title,
+            "buyer_name": tender.buyer.official_name if tender.buyer else "Acheteur Public",
+            "execution_location": tender.execution_location or "Maroc",
+            "deadline_display": dl_str,
+            "matching_rate": cached_diag.matching_rate if cached_diag else None,
+            "primary_domain": cached_diag.primary_domain if cached_diag else "",
+            "verdict": cached_diag.verdict if cached_diag else "",
+            "hardware_dependency": cached_diag.hardware_dependency if cached_diag else "",
+            "detected_technologies": cached_diag.detected_technologies if cached_diag else [],
+        }
+
+    if cached_diag:
+        return {
+            "portal_id": portal_id,
+            "reference": f"#{portal_id}",
+            "source_type": "BDC",
+            "title": cached_diag.diagnostic_summary[:140],
+            "buyer_name": "Marchés Publics Maroc",
+            "execution_location": "Maroc",
+            "deadline_display": "Voir fiche",
+            "matching_rate": cached_diag.matching_rate,
+            "primary_domain": cached_diag.primary_domain,
+            "verdict": cached_diag.verdict,
+            "hardware_dependency": cached_diag.hardware_dependency,
+            "detected_technologies": cached_diag.detected_technologies,
+        }
+
+    return None
+
+
+def _inject_og_meta(html_content: str, og_tags: str) -> str:
+    placeholder = "<!-- OG_META_PLACEHOLDER -->"
+    if placeholder in html_content:
+        return html_content.replace(placeholder, og_tags, 1)
+    return html_content.replace("</head>", f"    {og_tags}\n</head>", 1)
+
+
+@app.get("/og-image.png", include_in_schema=False)
+async def get_default_og_image():
+    """Returns a 1200x630 PNG preview image for the main Bergag dashboard."""
+    png_bytes = generate_og_image()
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/og-image/avis/{portal_id}.png", include_in_schema=False)
+async def get_avis_og_image(portal_id: int, session: AsyncSession = Depends(get_db_session)):
+    """Returns a 1200x630 PNG preview card for a specific avis/tender."""
+    tender_info = await _resolve_tender_og_info(portal_id, session)
+    png_bytes = generate_og_image(tender_info)
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=1800"},
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
-async def serve_dashboard():
-    """Serves the single-page responsive procurement dashboard with RBAC and Chart.js"""
-    return HTMLResponse(content=load_dashboard_html())
+async def serve_dashboard(
+    request: Request,
+    tender: Optional[int] = Query(default=None, description="Optional portal_id for OG preview & deep-link"),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Serves the single-page responsive procurement dashboard with dynamic Open Graph tags."""
+    base_url = _get_public_base_url(request)
+    tender_info = await _resolve_tender_og_info(tender, session) if tender else None
+    page_url = f"{base_url}/?tender={tender}" if tender else f"{base_url}/"
+    og_tags = render_og_meta_tags(base_url, tender_info=tender_info, page_url=page_url)
+    return HTMLResponse(content=_inject_og_meta(load_dashboard_html(), og_tags))
+
+
+@app.get("/avis/{portal_id}", response_class=HTMLResponse)
+async def serve_avis_deep_link(
+    portal_id: int,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Serves the dashboard with tender-specific Open Graph tags for WhatsApp/social sharing."""
+    base_url = _get_public_base_url(request)
+    tender_info = await _resolve_tender_og_info(portal_id, session)
+    page_url = f"{base_url}/avis/{portal_id}"
+    og_tags = render_og_meta_tags(base_url, tender_info=tender_info, page_url=page_url)
+    return HTMLResponse(content=_inject_og_meta(load_dashboard_html(), og_tags))
