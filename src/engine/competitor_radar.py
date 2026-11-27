@@ -7,6 +7,73 @@ from src.models.tender import Award
 
 logger = logging.getLogger(__name__)
 
+NATURE_RULES = [
+    (
+        "Développement & Solutions IT",
+        [
+            "développement", "developpement", "logiciel", "application", "plateforme",
+            "site web", "portail", "progiciel", "erp", "crm", "système d'information",
+            "systeme d'information", "base de données", "digitalisation", "cloud",
+            "intelligence artificielle", "api", "saas", "maintenance applicative",
+        ],
+    ),
+    (
+        "Matériel IT, Réseau & Sécurité",
+        [
+            "informatique", "ordinateur", "pc ", "serveur", "imprimante", "scanner",
+            "vidéosurveillance", "videosurveillance", "caméra", "camera", "contrôle d'accès",
+            "controle d'acces", "réseau", "reseau", "switch", "routeur", "câblage",
+            "cablage", "onduleur", "téléphonie", "telephonie", "audiovisuel",
+        ],
+    ),
+    (
+        "Études, Conseil & Audit",
+        [
+            "étude", "etude", "conseil", "audit", "expertise", "assistance technique",
+            "accompagnement", "diagnostic", "contrôle technique", "controle technique",
+            "analyse", "laboratoire", "essai", "métrologie", "metrologie",
+        ],
+    ),
+    (
+        "Travaux & Aménagement",
+        [
+            "travaux", "aménagement", "amenagement", "réhabilitation", "rehabilitation",
+            "construction", "rénovation", "renovation", "installation", "pose ",
+            "peinture", "plomberie", "électricité", "electricite", "climatisation",
+            "étanchéité", "etancheite", "génie civil", "genie civil", "menuiserie",
+        ],
+    ),
+    (
+        "Services & Maintenance",
+        [
+            "prestation", "service", "maintenance", "entretien", "réparation", "reparation",
+            "nettoyage", "gardiennage", "transport", "restauration", "hébergement",
+            "hebergement", "formation", "assurance", "location", "impression",
+            "événement", "evenement", "organisation", "nettoiement", "hygiène", "hygiene",
+        ],
+    ),
+    (
+        "Achat Produits & Équipements",
+        [
+            "achat", "acquisition", "fourniture", "équipement", "equipement",
+            "matériel", "materiel", "mobilier", "véhicule", "vehicule", "voiture",
+            "carburant", "réactif", "reactif", "consommable", "produit", "outillage",
+            "appareil", "kit", "tenue", "papeterie", "bureau", "médicament", "medicament",
+        ],
+    ),
+]
+
+
+def classify_award_nature(title_raw: Optional[str]) -> str:
+    """Classifies an award title into a procurement nature (product, service, IT dev, etc.)."""
+    if not title_raw:
+        return "Autre / Divers"
+    low = title_raw.lower()
+    for nature, keywords in NATURE_RULES:
+        if any(kw in low for kw in keywords):
+            return nature
+    return "Autre / Divers"
+
 class CompetitorRadar:
     """
     Analyzes the historical awards archive to extract
@@ -34,7 +101,7 @@ class CompetitorRadar:
                 func.count(Award.id).label("total_wins"),
                 func.sum(Award.amount_ttc).label("total_awarded_mad"),
                 func.avg(Award.amount_ttc).label("avg_contract_mad"),
-                func.avg(Award.devis_received_count).label("avg_competition_density")
+                func.sum(Award.devis_received_count).label("total_devis")
             )
             .where(Award.status == "Attribué")
             .where(Award.winner_name != "")
@@ -58,7 +125,7 @@ class CompetitorRadar:
         sort_map = {
             "wins": desc("total_wins"),
             "avg_amount": desc("avg_contract_mad"),
-            "competition": desc("avg_competition_density"),
+            "competition": desc("total_devis"),
             "amount": desc("total_awarded_mad"),
         }
         order_col = sort_map.get(sort_by, desc("total_awarded_mad"))
@@ -77,12 +144,12 @@ class CompetitorRadar:
                 return []
             # Moroccan Procurement market baseline (Fournitures, IT & Sécurité) when DB is empty
             return [
-                {"winner_name": "OMNIDATA MAROC SA", "total_wins": 14, "total_awarded_mad": 4820000.0, "avg_contract_mad": 344285.0, "avg_competition_density": 3.2},
-                {"winner_name": "CBI (Compagnie Bur. Informatique)", "total_wins": 11, "total_awarded_mad": 3650000.0, "avg_contract_mad": 331818.0, "avg_competition_density": 2.8},
-                {"winner_name": "DISWAY SYSTEMS", "total_wins": 9, "total_awarded_mad": 2980000.0, "avg_contract_mad": 331111.0, "avg_competition_density": 4.1},
-                {"winner_name": "IB MAROC TECHNOLOGIES", "total_wins": 7, "total_awarded_mad": 2450000.0, "avg_contract_mad": 350000.0, "avg_competition_density": 2.5},
-                {"winner_name": "SECURITAS MAROC SARL", "total_wins": 6, "total_awarded_mad": 1920000.0, "avg_contract_mad": 320000.0, "avg_competition_density": 3.0},
-                {"winner_name": "DATA PROTECT MAROC", "total_wins": 5, "total_awarded_mad": 1680000.0, "avg_contract_mad": 336000.0, "avg_competition_density": 2.2}
+                {"winner_name": "OMNIDATA MAROC SA", "total_wins": 14, "total_awarded_mad": 4820000.0, "avg_contract_mad": 344285.0, "total_devis": 45},
+                {"winner_name": "CBI (Compagnie Bur. Informatique)", "total_wins": 11, "total_awarded_mad": 3650000.0, "avg_contract_mad": 331818.0, "total_devis": 31},
+                {"winner_name": "DISWAY SYSTEMS", "total_wins": 9, "total_awarded_mad": 2980000.0, "avg_contract_mad": 331111.0, "total_devis": 37},
+                {"winner_name": "IB MAROC TECHNOLOGIES", "total_wins": 7, "total_awarded_mad": 2450000.0, "avg_contract_mad": 350000.0, "total_devis": 18},
+                {"winner_name": "SECURITAS MAROC SARL", "total_wins": 6, "total_awarded_mad": 1920000.0, "avg_contract_mad": 320000.0, "total_devis": 18},
+                {"winner_name": "DATA PROTECT MAROC", "total_wins": 5, "total_awarded_mad": 1680000.0, "avg_contract_mad": 336000.0, "total_devis": 11}
             ][:limit]
 
         return [
@@ -91,29 +158,73 @@ class CompetitorRadar:
                 "total_wins": r.total_wins,
                 "total_awarded_mad": float(r.total_awarded_mad or 0.0),
                 "avg_contract_mad": float(r.avg_contract_mad or 0.0),
-                "avg_competition_density": round(float(r.avg_competition_density or 0.0), 1)
+                "total_devis": int(r.total_devis or 0)
             }
             for r in rows
         ]
 
-    async def get_competitor_profile(self, winner_name: str) -> Dict[str, Any]:
+    async def get_competitor_profile(
+        self,
+        winner_name: str,
+        year: Optional[int] = None,
+        months: Optional[int] = None,
+        title_keyword: Optional[str] = None,
+        buyer_keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
-        Generates a 360-degree intelligence dossier for a specific competitor.
+        Generates a 360-degree intelligence dossier for a specific competitor,
+        classifying and sorting closed awards by procurement nature and price.
         """
         stmt = (
             select(Award)
             .where(Award.winner_name.ilike(winner_name.strip()))
-            .order_by(desc(Award.published_at))
-            .limit(50)
+            .where(Award.status == "Attribué")
         )
+        if title_keyword and title_keyword.strip():
+            stmt = stmt.where(Award.title_raw.ilike(f"%{title_keyword.strip()}%"))
+        if buyer_keyword and buyer_keyword.strip():
+            stmt = stmt.where(Award.buyer_name_raw.ilike(f"%{buyer_keyword.strip()}%"))
+        if year:
+            stmt = stmt.where(extract("year", Award.published_at) == year)
+        elif months and months > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
+            stmt = stmt.where(Award.published_at >= cutoff)
+
+        stmt = stmt.order_by(desc(Award.published_at)).limit(100)
         res = await self.session.execute(stmt)
         awards = res.scalars().all()
 
         if not awards:
-            return {"winner_name": winner_name, "found": False, "awards": []}
+            return {"winner_name": winner_name, "found": False, "awards": [], "recent_wins": [], "nature_breakdown": []}
 
         total_mad = sum(a.amount_ttc for a in awards)
         buyers_set = {a.buyer_name_raw for a in awards}
+
+        wins = []
+        nature_stats: Dict[str, Dict[str, Any]] = {}
+        for a in awards:
+            nature = classify_award_nature(a.title_raw)
+            amt = float(a.amount_ttc or 0.0)
+            wins.append({
+                "reference": a.reference,
+                "title": a.title_raw,
+                "nature": nature,
+                "buyer": a.buyer_name_raw,
+                "amount_ttc": amt,
+                "devis_count": a.devis_received_count,
+                "awarded_at": a.published_at.strftime("%d/%m/%Y") if a.published_at else "",
+            })
+            if nature not in nature_stats:
+                nature_stats[nature] = {"nature": nature, "count": 0, "total_mad": 0.0}
+            nature_stats[nature]["count"] += 1
+            nature_stats[nature]["total_mad"] += amt
+
+        # Sort awards by nature (grouped), then highest price first within each nature
+        wins.sort(key=lambda w: (w["nature"], -w["amount_ttc"]))
+        nature_breakdown = sorted(
+            nature_stats.values(),
+            key=lambda n: (-n["count"], -n["total_mad"]),
+        )
 
         return {
             "winner_name": winner_name,
@@ -123,15 +234,7 @@ class CompetitorRadar:
             "avg_amount_mad": float(total_mad / len(awards)) if awards else 0.0,
             "unique_buyers_count": len(buyers_set),
             "top_client_buyers": list(buyers_set)[:5],
-            "recent_wins": [
-                {
-                    "reference": a.reference,
-                    "title": a.title_raw,
-                    "buyer": a.buyer_name_raw,
-                    "amount_ttc": float(a.amount_ttc),
-                    "awarded_at": a.published_at.strftime("%d/%m/%Y")
-                }
-                for a in awards[:10]
-            ]
+            "nature_breakdown": nature_breakdown,
+            "recent_wins": wins,
         }
 

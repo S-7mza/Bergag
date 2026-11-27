@@ -115,28 +115,45 @@ class BuyerRadar:
             ]
 
         results = []
+        is_scoped = bool(title_keyword and title_keyword.strip())
         for r in rows:
             spent = float(r.total_spent_mad or 0.0)
-            exhaustion_pct = min(100.0, (spent / LEGAL_BDC_ANNUAL_CEILING_MAD) * 100.0)
+            raw_pct = (spent / LEGAL_BDC_ANNUAL_CEILING_MAD) * 100.0
+            exhaustion_pct = min(100.0, raw_pct)
+            cap_ratio = round(spent / LEGAL_BDC_ANNUAL_CEILING_MAD, 1)
 
-            if alert_filter == "ao_imminent" and exhaustion_pct < 80.0:
-                continue
-            if alert_filter == "warning" and not (50.0 <= exhaustion_pct < 80.0):
-                continue
-            if alert_filter == "available" and exhaustion_pct >= 60.0:
-                continue
-            
-            # Predict upcoming formal tender (Marché Public / AO)
-            upcoming_ao_signal = False
-            signal_rationale = "Marge BDC disponible sous le plafond annuel."
-            if spent >= 400000.0:
+            # Classify Art. 91 status without falsely flagging multi-line institutions as 100% red errors.
+            # Decree 2-22-431 Art. 91 applies per nature of prestation/budget line, not institution-wide.
+            if not is_scoped and spent > LEGAL_BDC_ANNUAL_CEILING_MAD:
+                cap_status = "multi_line"
+                upcoming_ao_signal = False
+                signal_rationale = (
+                    f"Volume global multi-prestations ({cap_ratio}× 500k DH). "
+                    "Filtrez par Objet/Créneau pour estimer le plafond Art. 91 sur votre prestation."
+                )
+            elif spent >= 400000.0:
+                cap_status = "ao_signal"
                 upcoming_ao_signal = True
                 signal_rationale = (
-                    f"CRITIQUE : {exhaustion_pct:.0f}% ({spent:,.0f} MAD) du plafond 500k MAD Art. 91 consommé. "
-                    f"Un Appel d'Offres (AO) formel est imminent."
+                    f"{exhaustion_pct:.0f}% du seuil 500k DH atteint"
+                    + (" sur ce créneau." if is_scoped else ".")
+                    + " Appel d'Offres (AO) probable."
                 )
             elif spent >= 250000.0:
-                signal_rationale = f"Consommation modérée ({exhaustion_pct:.0f}%). Approche du seuil d'alerte."
+                cap_status = "approaching"
+                upcoming_ao_signal = False
+                signal_rationale = f"Consommation modérée ({exhaustion_pct:.0f}%). Marge BDC restante."
+            else:
+                cap_status = "available"
+                upcoming_ao_signal = False
+                signal_rationale = "Marge BDC disponible sous le plafond annuel."
+
+            if alert_filter == "ao_imminent" and cap_status != "ao_signal":
+                continue
+            if alert_filter == "warning" and cap_status != "approaching":
+                continue
+            if alert_filter == "available" and spent >= 300000.0:
+                continue
 
             results.append({
                 "buyer_name": r.buyer_name_raw,
@@ -145,6 +162,9 @@ class BuyerRadar:
                 "total_spent_mad": spent,
                 "avg_bdc_mad": round(float(r.avg_bdc_mad or 0.0), 2),
                 "budget_exhaustion_pct": round(exhaustion_pct, 1),
+                "cap_ratio": cap_ratio,
+                "cap_status": cap_status,
+                "is_scoped_by_keyword": is_scoped,
                 "upcoming_ao_signal": upcoming_ao_signal,
                 "signal_rationale": signal_rationale
             })

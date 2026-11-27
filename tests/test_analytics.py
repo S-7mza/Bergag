@@ -126,7 +126,7 @@ async def test_competitor_radar_top_winners():
         total_wins=15,
         total_awarded_mad=3500000.0,
         avg_contract_mad=233333.3,
-        avg_competition_density=3.2
+        total_devis=48
     )
 
     mock_res = MagicMock()
@@ -140,7 +140,7 @@ async def test_competitor_radar_top_winners():
     assert top[0]["winner_name"] == "SOCIETE MAROCAINE DE SECURITE SARL"
     assert top[0]["total_wins"] == 15
     assert top[0]["total_awarded_mad"] == 3500000.0
-    assert top[0]["avg_competition_density"] == 3.2
+    assert top[0]["total_devis"] == 48
 
 def test_api_analytics_endpoints(client):
     """Tests FastAPI /api/analytics endpoints with mocked radar calls."""
@@ -193,4 +193,58 @@ def test_api_analytics_endpoints(client):
         assert res_seas.status_code == 200
         seas_data = res_seas.json()
         assert seas_data["q4_concentration_pct"] == 45.5
+
+
+@pytest.mark.asyncio
+async def test_competitor_profile_nature_classification_and_sorting():
+    from datetime import datetime, timezone
+    from src.engine.competitor_radar import classify_award_nature
+    from src.models.tender import Award
+
+    assert classify_award_nature("Développement d'une plateforme web") == "Développement & Solutions IT"
+    assert classify_award_nature("Achat de matériel informatique") == "Matériel IT, Réseau & Sécurité"
+    assert classify_award_nature("Acquisition de mobilier de bureau") == "Achat Produits & Équipements"
+    assert classify_award_nature("Prestation de nettoyage des locaux") == "Services & Maintenance"
+
+    mock_session = AsyncMock()
+    a1 = MagicMock(
+        spec=Award,
+        reference="01/2026",
+        title_raw="Prestation de maintenance préventive",
+        buyer_name_raw="MINISTERE X",
+        amount_ttc=50000.0,
+        devis_received_count=4,
+        published_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
+    )
+    a2 = MagicMock(
+        spec=Award,
+        reference="02/2026",
+        title_raw="Développement d'une application mobile",
+        buyer_name_raw="MINISTERE Y",
+        amount_ttc=120000.0,
+        devis_received_count=3,
+        published_at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+    )
+    a3 = MagicMock(
+        spec=Award,
+        reference="03/2026",
+        title_raw="Achat de fournitures de bureau",
+        buyer_name_raw="MINISTERE Z",
+        amount_ttc=30000.0,
+        devis_received_count=7,
+        published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+    )
+
+    mock_res = MagicMock()
+    mock_res.scalars.return_value.all.return_value = [a1, a2, a3]
+    mock_session.execute.return_value = mock_res
+
+    radar = CompetitorRadar(mock_session)
+    profile = await radar.get_competitor_profile("TECH DATA SARL")
+
+    assert profile["found"] is True
+    assert len(profile["recent_wins"]) == 3
+    natures = [w["nature"] for w in profile["recent_wins"]]
+    assert natures == sorted(natures)
+    assert len(profile["nature_breakdown"]) == 3
 

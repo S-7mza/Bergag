@@ -38,13 +38,23 @@ async def get_top_competitors(
 @router.get("/competitors/{winner_name}")
 async def get_competitor_profile(
     winner_name: str,
+    year: Optional[int] = Query(None, description="Filter by award year"),
+    months: Optional[int] = Query(None, ge=1, le=60, description="Filter by last N months"),
+    keyword: Optional[str] = Query(None, description="Filter by title keyword"),
+    buyer: Optional[str] = Query(None, description="Filter by public buyer or city"),
     session: AsyncSession = Depends(get_db_session)
 ) -> Dict[str, Any]:
     """
     Retrieves full intelligence dossier for a specific winning contractor.
     """
     radar = CompetitorRadar(session)
-    result = await radar.get_competitor_profile(winner_name)
+    result = await radar.get_competitor_profile(
+        winner_name,
+        year=year,
+        months=months,
+        title_keyword=keyword,
+        buyer_keyword=buyer,
+    )
     if not result.get("found"):
         raise HTTPException(status_code=404, detail=f"No award records found for '{winner_name}'")
     return result
