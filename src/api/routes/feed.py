@@ -26,6 +26,7 @@ from src.scraper.detail_spider import DetailSpider
 from src.scraper.attachment_worker import AttachmentWorker
 from src.engine.ai_matching_agent import ai_matching_agent
 from src.api.schemas import AIMatchingDiagnosis
+from src.api.auth import User, get_current_user, require_role, user_can_access_profile
 from src.engine.cancellation_tracker import (
     is_cancellation_notice,
     extract_target_cancelled_reference,
@@ -64,11 +65,12 @@ ALL_SECTORS_PROFILE = CompanyProfileSchema(
 )
 
 @router.get("/profiles")
-async def get_available_profiles():
-    """Lists all loaded company profiles with rich metadata, catalog item counts, and keyword totals"""
+async def get_available_profiles(user: User = Depends(get_current_user)):
+    """Lists all authorized company profiles with rich metadata, catalog item counts, keywords, and AI scoring weights"""
     profiles = load_all_profiles()
-    res = [
-        {
+    res = []
+    if user_can_access_profile(user, "all"):
+        res.append({
             "id": "all",
             "tenant_id": "all",
             "profile_name": "Tous les Secteurs",
@@ -77,16 +79,27 @@ async def get_available_profiles():
             "categories": ["Fournitures", "Services", "Travaux"],
             "catalog_count": 0,
             "keywords_count": 0,
-            "negative_keywords_count": 0
-        }
-    ]
+            "negative_keywords_count": 0,
+            "scoring_mode": "cascade",
+            "scoring_weights": {},
+            "positive_keywords_sample": [],
+            "negative_keywords_sample": [],
+            "file_name": "global",
+        })
     for p in profiles:
+        pid = p.profile_id or p.tenant_id
+        if not user_can_access_profile(user, pid):
+            continue
+        pos_kws = []
+        for c in p.catalog:
+            pos_kws.extend(getattr(c, "synonyms_fr", []))
+            pos_kws.extend(getattr(c, "technical_keywords", []))
         kw_count = sum(
             len(getattr(c, "synonyms_fr", [])) + len(getattr(c, "synonyms_ar", [])) + len(getattr(c, "technical_keywords", []))
             for c in p.catalog
         )
         res.append({
-            "id": p.profile_id or p.tenant_id,
+            "id": pid,
             "tenant_id": p.tenant_id,
             "profile_name": p.profile_name,
             "icon": p.icon or DEFAULT_SECTOR_ICONS.get(p.profile_id or "", "🏷️"),
@@ -94,13 +107,20 @@ async def get_available_profiles():
             "categories": p.macro_filters.categories,
             "catalog_count": len(p.catalog),
             "keywords_count": kw_count,
-            "negative_keywords_count": len(p.negative_constraints.keywords)
+            "negative_keywords_count": len(p.negative_constraints.keywords),
+            "scoring_mode": getattr(p, "scoring_mode", "cascade"),
+            "scoring_weights": p.scoring_weights.model_dump() if p.scoring_weights else {},
+            "positive_keywords_sample": list(dict.fromkeys(pos_kws))[:8],
+            "negative_keywords_sample": list(p.negative_constraints.keywords)[:8],
+            "file_name": f"{pid}.yaml",
         })
     return res
 
 @router.get("/profiles/{profile_id}")
-async def get_profile_detail(profile_id: str):
-    """Returns full details of a specific sector profile including catalog items and weights"""
+async def get_profile_detail(profile_id: str, user: User = Depends(get_current_user)):
+    """Returns full details of an authorized sector profile including catalog items and weights"""
+    if not user_can_access_profile(user, profile_id):
+        raise HTTPException(status_code=403, detail=f"Accès refusé au profil '{profile_id}' pour votre compte.")
     if profile_id.lower().strip() in ("all", "tous", "all_sectors", "*"):
         data = ALL_SECTORS_PROFILE.model_dump()
         data["id"] = "all"
@@ -117,8 +137,12 @@ async def get_profile_detail(profile_id: str):
         raise HTTPException(status_code=404, detail=f"Secteur '{profile_id}' non trouvé")
 
 @router.put("/profiles/{profile_id}")
-async def update_profile_configuration(profile_id: str, payload: Dict[str, Any]):
-    """Updates an existing sector profile, modifying its keywords, weights, categories, or negative constraints"""
+async def update_profile_configuration(
+    profile_id: str,
+    payload: Dict[str, Any],
+    user: User = Depends(require_role(["admin"]))
+):
+    """Updates an existing sector profile, modifying its keywords, weights, categories, or negative constraints (Admin only)"""
     if profile_id.lower().strip() in ("all", "tous", "all_sectors", "*"):
         raise HTTPException(status_code=400, detail="Le profil global 'Tous les Secteurs' est un profil système non modifiable.")
     try:
@@ -318,12 +342,20 @@ async def get_tender_feed(
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, score_asc, ai_score_desc, ai_score_asc, deadline_asc, deadline_desc, items_desc, items_asc, id_desc, id_asc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
     limit: int = Query(2500, ge=1, le=5000),
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
 ):
     """
     Returns dynamically filtered, ranked active procurement opportunities
-    scored against the selected profile and scoped by user role.
+    scored against the selected profile and scoped by user role & profile RBAC.
     """
+    if not user_can_access_profile(user, profile_name):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Accès refusé : votre compte ({user.role}) n'est pas autorisé à consulter le profil '{profile_name}'."
+        )
+
+    effective_role = role if user.role == "admin" else user.role
     is_all_sectors = bool(profile_name and profile_name.lower().strip() in ("all", "tous", "all_sectors", "*"))
     if is_all_sectors:
         profile = ALL_SECTORS_PROFILE

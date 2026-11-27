@@ -122,6 +122,8 @@ class BdcIngestionService:
         if tender:
             # Explicit update requested (skip_if_exists=False)
             tender.deadline_at = deadline_dt
+            tender.published_at = published_dt
+            tender.status = (detail_data.get("status") or "active")[:32]
             tender.title = detail_data.get("title", "")
             tender.main_category = main_category
             tender.prestation_type = detail_data.get("prestation_type")

@@ -1,0 +1,253 @@
+version: "1.0"
+tenant_id: "hamza-solutions"
+profile_id: "special_ai_hybrid"
+profile_name: "Solutions Numériques & IA (Profil Hybride Maître)"
+contact_email: "hamza@example.com"
+icon: "⚡"
+description: "Moteur Unifié : Fusionne l'intelligence contextuelle de l'IA (piliers technologiques & veto matériel) avec la précision réglementaire et bordereau du profil secteur."
+
+scoring_mode: "hybrid"
+
+macro_filters:
+  categories:
+    - "Services"
+    - "Fournitures"
+    - "Travaux"
+  prestation_types:
+    - "Achat de matériel technique, de logiciels et de matériel informatique"
+    - "Entretien et maintenance de logiciels et de progiciels"
+    - "Études, conseil et formation"
+    - "Services informatiques et développement logiciel"
+    - "Prestations d'études et d'assistance technique"
+  geographic_coverage:
+    mode: "national"
+    preferred_regions:
+      - "Casablanca-Settat"
+      - "Rabat-Salé-Kénitra"
+      - "Marrakech-Safi"
+      - "Tanger-Tétouan-Al Hoceïma"
+      - "Fès-Meknès"
+      - "Souss-Massa"
+    max_travel_distance_km: 800
+  financial_bands:
+    min_amount_mad: 10000.0
+    max_amount_mad: 500000.0
+  minimum_deadline_hours: 24
+
+catalog:
+  - id: "web-development"
+    label: "Web Development, Portals & CMS"
+    weight: 1.0
+    synonyms_fr:
+      - "développement web"
+      - "site web"
+      - "portail web"
+      - "application web"
+      - "plateforme web"
+      - "intranet"
+      - "extranet"
+      - "refonte de site web"
+      - "refonte site"
+      - "portail électronique"
+      - "guichet unique électronique"
+      - "cms"
+      - "interface web"
+      - "front-end"
+      - "responsive design"
+    synonyms_ar:
+      - "تطوير مواقع الويب"
+      - "موقع إلكتروني"
+      - "بوابة إلكترونية"
+      - "تطبيق ويب"
+      - "منصة رقمية"
+    technical_keywords:
+      - "Python"
+      - "React"
+      - "Vue.js"
+      - "Angular"
+      - "Node.js"
+      - "Next.js"
+      - "JavaScript"
+      - "TypeScript"
+      - "HTML5"
+      - "CSS3"
+      - "Tailwind"
+      - "PHP"
+      - "Laravel"
+      - "Symfony"
+      - "Django"
+      - "WordPress"
+      - "Drupal"
+      - "REST API"
+      - "GraphQL"
+
+  - id: "software-engineering"
+    label: "Software Engineering & Custom Systems"
+    weight: 1.0
+    synonyms_fr:
+      - "développement logiciel"
+      - "génie logiciel"
+      - "application sur mesure"
+      - "logiciel sur mesure"
+      - "logiciel métier"
+      - "progiciel"
+      - "progiciel de gestion"
+      - "système d'information"
+      - "maintenance applicative"
+      - "tierce maintenance applicative"
+      - "tma"
+      - "dématérialisation"
+      - "ged"
+      - "gestion électronique des documents"
+      - "numérisation"
+      - "interopérabilité"
+      - "application mobile"
+    synonyms_ar:
+      - "تطوير البرمجيات"
+      - "برامج مخصصة"
+      - "نظام معلوماتي"
+      - "رقمنة"
+      - "تطبيق جوال"
+    technical_keywords:
+      - "Python"
+      - "Java"
+      - "Spring Boot"
+      - "C#"
+      - ".NET"
+      - "Golang"
+      - "Flutter"
+      - "React Native"
+      - "Android"
+      - "iOS"
+      - "Microservices"
+      - "Docker"
+      - "API"
+
+  - id: "data-engineering-bi"
+    label: "Data Engineering, BI & Analytics"
+    weight: 0.95
+    synonyms_fr:
+      - "ingénierie de données"
+      - "décisionnel"
+      - "business intelligence"
+      - "tableau de bord"
+      - "tableaux de bord"
+      - "entrepôt de données"
+      - "data warehouse"
+      - "reporting"
+      - "analytique"
+      - "migration de données"
+      - "gouvernance des données"
+      - "qualité des données"
+      - "traitement des données"
+    synonyms_ar:
+      - "هندسة البيانات"
+      - "ذكاء الأعمال"
+      - "لوحة قيادة"
+      - "معالجة البيانات"
+    technical_keywords:
+      - "Power BI"
+      - "Tableau"
+      - "Apache Superset"
+      - "ETL"
+      - "SQL"
+      - "PostgreSQL"
+      - "MySQL"
+      - "Oracle"
+      - "Data Pipeline"
+      - "Big Data"
+
+  - id: "ai-automation"
+    label: "AI, Machine Learning & OCR"
+    weight: 0.95
+    synonyms_fr:
+      - "intelligence artificielle"
+      - "ia"
+      - "apprentissage automatique"
+      - "machine learning"
+      - "reconnaissance optique de caractères"
+      - "ocr"
+      - "automatisation des processus"
+      - "rpa"
+      - "chatbot"
+      - "agent conversationnel"
+      - "traitement automatique du langage"
+      - "vision par ordinateur"
+    synonyms_ar:
+      - "الذكاء الاصطناعي"
+      - "التعلم الآلي"
+      - "التعرف الضوئي على الحروف"
+      - "الأتمتة"
+    technical_keywords:
+      - "TensorFlow"
+      - "PyTorch"
+      - "Scikit-Learn"
+      - "Tesseract OCR"
+      - "LLM"
+      - "NLP"
+      - "OpenCV"
+
+  - id: "cloud-devops"
+    label: "Cloud, DevOps & Infrastructure Logicielle"
+    weight: 0.90
+    synonyms_fr:
+      - "cloud"
+      - "hébergement web"
+      - "infrastructure cloud"
+      - "devops"
+      - "sécurité applicative"
+      - "conteneurisation"
+    synonyms_ar:
+      - "الحوسبة السحابية"
+      - "استضافة المواقع"
+    technical_keywords:
+      - "Docker"
+      - "Kubernetes"
+      - "Linux"
+      - "CI/CD"
+      - "Nginx"
+      - "AWS"
+      - "Azure"
+      - "GCP"
+
+negative_constraints:
+  keywords:
+    # Automotive & Fuels
+    - "véhicules"
+    - "véhicule"
+    - "automobile"
+    - "automobiles"
+    - "camion"
+    - "camions"
+    - "tracteur"
+    - "carburant"
+    - "gasoil"
+    - "essence"
+    - "vidange"
+    # Civil works & building
+    - "génie civil"
+    - "travaux de construction"
+    - "bâtiment"
+    - "maçonnerie"
+    - "peinture"
+    - "plomberie"
+    - "étanchéité"
+    # Facilities, food & security
+    - "gardiennage"
+    - "nettoyage des locaux"
+    - "restauration"
+    - "traiteur"
+    - "pause café"
+    - "denrées alimentaires"
+  disallowed_buyer_types: []
+
+scoring_weights:
+  # Master Hybrid Weights
+  ai_engine_weight: 0.50
+  cascade_weight: 0.50
+  enable_hardware_damping: true
+  # Sector Cascade Line Item Weights
+  line_item_coverage: 0.40
+  semantic_similarity: 0.30
+  feasibility_proximity: 0.15
+  commercial_attractiveness: 0.15

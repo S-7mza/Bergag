@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 from typing import Tuple, Optional
@@ -65,6 +66,42 @@ class ListingSpider:
 
         logger.info(f"ListingSpider: Found {total_results} active consultations on portal ({len(cards)} on page {page})")
         return raw_log, cards, total_results
+
+    async def fetch_all_active_cards(
+        self,
+        max_pages: int = 50,
+        concurrency: int = 4
+    ) -> Tuple[int, list[dict]]:
+        """
+        Exhaustively fetches all active consultation cards across all available active pages.
+        Returns (portal_total_count, all_active_cards).
+        """
+        raw_log, first_page_cards, total_count = await self.fetch_active(page=1, page_size=50)
+        all_cards = list(first_page_cards)
+        if total_count <= 50:
+            return total_count, all_cards
+
+        pages_needed = min(max_pages, (total_count + 49) // 50)
+        remaining_pages = list(range(2, pages_needed + 1))
+
+        # Fetch in concurrent chunks to be polite to the WAF while fast
+        for i in range(0, len(remaining_pages), concurrency):
+            chunk = remaining_pages[i:i + concurrency]
+            async def _fetch_one(p: int):
+                try:
+                    _, cards, _ = await self.fetch_active(page=p, page_size=50)
+                    return cards
+                except Exception as e:
+                    logger.warning(f"ListingSpider: Failed to fetch active page {p}: {e}")
+                    return []
+            chunk_results = await asyncio.gather(*[_fetch_one(p) for p in chunk])
+            for res_cards in chunk_results:
+                all_cards.extend(res_cards)
+            if i + concurrency < len(remaining_pages):
+                await asyncio.sleep(0.3)
+
+        logger.info(f"ListingSpider: Exhaustive active crawl completed: {len(all_cards)}/{total_count} cards gathered across {pages_needed} pages.")
+        return total_count, all_cards
 
     async def fetch_by_date(
         self, 

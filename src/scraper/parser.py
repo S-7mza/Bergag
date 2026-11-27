@@ -4,21 +4,45 @@ from bs4 import BeautifulSoup
 from typing import Any
 from src.engine.cancellation_tracker import is_cancellation_notice
 
+FRENCH_MONTHS = {
+    'janvier': 1, 'janv': 1, 'jan': 1,
+    'février': 2, 'fevrier': 2, 'févr': 2, 'fevr': 2, 'fev': 2,
+    'mars': 3, 'mar': 3,
+    'avril': 4, 'avr': 4,
+    'mai': 5,
+    'juin': 6,
+    'juillet': 7, 'juil': 7,
+    'août': 8, 'aout': 8,
+    'septembre': 9, 'sept': 9, 'sep': 9,
+    'octobre': 10, 'oct': 10,
+    'novembre': 11, 'nov': 11,
+    'décembre': 12, 'decembre': 12, 'déc': 12, 'dec': 12
+}
+
 def clean_text(text: str | None) -> str:
     if not text:
         return ""
     return re.sub(r'\s+', ' ', text).strip()
 
 def parse_date(date_str: str | None) -> str | None:
-    """Parses French portal datetimes like '27/11/2026 14:00' or '18/11/2026 16:15'"""
+    """Parses French portal datetimes like '27/11/2026 14:00', '16 mars 2027 à 14:00', or '31 déc. 2026 à 12:00'"""
     if not date_str:
         return None
     cleaned = clean_text(date_str)
-    # Match standard dd/mm/yyyy hh:mm
-    match = re.search(r'(\d{2})/(\d{2})/(\d{4})\s*(?:à|a)?\s*(\d{2}):(\d{2})', cleaned)
+    # 1. Match numeric dd/mm/yyyy hh:mm
+    match = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})\s*(?:à|a)?\s*(\d{1,2}):(\d{2})', cleaned)
     if match:
         day, month, year, hour, minute = match.groups()
-        return f"{year}-{month}-{day}T{hour}:{minute}:00+01:00"
+        return f"{int(year):04d}-{int(month):02d}-{int(day):02d}T{int(hour):02d}:{int(minute):02d}:00+01:00"
+
+    # 2. Match text dd month yyyy hh:mm (e.g. '16 mars 2027 à 14:00' or '31 déc. 2026 à 12:00')
+    match_french = re.search(r'(\d{1,2})\s+([a-zA-ZéûÉÛ\.]+)\s+(\d{4})\s*(?:à|a)?\s*(\d{1,2}):(\d{2})', cleaned, re.IGNORECASE)
+    if match_french:
+        day, month_raw, year, hour, minute = match_french.groups()
+        month_key = month_raw.lower().replace('.', '').strip()
+        if month_key in FRENCH_MONTHS:
+            mo = FRENCH_MONTHS[month_key]
+            return f"{int(year):04d}-{mo:02d}-{int(day):02d}T{int(hour):02d}:{int(minute):02d}:00+01:00"
     return None
 
 def parse_total_results(html: str) -> int:
@@ -62,9 +86,19 @@ def parse_listing_page(html: str) -> list[dict[str, Any]]:
         side = card.select_one('.bdc-card__side')
         status = "active"
         if side:
+            side_classes = side.get("class", [])
+            if "bdc-card__side--ko" in side_classes:
+                status = "annule"
             v_el = side.select_one('.bdc-card__v')
             if v_el and "annul" in v_el.get_text().lower():
                 status = "annule"
+
+        # Check badges for cancellation
+        badges = card.select('.badge')
+        for b in badges:
+            if "annul" in b.get_text().lower():
+                status = "annule"
+                break
 
         # Also detect if this consultation is itself a published cancellation notice
         if is_cancellation_notice(title, reference):
@@ -79,15 +113,25 @@ def parse_listing_page(html: str) -> list[dict[str, Any]]:
             if match:
                 portal_id = int(match.group(1))
 
-        # Deadline
-        facts = card.select('.bdc-card__facts div')
+        # Deadline extraction from .bdc-card__side (.bdc-card__v + .bdc-card__s)
         deadline_raw = None
-        for fact in facts:
-            dt = fact.select_one('dt')
-            dd = fact.select_one('dd')
-            if dt and "limite" in dt.get_text().lower() and dd:
-                deadline_raw = clean_text(dd.get_text())
-                break
+        if side:
+            v_el = side.select_one('.bdc-card__v')
+            s_el = side.select_one('.bdc-card__s')
+            if v_el:
+                date_part = clean_text(v_el.get_text())
+                time_part = clean_text(s_el.get_text()) if s_el else ""
+                deadline_raw = f"{date_part} {time_part}".strip()
+
+        # Fallback to .bdc-card__facts div if present
+        if not deadline_raw:
+            facts = card.select('.bdc-card__facts div')
+            for fact in facts:
+                dt = fact.select_one('dt')
+                dd = fact.select_one('dd')
+                if dt and "limite" in dt.get_text().lower() and dd:
+                    deadline_raw = clean_text(dd.get_text())
+                    break
 
         results.append({
             "portal_id": portal_id,

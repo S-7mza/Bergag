@@ -606,16 +606,41 @@ async def run_awards_crawl_cycle(
 async def run_daemon_loop(pages: int = 5, interval_seconds: int = 3600, send_emails: bool = True):
     """
     Runs the autonomous ingestion and alert pipeline continuously as a background daemon.
+    - Every `interval_seconds` (default 1h): executes a tracked scheduled batch via BatchManager.
+    - At least once every 24h: executes a full 100% active market sync (`execute_active_sync_batch`)
+      to guarantee zero missing avis across all portal pages.
     """
+    from src.engine.batch_manager import batch_manager
+
     logger.info(f"Starting Bergag Crawler Daemon loop (interval: {interval_seconds}s, pages: {pages})...")
     await wait_for_database_ready()
 
     cycle_count = 0
+    last_full_sync_at: Optional[datetime] = None
+
     while True:
         cycle_count += 1
+        now = datetime.now()
         logger.info(f"--- Starting Autonomous Crawl Cycle #{cycle_count} ---")
         try:
-            await run_active_crawl_cycle(max_pages=pages, send_emails=send_emails)
+            if batch_manager.active_batch is None:
+                # At least once a day (or on first cycle), run full 100% active sync for all missing avis
+                needs_daily_full_sync = (
+                    last_full_sync_at is None
+                    or (now - last_full_sync_at).total_seconds() >= 86400
+                )
+                if needs_daily_full_sync:
+                    logger.info("[Daemon] Running daily 100% active market sync for all missing avis...")
+                    await batch_manager.execute_active_sync_batch(user_name="Daemon Worker (Sync Quotidien 100%)")
+                    last_full_sync_at = datetime.now()
+                else:
+                    await batch_manager.execute_batch(
+                        pages=pages,
+                        trigger_type="scheduled",
+                        user_name="Daemon Worker"
+                    )
+            else:
+                logger.info("[Daemon] A batch is already in progress, skipping cycle.")
         except Exception as e:
             logger.error(f"Error during crawl cycle #{cycle_count}: {e}", exc_info=True)
 

@@ -25,6 +25,10 @@ class ScoringWeights(BaseModel):
     semantic_similarity: float = 0.30
     feasibility_proximity: float = 0.15
     commercial_attractiveness: float = 0.15
+    # Unified Hybrid AI Scoring weights
+    ai_engine_weight: float = 0.0          # Weight given to deep AI diagnostic engine (0.0 to 1.0)
+    cascade_weight: float = 1.0            # Weight given to sector catalog cascade engine (0.0 to 1.0)
+    enable_hardware_damping: bool = True   # Automatically mitigate score when heavy hardware dominates
 
 class CompanyProfileSchema(BaseModel):
     version: str = "1.0"
@@ -34,6 +38,7 @@ class CompanyProfileSchema(BaseModel):
     icon: str | None = None
     description: str | None = None
     contact_email: str | None = None
+    scoring_mode: Literal["cascade_only", "ai_only", "hybrid"] = "cascade_only"
     macro_filters: MacroFilters
     catalog: list[CatalogItem]
     negative_constraints: NegativeConstraints

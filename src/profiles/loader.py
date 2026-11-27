@@ -6,6 +6,7 @@ from src.profiles.schema import CompanyProfileSchema
 PROFILES_DIR = Path(__file__).parent / "configs"
 
 DEFAULT_SECTOR_ICONS: Dict[str, str] = {
+    "special_ai_hybrid": "⚡",
     "it_hardware": "🖥️",
     "software_data": "💻",
     "cctv_security": "📹",
@@ -43,7 +44,7 @@ def load_all_profiles() -> list[CompanyProfileSchema]:
     profiles = []
     # Preferred display order
     order = [
-        "it_hardware", "software_data", "cctv_security", "btp_construction",
+        "special_ai_hybrid", "software_data", "it_hardware", "cctv_security", "btp_construction",
         "electricite_fluides", "medical_pharma", "transport_vehicules",
         "nettoyage_gardiennage", "bureau_mobilier", "etudes_conseil", "communication_event"
     ]

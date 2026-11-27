@@ -318,6 +318,14 @@
 
                     </button>
 
+                    <button @click="activeModule = 'tuner'; initTuner()" :class="activeModule === 'tuner' ? 'bg-indigo-600/25 text-indigo-300 border border-indigo-500/40 shadow-sm' : 'text-slate-400 hover:text-indigo-300'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap">
+
+                        <span>🧠</span> Swipe & Tune IA
+
+                        <span class="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 text-[10px] rounded-full font-bold border border-indigo-500/30">RLHF</span>
+
+                    </button>
+
 
 
                     <button @click="activeModule = 'market_radar'; fetchMarketRadar()" :class="activeModule === 'market_radar' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'" class="px-3 py-1.5 rounded-lg transition-all flex items-center gap-2">
@@ -2629,6 +2637,303 @@
             </div>
 
 
+
+            <!-- ========================================== -->
+            <!-- MODULE 2B: ACTIVE LEARNING SWIPE & TUNE    -->
+            <!-- ========================================== -->
+            <div x-show="activeModule === 'tuner'" x-cloak class="space-y-6">
+
+                <!-- Top HUD Telemetry & Controls -->
+                <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 rounded-2xl border border-indigo-500/30 p-5 shadow-xl">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div>
+                            <div class="flex items-center gap-2.5">
+                                <span class="text-2xl">🧠</span>
+                                <h2 class="text-lg font-extrabold text-white tracking-tight">Studio d'Entraînement IA (Swipe &amp; Tune)</h2>
+                                <span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold uppercase tracking-wider">Active Learning &amp; Hard Negative Mining</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1">
+                                Calibrez votre modèle de scoring comme en reconnaissance d'objets : glissez à <strong class="text-emerald-400">droite (→)</strong> si l'avis est pertinent, à <strong class="text-rose-400">gauche (←)</strong> pour l'écarter.
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <!-- Profile Selector -->
+                            <select x-model="tunerProfileId" @change="loadTunerCards()" class="bg-slate-950 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 focus:border-indigo-500 outline-none">
+                                <template x-for="p in availableProfiles.filter(x => x.id !== 'all')" :key="p.id">
+                                    <option :value="p.id" x-text="(p.icon || '🏷️') + ' ' + p.profile_name"></option>
+                                </template>
+                            </select>
+
+                            <!-- Scope Selector -->
+                            <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+                                <button type="button" @click="tunerScope = 'all'; loadTunerCards()" :class="tunerScope === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg transition-colors">Tous</button>
+                                <button type="button" @click="tunerScope = 'active'; loadTunerCards()" :class="tunerScope === 'active' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg transition-colors">Actifs</button>
+                                <button type="button" @click="tunerScope = 'closed'; loadTunerCards()" :class="tunerScope === 'closed' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'" class="px-2.5 py-1 rounded-lg transition-colors">Clos</button>
+                            </div>
+
+                            <!-- Undo -->
+                            <button type="button" @click="undoTunerSwipe()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-all active:scale-95" title="Annuler le dernier swipe (Touche Z)">
+                                <span>↺</span> Annuler (Z)
+                            </button>
+
+                            <!-- Save Logic -->
+                            <button type="button" @click="saveTunerLogic()" :disabled="tunerSaving" class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50">
+                                <span x-show="!tunerSaving">💾</span>
+                                <span x-show="tunerSaving" class="animate-spin">⚙️</span>
+                                <span x-text="tunerSaving ? 'Enregistrement...' : 'Enregistrer la logique'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Strip -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-800/80">
+                        <div class="bg-slate-950/70 rounded-xl p-3 border border-slate-800/70">
+                            <div class="text-[10px] text-slate-400 font-mono uppercase">Avis Annotés</div>
+                            <div class="text-lg font-black text-white mt-0.5 flex items-baseline gap-2">
+                                <span x-text="tunerStats?.metrics?.total_swipes || 0"></span>
+                                <span class="text-[11px] font-semibold text-emerald-400" x-text="'+' + (tunerStats?.metrics?.accepted_count || 0)"></span>
+                                <span class="text-[11px] font-semibold text-rose-400" x-text="'-' + (tunerStats?.metrics?.rejected_count || 0)"></span>
+                            </div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded-xl p-3 border border-slate-800/70">
+                            <div class="text-[10px] text-slate-400 font-mono uppercase">Précision Estimée</div>
+                            <div class="text-lg font-black text-indigo-400 mt-0.5" x-text="(tunerStats?.metrics?.accuracy_estimate || 0) + '%'"></div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded-xl p-3 border border-slate-800/70">
+                            <div class="text-[10px] text-slate-400 font-mono uppercase">Stabilité Frontière</div>
+                            <div class="text-lg font-black text-emerald-400 mt-0.5" x-text="(tunerStats?.metrics?.boundary_stability || 0) + '%'"></div>
+                        </div>
+                        <div class="bg-slate-950/70 rounded-xl p-3 border border-slate-800/70">
+                            <div class="text-[10px] text-slate-400 font-mono uppercase">Règles Confirmées</div>
+                            <div class="text-lg font-black text-amber-400 mt-0.5" x-text="(tunerStats?.metrics?.confirmed_rules_count || 0) + ' règles'"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Workspace: Card Deck + Live Learned Rules -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                    <!-- Left / Center: Interactive Card Deck (8 cols) -->
+                    <div class="lg:col-span-8 flex flex-col items-center space-y-4">
+
+                        <!-- Loading State -->
+                        <div x-show="tunerLoading" class="w-full max-w-2xl bg-slate-900 rounded-3xl border border-slate-800 p-12 text-center space-y-3">
+                            <div class="animate-spin text-3xl inline-block">🧠</div>
+                            <div class="text-sm font-bold text-slate-300">Échantillonnage actif des avis les plus informatifs...</div>
+                        </div>
+
+                        <!-- Empty State -->
+                        <div x-show="!tunerLoading && tunerCards.length === 0" class="w-full max-w-2xl bg-slate-900 rounded-3xl border border-slate-800 p-10 text-center space-y-4">
+                            <div class="text-4xl">🎯</div>
+                            <h3 class="text-base font-bold text-white">Lot d'entraînement terminé !</h3>
+                            <p class="text-xs text-slate-400">Tous les avis de ce lot ont été arbitrés. Chargez une nouvelle série d'exemples ou enregistrez votre logique.</p>
+                            <div class="flex justify-center gap-3">
+                                <button type="button" @click="loadTunerCards()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl">🔄 Charger d'autres exemples</button>
+                                <button type="button" @click="saveTunerLogic()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl">💾 Enregistrer la logique</button>
+                            </div>
+                        </div>
+
+                        <!-- Active Swipe Card -->
+                        <template x-if="!tunerLoading && tunerCards.length > 0">
+                            <div class="w-full max-w-2xl relative select-none">
+                                <!-- Background Stack Card Preview -->
+                                <div x-show="tunerCards.length > 1" class="absolute inset-x-4 -bottom-3 h-12 bg-slate-800/60 rounded-3xl border border-slate-700/50 -z-10"></div>
+
+                                <!-- Foreground Draggable Card -->
+                                <div @pointerdown="startTunerDrag($event)"
+                                     @pointermove="onTunerDrag($event)"
+                                     @pointerup="endTunerDrag($event)"
+                                     @pointercancel="endTunerDrag($event)"
+                                     :style="`transform: translateX(${tunerDragX}px) rotate(${tunerDragX * 0.04}deg); transition: ${tunerIsDragging ? 'none' : 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)'}; touch-action: pan-y;`"
+                                     :class="{
+                                         'border-emerald-500 ring-2 ring-emerald-500/40': tunerDragX > 60,
+                                         'border-rose-500 ring-2 ring-rose-500/40': tunerDragX < -60,
+                                         'border-slate-700/90': Math.abs(tunerDragX) <= 60
+                                     }"
+                                     class="bg-slate-900 rounded-3xl border-2 p-6 shadow-2xl cursor-grab active:cursor-grabbing relative overflow-hidden space-y-4">
+
+                                    <!-- Drag Overlay Stamp: ACCEPT -->
+                                    <div x-show="tunerDragX > 45" class="absolute top-6 right-6 z-20 px-4 py-1.5 rounded-xl border-4 border-emerald-400 text-emerald-400 font-black text-lg uppercase tracking-widest rotate-12 bg-emerald-950/80 pointer-events-none">
+                                        ✅ RETENU
+                                    </div>
+
+                                    <!-- Drag Overlay Stamp: REJECT -->
+                                    <div x-show="tunerDragX < -45" class="absolute top-6 left-6 z-20 px-4 py-1.5 rounded-xl border-4 border-rose-500 text-rose-400 font-black text-lg uppercase tracking-widest -rotate-12 bg-rose-950/80 pointer-events-none">
+                                        ❌ ÉCARTÉ
+                                    </div>
+
+                                    <!-- Card Top Badges -->
+                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span :class="tunerCards[0].is_closed ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'"
+                                                  class="px-2.5 py-1 rounded-full text-[11px] font-bold border flex items-center gap-1.5">
+                                                <span x-text="tunerCards[0].is_closed ? '⚪ Archive / Clos' : '🟢 En Dépôt (Actif)'"></span>
+                                            </span>
+                                            <span class="px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold"
+                                                  x-text="tunerCards[0].sampling_label"></span>
+                                        </div>
+
+                                        <div class="flex items-center gap-2 text-xs font-mono">
+                                            <span class="text-slate-400" x-text="'#' + tunerCards[0].portal_id + ' • ' + tunerCards[0].reference"></span>
+                                            <span :class="tunerCards[0].tuned_score >= 70 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : (tunerCards[0].tuned_score >= 45 ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40')"
+                                                  class="px-2.5 py-1 rounded-xl font-black border"
+                                                  x-text="'Score: ' + tunerCards[0].tuned_score + '%'"></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tender Object / Title -->
+                                    <div>
+                                        <h3 class="text-base sm:text-lg font-extrabold text-white leading-snug" x-text="tunerCards[0].title"></h3>
+                                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
+                                            <span>🏛️ <strong class="text-slate-200" x-text="tunerCards[0].buyer_name"></strong></span>
+                                            <span>📍 <span x-text="tunerCards[0].execution_location"></span></span>
+                                            <span>🏷️ <span x-text="tunerCards[0].main_category"></span></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Highlighted Features / Tokens -->
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                        <template x-for="kw in tunerCards[0].keyword_highlights" :key="kw.term">
+                                            <span :class="{
+                                                    'bg-emerald-500/15 text-emerald-300 border-emerald-500/30': kw.type === 'positive',
+                                                    'bg-rose-500/15 text-rose-300 border-rose-500/30': kw.type === 'negative' || kw.type === 'exclusion',
+                                                    'bg-slate-800 text-slate-300 border-slate-700': kw.type === 'neutral'
+                                                  }"
+                                                  class="px-2 py-0.5 rounded-lg border text-[11px] font-mono flex items-center gap-1">
+                                                <span x-text="kw.term"></span>
+                                                <span x-show="kw.weight !== 0" class="opacity-75" x-text="(kw.weight > 0 ? '+' : '') + kw.weight"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+
+                                    <!-- Devis / Line Items Preview -->
+                                    <div class="bg-slate-950/80 rounded-2xl border border-slate-800/90 p-3.5 space-y-2">
+                                        <div class="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                            <span x-text="'📦 Articles au Devis (' + tunerCards[0].line_items_count + ')'"></span>
+                                            <button type="button" x-show="tunerCards[0].line_items.length > 3" @click.stop="tunerShowAllItems = !tunerShowAllItems" class="text-indigo-400 hover:text-indigo-300 normal-case font-semibold">
+                                                <span x-text="tunerShowAllItems ? 'Réduire (↑)' : 'Voir tout (↑)'"></span>
+                                            </button>
+                                        </div>
+                                        <div x-show="tunerCards[0].line_items.length === 0" class="text-xs text-slate-500 italic">
+                                            Aucun article détaillé structuré (jugement basé sur l'objet et l'acheteur).
+                                        </div>
+                                        <div class="space-y-1.5">
+                                            <template x-for="(item, idx) in (tunerShowAllItems ? tunerCards[0].line_items : tunerCards[0].line_items.slice(0, 3))" :key="idx">
+                                                <div class="flex items-start justify-between gap-3 text-xs py-1 border-b border-slate-800/50 last:border-0">
+                                                    <span class="text-slate-200 leading-snug" x-text="(idx + 1) + '. ' + item.designation"></span>
+                                                    <span class="text-slate-400 font-mono whitespace-nowrap shrink-0" x-text="item.quantity + ' ' + item.unit"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Confirmation Probe Prompt (after rejecting an unexpected or borderline avis) -->
+                        <div x-show="tunerConfirmationOptions.length > 0" x-transition class="w-full max-w-2xl bg-amber-950/30 border border-amber-500/40 rounded-2xl p-4 space-y-2.5 shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div class="text-xs font-bold text-amber-300 flex items-center gap-2">
+                                    <span>🔍</span>
+                                    <span>Confirmation de règle : pourquoi écartez-vous ce type d'avis ?</span>
+                                </div>
+                                <button type="button" @click="tunerConfirmationOptions = []" class="text-xs text-slate-400 hover:text-white">Ignorer</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <template x-for="opt in tunerConfirmationOptions" :key="opt.id">
+                                    <button type="button" @click="confirmTunerRule(opt)"
+                                            class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-amber-500/20 text-slate-200 hover:text-amber-200 border border-slate-700 hover:border-amber-500/50 text-xs font-semibold transition-all active:scale-95">
+                                        <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Tactile Action Buttons -->
+                        <div x-show="!tunerLoading && tunerCards.length > 0" class="flex items-center justify-center gap-4 pt-2">
+                            <button type="button" @click="swipeTunerCard('reject')"
+                                    class="px-6 py-3.5 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-2 border-rose-500/40 font-black text-sm flex items-center gap-2 shadow-lg transition-all active:scale-95">
+                                <span>❌</span> Écarter / NON <span class="text-[11px] font-mono opacity-75">(←)</span>
+                            </button>
+
+                            <button type="button" @click="swipeTunerCard('skip')"
+                                    class="px-4 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95">
+                                <span>⏭️</span> Passer <span class="text-[10px] font-mono opacity-75">(↓)</span>
+                            </button>
+
+                            <button type="button" @click="swipeTunerCard('accept')"
+                                    class="px-6 py-3.5 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-2 border-emerald-500/50 font-black text-sm flex items-center gap-2 shadow-lg transition-all active:scale-95">
+                                <span>✅</span> Retenir / OUI <span class="text-[11px] font-mono opacity-75">(→)</span>
+                            </button>
+                        </div>
+
+                        <div class="text-[11px] text-slate-500 font-mono text-center">
+                            Raccourcis clavier : <span class="text-slate-300">← / A</span> Écarter &bull; <span class="text-slate-300">→ / D</span> Retenir &bull; <span class="text-slate-300">↑ / W</span> Devis complet &bull; <span class="text-slate-300">Z</span> Annuler
+                        </div>
+                    </div>
+
+                    <!-- Right Sidebar: Learned Memory & Active Rules (4 cols) -->
+                    <div class="lg:col-span-4 space-y-4">
+                        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 space-y-4 shadow-xl">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
+                                    <span>🧬</span> Mémoire du Modèle
+                                </h3>
+                                <button type="button" @click="resetTunerSession()" class="text-[11px] text-rose-400 hover:text-rose-300 font-semibold">Réinitialiser</button>
+                            </div>
+
+                            <!-- Positive Learned Criteria -->
+                            <div class="space-y-2">
+                                <div class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Critères Renforcés (+)</div>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <template x-if="!tunerStats?.top_positive_keywords?.length">
+                                        <span class="text-xs text-slate-500 italic">Glissez à droite pour renforcer des critères...</span>
+                                    </template>
+                                    <template x-for="item in (tunerStats?.top_positive_keywords || [])" :key="item.term">
+                                        <span class="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono">
+                                            <span x-text="item.term"></span>
+                                            <span class="opacity-75" x-text="' +' + item.weight"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Confirmed Exclusions -->
+                            <div class="space-y-2 pt-3 border-t border-slate-800">
+                                <div class="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Exclusions &amp; Pénalités (-)</div>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <template x-if="!(tunerStats?.exclusion_keywords?.length || tunerStats?.top_negative_keywords?.length)">
+                                        <span class="text-xs text-slate-500 italic">Aucune exclusion apprise pour le moment.</span>
+                                    </template>
+                                    <template x-for="ex in (tunerStats?.exclusion_keywords || [])" :key="ex">
+                                        <span class="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-200 border border-rose-500/40 text-[11px] font-mono font-bold" x-text="'🚫 ' + ex"></span>
+                                    </template>
+                                    <template x-for="item in (tunerStats?.top_negative_keywords || [])" :key="item.term">
+                                        <span class="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-300 border border-rose-500/25 text-[11px] font-mono">
+                                            <span x-text="item.term"></span>
+                                            <span class="opacity-75" x-text="' ' + item.weight"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+                                <div class="flex justify-between">
+                                    <span>Sondes en attente :</span>
+                                    <span class="font-mono text-amber-400" x-text="tunerStats?.pending_probes_count || 0"></span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Dernière sauvegarde :</span>
+                                    <span class="font-mono text-slate-300" x-text="tunerStats?.last_saved_to_profile_at ? new Date(tunerStats.last_saved_to_profile_at).toLocaleTimeString('fr-FR') : 'Non enregistré'"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
 
             <!-- ========================================== -->
 
@@ -7464,6 +7769,20 @@
 
                 selectedProfile: 'it_hardware',
 
+                // Active Learning Swipe & Tune Studio State
+                tunerProfileId: 'special_ai_hybrid',
+                tunerScope: 'all',
+                tunerCards: [],
+                tunerStats: null,
+                tunerLoading: false,
+                tunerSaving: false,
+                tunerShowAllItems: false,
+                tunerConfirmationOptions: [],
+                tunerLastRejectedId: null,
+                tunerDragX: 0,
+                tunerStartX: 0,
+                tunerIsDragging: false,
+
                 availableProfiles: [],
                 sectorModalOpen: false,
                 selectedSectorId: 'it_hardware',
@@ -8002,6 +8321,28 @@
                     this.checkUrlHash();
 
                     window.addEventListener('hashchange', () => this.checkUrlHash());
+
+                    // Keyboard shortcuts for Active Learning Swipe & Tune Studio
+                    window.addEventListener('keydown', (e) => {
+                        if (this.activeModule !== 'tuner') return;
+                        if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+                        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                            e.preventDefault();
+                            this.swipeTunerCard('accept');
+                        } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                            e.preventDefault();
+                            this.swipeTunerCard('reject');
+                        } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                            e.preventDefault();
+                            this.swipeTunerCard('skip');
+                        } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                            e.preventDefault();
+                            this.tunerShowAllItems = !this.tunerShowAllItems;
+                        } else if (e.key === 'z' || e.key === 'Z') {
+                            e.preventDefault();
+                            this.undoTunerSwipe();
+                        }
+                    });
 
 
 
@@ -8788,6 +9129,7 @@
                         return (found.icon ? found.icon + ' ' : '') + found.profile_name;
                     }
                     const fallbackMap = {
+                        'special_ai_hybrid': '⚡ Solutions Numériques & IA (Profil Hybride Maître)',
                         'all': '🌐 Tous les Secteurs',
                         'it_hardware': '🖥️ Matériel Informatique & Réseaux',
                         'software_data': '💻 Logiciel & Données',
@@ -10716,7 +11058,7 @@
 
                     try {
 
-                        const url = `/api/admin/ingestion/audit-active${force ? '?force=true' : ''}`;
+                        const url = `/api/admin/ingestion/audit-active${force ? '?force=true&deep=true' : ''}`;
 
                         const res = await fetch(url);
 
@@ -10766,7 +11108,7 @@
 
                     this.reconcilingActive = true;
 
-                    const missingCount = this.activeAudit?.missing_count || 1;
+                    const missingCount = this.activeAudit?.missing_count || this.activeAudit?.total_unimported_count || 1;
 
                     this.showToast(`Importation et indexation de ${missingCount} avis actif(s)...`, 'info');
 
@@ -10780,7 +11122,9 @@
 
                             body: JSON.stringify({
 
-                                portal_ids: this.activeAudit?.missing_portal_ids || []
+                                portal_ids: this.activeAudit?.missing_portal_ids || [],
+
+                                sync_all: true
 
                             })
 
@@ -10832,37 +11176,37 @@
 
                 async triggerFullActiveSync(pages = null) {
 
-                    const totalUnimported = this.activeAudit?.total_unimported_count || Math.max(0, (this.activeAudit?.portal_total_active || 1850) - (this.activeAudit?.db_total_active || 407));
-
-                    const pagesNeeded = pages || this.activeAudit?.pages_needed_for_100_pct || Math.min(37, Math.max(1, Math.ceil(totalUnimported / 50)));
+                    const totalUnimported = this.activeAudit?.total_unimported_count || Math.max(0, (this.activeAudit?.portal_total_active || 1597) - (this.activeAudit?.db_total_active || 1485));
 
                     this.remediating = true;
 
-                    this.showToast(`Lancement de la synchronisation complète (${pagesNeeded} pages / ${totalUnimported} avis restants)...`, 'info');
+                    this.showToast(`🛡️ Lancement de la synchronisation 100% Marché Actif (${totalUnimported} avis ciblés)...`, 'info');
 
                     try {
 
-                        let pagesToSend = parseInt(pagesNeeded);
-
-                        let res = await fetch('/api/admin/ingestion/batches/trigger', {
+                        // Option 1 : Déclenchement du lot dédié de synchronisation 100% active avec stepper en temps réel
+                        let res = await fetch('/api/admin/ingestion/audit-active/sync-all', {
 
                             method: 'POST',
 
                             headers: {'Content-Type': 'application/json'},
 
-                            body: JSON.stringify({ pages: pagesToSend, send_emails: false })
+                            body: JSON.stringify({
+
+                                portal_ids: (this.activeAudit?.missing_portal_ids && this.activeAudit.missing_portal_ids.length > 0) ? this.activeAudit.missing_portal_ids : null
+
+                            })
 
                         });
 
 
 
-                        // Auto-adaptation de résilience si le serveur distant actif a la contrainte historique <= 10
+                        // Option 2 (Fallback) : Si l'API retourne 404 (serveur non redémarré), utiliser trigger batch
+                        if (!res.ok && res.status === 404) {
 
-                        if (res.status === 422 && pagesToSend > 10) {
+                            const pagesNeeded = pages || this.activeAudit?.pages_needed_for_100_pct || Math.min(40, Math.max(1, Math.ceil((this.activeAudit?.portal_total_active || 1600) / 50)));
 
-                            console.warn(`[Ingestion] Le serveur impose une limite <= 10 pages. Bascule automatique sur une tranche de 10 pages...`);
-
-                            pagesToSend = 10;
+                            let pagesToSend = parseInt(pagesNeeded);
 
                             res = await fetch('/api/admin/ingestion/batches/trigger', {
 
@@ -10874,9 +11218,19 @@
 
                             });
 
-                            if (res.ok) {
+                            if (res.status === 422 && pagesToSend > 10) {
 
-                                this.showToast("⚠️ Tranche de 10 pages (500 avis) lancée en mode compatibilité. Reconstruisez le conteneur Docker avec 'docker compose build --no-cache app' pour autoriser jusqu'à 100 pages d'un coup.", "warning");
+                                pagesToSend = 10;
+
+                                res = await fetch('/api/admin/ingestion/batches/trigger', {
+
+                                    method: 'POST',
+
+                                    headers: {'Content-Type': 'application/json'},
+
+                                    body: JSON.stringify({ pages: pagesToSend, send_emails: false })
+
+                                });
 
                             }
 
@@ -10888,7 +11242,7 @@
 
                         if (res.ok) {
 
-                            const successMsg = data.message || `⚡ Synchronisation initiée (${pagesToSend} pages / ${pagesToSend * 50} BDC) !`;
+                            const successMsg = data.message || `⚡ Synchronisation 100% Marché Actif initiée (${totalUnimported} avis) !`;
 
                             this.showToast(successMsg, 'success');
 
@@ -11195,6 +11549,201 @@
                 },
 
 
+
+                // ==========================================
+                // ACTIVE LEARNING SWIPE & TUNE METHODS
+                // ==========================================
+                async initTuner() {
+                    if (this.selectedProfile && this.selectedProfile !== 'all') {
+                        this.tunerProfileId = this.selectedProfile;
+                    }
+                    if (!this.tunerCards || this.tunerCards.length === 0) {
+                        await this.loadTunerCards();
+                    } else {
+                        await this.fetchTunerStats();
+                    }
+                },
+
+                async loadTunerCards() {
+                    this.tunerLoading = true;
+                    this.tunerShowAllItems = false;
+                    this.tunerDragX = 0;
+                    try {
+                        const res = await fetch(`/api/tuner/cards?profile_id=${encodeURIComponent(this.tunerProfileId)}&scope=${encodeURIComponent(this.tunerScope)}&limit=12`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.tunerCards = data.cards || [];
+                            this.tunerStats = data.stats || this.tunerStats;
+                        } else {
+                            this.showToast("Erreur lors du chargement des avis d'entraînement", "error");
+                        }
+                    } catch (e) {
+                        this.showToast("Erreur réseau : " + e, "error");
+                    } finally {
+                        this.tunerLoading = false;
+                    }
+                },
+
+                async fetchTunerStats() {
+                    try {
+                        const res = await fetch(`/api/tuner/stats?profile_id=${encodeURIComponent(this.tunerProfileId)}`);
+                        if (res.ok) {
+                            this.tunerStats = await res.json();
+                        }
+                    } catch (e) {}
+                },
+
+                startTunerDrag(e) {
+                    if (this.tunerLoading || this.tunerCards.length === 0) return;
+                    this.tunerIsDragging = true;
+                    this.tunerStartX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+                    this.tunerDragX = 0;
+                    if (e.currentTarget && e.currentTarget.setPointerCapture) {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+                    }
+                },
+
+                onTunerDrag(e) {
+                    if (!this.tunerIsDragging) return;
+                    const currentX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+                    this.tunerDragX = currentX - this.tunerStartX;
+                },
+
+                endTunerDrag(e) {
+                    if (!this.tunerIsDragging) return;
+                    this.tunerIsDragging = false;
+                    if (this.tunerDragX > 95) {
+                        this.swipeTunerCard('accept');
+                    } else if (this.tunerDragX < -95) {
+                        this.swipeTunerCard('reject');
+                    } else {
+                        this.tunerDragX = 0;
+                    }
+                },
+
+                async swipeTunerCard(decision) {
+                    if (!this.tunerCards || this.tunerCards.length === 0) return;
+                    const currentCard = this.tunerCards[0];
+
+                    // Animate offscreen before removing
+                    if (decision === 'accept') this.tunerDragX = 420;
+                    else if (decision === 'reject') this.tunerDragX = -420;
+                    else this.tunerDragX = 0;
+
+                    setTimeout(() => {
+                        this.tunerCards = this.tunerCards.slice(1);
+                        this.tunerDragX = 0;
+                        this.tunerShowAllItems = false;
+                        if (this.tunerCards.length <= 2) {
+                            this.loadTunerCards();
+                        }
+                    }, 180);
+
+                    try {
+                        const res = await fetch('/api/tuner/swipe', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                portal_id: currentCard.portal_id,
+                                profile_id: this.tunerProfileId,
+                                decision: decision,
+                                score_before: currentCard.tuned_score || 50.0,
+                                sampling_strategy: currentCard.sampling_strategy || 'uncertainty_boundary'
+                            })
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            await this.fetchTunerStats();
+                            if (data.needs_confirmation && data.confirmation_options?.length > 0) {
+                                this.tunerLastRejectedId = currentCard.portal_id;
+                                this.tunerConfirmationOptions = data.confirmation_options;
+                            } else {
+                                this.tunerConfirmationOptions = [];
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Swipe error:', e);
+                    }
+                },
+
+                async confirmTunerRule(opt) {
+                    try {
+                        const res = await fetch('/api/tuner/confirm-rule', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                profile_id: this.tunerProfileId,
+                                rule_type: opt.type,
+                                rule_value: opt.value,
+                                portal_id: this.tunerLastRejectedId
+                            })
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.showToast(data.message || 'Règle confirmée !', 'success');
+                            this.tunerConfirmationOptions = [];
+                            await this.fetchTunerStats();
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur confirmation : ' + e, 'error');
+                    }
+                },
+
+                async undoTunerSwipe() {
+                    try {
+                        const res = await fetch('/api/tuner/undo', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ profile_id: this.tunerProfileId })
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.showToast(data.message || 'Dernier swipe annulé', 'info');
+                            this.tunerConfirmationOptions = [];
+                            await this.loadTunerCards();
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur annulation : ' + e, 'error');
+                    }
+                },
+
+                async saveTunerLogic() {
+                    this.tunerSaving = true;
+                    try {
+                        const res = await fetch('/api/tuner/save-logic', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ profile_id: this.tunerProfileId })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            this.showToast(data.message || 'Logique enregistrée avec succès !', 'success');
+                            await this.fetchTunerStats();
+                            await this.fetchFeed();
+                        } else {
+                            this.showToast(data.detail || 'Erreur lors de la sauvegarde', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur réseau : ' + e, 'error');
+                    } finally {
+                        this.tunerSaving = false;
+                    }
+                },
+
+                async resetTunerSession() {
+                    try {
+                        const res = await fetch('/api/tuner/reset', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ profile_id: this.tunerProfileId })
+                        });
+                        if (res.ok) {
+                            this.showToast('Session réinitialisée', 'info');
+                            this.tunerConfirmationOptions = [];
+                            await this.loadTunerCards();
+                        }
+                    } catch (e) {}
+                },
 
                 get filteredBatches() {
 

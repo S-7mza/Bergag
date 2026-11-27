@@ -26,6 +26,10 @@ class DateAuditReconcileRequest(BaseModel):
 
 class ActiveAuditReconcileRequest(BaseModel):
     portal_ids: List[int] = Field(default_factory=list, description="Liste des identifiants BDC actifs manquants à importer (ou vide pour auto-détection)")
+    sync_all: bool = Field(default=False, description="Activer la synchronisation 100% de tous les avis actifs")
+
+class SyncAllActiveRequest(BaseModel):
+    portal_ids: Optional[List[int]] = Field(default=None, description="Identifiants spécifiques ou null pour balayage complet")
 
 class TriggerHistoricalBatchRequest(BaseModel):
     start_date: str = Field(description="Date de début (DD/MM/YYYY)")
@@ -87,13 +91,14 @@ async def reconcile_missing_date_items(
 @router.get("/audit-active")
 async def audit_active_tenders_endpoint(
     force: bool = Query(False, description="Forcer une nouvelle interrogation en direct du portail TGR"),
+    deep: bool = Query(False, description="Balayer exhaustivement l'intégralité des pages actives (100%)"),
     user: User = Depends(require_role(["admin", "analyst"]))
 ):
     """
     Audits active tenders exhaustiveness: guarantees that 100% of currently active consultations
     (submission deadline > now) on the public portal exist in the local database.
     """
-    return await batch_manager.audit_active_tenders_coverage(force_refresh=force)
+    return await batch_manager.audit_active_tenders_coverage(force_refresh=force, deep_scan=deep)
 
 @router.post("/audit-active/reconcile")
 async def reconcile_missing_active_items(
@@ -104,10 +109,40 @@ async def reconcile_missing_active_items(
     Directly targets and ingests missing active consultations so no business opportunity is lost.
     """
     p_ids = req.portal_ids if req else []
+    sync_all = req.sync_all if req else False
     return await batch_manager.reconcile_missing_active_tenders(
         portal_ids=p_ids,
-        user_name=user.full_name
+        user_name=user.full_name,
+        sync_all=sync_all
     )
+
+@router.post("/audit-active/sync-all")
+async def sync_all_active_tenders_endpoint(
+    bg_tasks: BackgroundTasks,
+    req: Optional[SyncAllActiveRequest] = None,
+    user: User = Depends(require_role(["admin"]))
+):
+    """
+    Triggers an autonomous 100% active market synchronization batch with real-time stepper.
+    Sweeps all open consultations on the portal, discovers every missing tender, and ingests them.
+    """
+    if batch_manager.active_batch is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Un lot d'ingestion ou de synchronisation est déjà en cours d'exécution. Veuillez patienter."
+        )
+
+    p_ids = req.portal_ids if req else None
+    bg_tasks.add_task(
+        batch_manager.execute_active_sync_batch,
+        user_name=user.full_name,
+        target_portal_ids=p_ids
+    )
+
+    return {
+        "status": "sync_started",
+        "message": f"🛡️ Synchronisation 100% Marché Actif lancée avec succès par {user.full_name}."
+    }
 
 @router.post("/probe-portal-gap")
 async def probe_portal_gap(user: User = Depends(require_role(["admin", "analyst"]))):

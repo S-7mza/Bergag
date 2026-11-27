@@ -16,7 +16,12 @@ from src.api.auth import (
     get_current_user,
     require_role,
     hash_password,
-    SYSTEM_USERS
+    SYSTEM_USERS,
+    check_login_rate_limit,
+    record_failed_login,
+    clear_failed_logins,
+    get_user_profile_scope,
+    set_user_profile_scope,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,12 +41,16 @@ class SwitchRoleRequest(BaseModel):
 class UpdateUserRoleRequest(BaseModel):
     role: str
     is_active: Optional[bool] = None
+    default_profile: Optional[str] = None
+    allowed_profiles: Optional[List[str]] = None
 
 @router.post("/login", response_model=LoginResponse)
 async def login(req: LoginRequest, session: AsyncSession = Depends(get_db_session)):
-    """Authenticates user against DB or memory store and returns signed session token with RBAC permissions"""
+    """Authenticates user against DB or memory store and returns signed session token with RBAC & profile scope"""
+    check_login_rate_limit(req.username_or_email)
     user = await authenticate_user_async(req.username_or_email, req.password, session=session)
     if not user:
+        record_failed_login(req.username_or_email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Identifiants incorrects. Vérifiez votre email et mot de passe."
@@ -52,8 +61,9 @@ async def login(req: LoginRequest, session: AsyncSession = Depends(get_db_sessio
             detail="Ce compte utilisateur est désactivé. Veuillez contacter un administrateur."
         )
 
+    clear_failed_logins(req.username_or_email)
     token = create_session_token(user.email, user.role)
-    logger.info(f"User '{user.email}' logged in successfully with role '{user.role}'")
+    logger.info(f"User '{user.email}' logged in successfully with role '{user.role}' (profile: {user.default_profile})")
     return LoginResponse(token=token, user=user)
 
 @router.get("/me", response_model=User)
@@ -74,6 +84,7 @@ async def switch_demo_role(req: SwitchRoleRequest):
         raise HTTPException(status_code=400, detail=f"Rôle '{req.role}' invalide")
 
     user_data = SYSTEM_USERS[email]
+    scope = get_user_profile_scope(user_data["email"], user_data["role"])
     user = User(
         id=user_data["id"],
         email=user_data["email"],
@@ -83,7 +94,9 @@ async def switch_demo_role(req: SwitchRoleRequest):
         title=user_data["title"],
         avatar_color=user_data["avatar_color"],
         permissions=user_data.get("permissions") or ROLE_PERMISSIONS.get(user_data["role"], ROLE_PERMISSIONS["viewer"]),
-        is_active=user_data.get("is_active", True)
+        is_active=user_data.get("is_active", True),
+        default_profile=scope["default_profile"],
+        allowed_profiles=scope["allowed_profiles"],
     )
     token = create_session_token(user.email, user.role)
     return LoginResponse(token=token, user=user)
@@ -99,38 +112,48 @@ async def list_team_users(
         res = await session.execute(stmt)
         db_users = res.scalars().all()
         if db_users:
-            return [
-                User(
-                    id=str(u.id),
-                    email=u.email,
-                    username=u.username,
-                    full_name=u.full_name,
-                    role=u.role,
-                    title=u.title,
-                    avatar_color=u.avatar_color,
-                    permissions=u.permissions,
-                    is_active=u.is_active
+            result_users = []
+            for u in db_users:
+                scope = get_user_profile_scope(u.email, u.role)
+                result_users.append(
+                    User(
+                        id=str(u.id),
+                        email=u.email,
+                        username=u.username,
+                        full_name=u.full_name,
+                        role=u.role,
+                        title=u.title,
+                        avatar_color=u.avatar_color,
+                        permissions=u.permissions,
+                        is_active=u.is_active,
+                        default_profile=scope["default_profile"],
+                        allowed_profiles=scope["allowed_profiles"],
+                    )
                 )
-                for u in db_users
-            ]
+            return result_users
     except Exception as e:
         logger.debug(f"DB user query fallback: {e}")
 
     # Fallback to seed accounts
-    return [
-        User(
-            id=d["id"],
-            email=d["email"],
-            username=d.get("username"),
-            full_name=d["full_name"],
-            role=d["role"],
-            title=d["title"],
-            avatar_color=d["avatar_color"],
-            permissions=d.get("permissions") or ROLE_PERMISSIONS.get(d["role"], ROLE_PERMISSIONS["viewer"]),
-            is_active=d.get("is_active", True)
+    fallback = []
+    for d in SYSTEM_USERS.values():
+        scope = get_user_profile_scope(d["email"], d["role"])
+        fallback.append(
+            User(
+                id=d["id"],
+                email=d["email"],
+                username=d.get("username"),
+                full_name=d["full_name"],
+                role=d["role"],
+                title=d["title"],
+                avatar_color=d["avatar_color"],
+                permissions=d.get("permissions") or ROLE_PERMISSIONS.get(d["role"], ROLE_PERMISSIONS["viewer"]),
+                is_active=d.get("is_active", True),
+                default_profile=scope["default_profile"],
+                allowed_profiles=scope["allowed_profiles"],
+            )
         )
-        for d in SYSTEM_USERS.values()
-    ]
+    return fallback
 
 @router.post("/users", response_model=User, status_code=status.HTTP_201_CREATED)
 async def create_user(
@@ -171,6 +194,7 @@ async def create_user(
         await session.commit()
         await session.refresh(new_db_user)
 
+        set_user_profile_scope(new_db_user.email, req.default_profile, req.allowed_profiles)
         logger.info(f"Admin {admin.email} created user {new_db_user.email} in DB with role {new_db_user.role}")
         return User(
             id=str(new_db_user.id),
@@ -181,7 +205,9 @@ async def create_user(
             title=new_db_user.title,
             avatar_color=new_db_user.avatar_color,
             permissions=new_db_user.permissions,
-            is_active=new_db_user.is_active
+            is_active=new_db_user.is_active,
+            default_profile=req.default_profile,
+            allowed_profiles=req.allowed_profiles,
         )
     except HTTPException:
         raise
@@ -208,6 +234,7 @@ async def create_user(
         "is_active": True
     }
     SYSTEM_USERS[clean_email] = user_dict
+    set_user_profile_scope(clean_email, req.default_profile, req.allowed_profiles)
 
     return User(
         id=user_id,
@@ -218,5 +245,77 @@ async def create_user(
         title=req.title.strip(),
         avatar_color=req.avatar_color,
         permissions=ROLE_PERMISSIONS[req.role],
-        is_active=True
+        is_active=True,
+        default_profile=req.default_profile,
+        allowed_profiles=req.allowed_profiles,
+    )
+
+
+@router.put("/users/{email}/access", response_model=User)
+async def update_user_access(
+    email: str,
+    req: UpdateUserRoleRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(require_role(["admin"]))
+):
+    """Updates a user's role, active state, and profile-based RBAC access (Admin only)."""
+    clean_email = email.strip().lower()
+    if req.role not in ROLE_PERMISSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rôle invalide '{req.role}'. Choix autorisés: {list(ROLE_PERMISSIONS.keys())}"
+        )
+
+    set_user_profile_scope(clean_email, req.default_profile, req.allowed_profiles)
+    scope = get_user_profile_scope(clean_email, req.role)
+
+    # 1. Update in PostgreSQL if present
+    try:
+        stmt = select(DBUser).where(DBUser.email.ilike(clean_email))
+        res = await session.execute(stmt)
+        db_user = res.scalar_one_or_none()
+        if db_user:
+            db_user.role = req.role
+            if req.is_active is not None:
+                db_user.is_active = req.is_active
+            await session.commit()
+            await session.refresh(db_user)
+            return User(
+                id=str(db_user.id),
+                email=db_user.email,
+                username=db_user.username,
+                full_name=db_user.full_name,
+                role=db_user.role,
+                title=db_user.title,
+                avatar_color=db_user.avatar_color,
+                permissions=db_user.permissions,
+                is_active=db_user.is_active,
+                default_profile=scope["default_profile"],
+                allowed_profiles=scope["allowed_profiles"],
+            )
+    except Exception as e:
+        logger.debug(f"DB update_user_access fallback: {e}")
+
+    # 2. Fallback to memory store
+    if clean_email not in SYSTEM_USERS:
+        raise HTTPException(status_code=404, detail=f"Utilisateur '{clean_email}' introuvable.")
+
+    u = SYSTEM_USERS[clean_email]
+    u["role"] = req.role
+    u["permissions"] = ROLE_PERMISSIONS[req.role]
+    if req.is_active is not None:
+        u["is_active"] = req.is_active
+
+    return User(
+        id=u["id"],
+        email=u["email"],
+        username=u.get("username"),
+        full_name=u["full_name"],
+        role=u["role"],
+        title=u["title"],
+        avatar_color=u["avatar_color"],
+        permissions=u["permissions"],
+        is_active=u["is_active"],
+        default_profile=scope["default_profile"],
+        allowed_profiles=scope["allowed_profiles"],
     )

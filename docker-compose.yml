@@ -63,7 +63,6 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-hamza}:${POSTGRES_PASSWORD:-rootpassword}@db:5432/${POSTGRES_DB:-marchespublics}
     volumes:
       - .:/app
-      - app_data:/app/data
       - app_logs:/app/logs
     command: ["python", "-m", "src.scheduler.jobs", "--daemon", "--interval", "3600"]
 
