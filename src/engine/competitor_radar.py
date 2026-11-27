@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select, func, desc, extract
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.models.tender import Award
+from src.models.tender import Award, Tender
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +210,8 @@ class CompetitorRadar:
             nature = classify_award_nature(a.title_raw)
             amt = float(a.amount_ttc or 0.0)
             wins.append({
+                "award_id": str(a.id),
+                "tender_id": a.tender_id,
                 "reference": a.reference,
                 "title": a.title_raw,
                 "nature": nature,
@@ -230,6 +232,55 @@ class CompetitorRadar:
             key=lambda n: (-n["count"], -n["total_mad"]),
         )
 
+        # Fetch awards won by OTHER suppliers at the same public buyers (rival context)
+        rival_awards: List[Dict[str, Any]] = []
+        rivals_map: Dict[str, Dict[str, Any]] = {}
+        target_buyers = [b for b in buyers_set if b][:10]
+        if target_buyers:
+            rival_stmt = (
+                select(Award)
+                .where(Award.buyer_name_raw.in_(target_buyers))
+                .where(Award.status == "Attribué")
+                .where(Award.winner_name != "")
+                .where(Award.winner_name != "—")
+                .where(~Award.winner_name.ilike(winner_name.strip()))
+            )
+            if title_keyword and title_keyword.strip():
+                rival_stmt = rival_stmt.where(Award.title_raw.ilike(f"%{title_keyword.strip()}%"))
+            if year:
+                rival_stmt = rival_stmt.where(extract("year", Award.published_at) == year)
+            elif months and months > 0:
+                cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
+                rival_stmt = rival_stmt.where(Award.published_at >= cutoff)
+
+            rival_stmt = rival_stmt.order_by(desc(Award.published_at)).limit(40)
+            rival_res = await self.session.execute(rival_stmt)
+            for ra in rival_res.scalars().all():
+                amt = float(ra.amount_ttc or 0.0)
+                nature = classify_award_nature(ra.title_raw)
+                rival_awards.append({
+                    "reference": ra.reference,
+                    "title": ra.title_raw,
+                    "nature": nature,
+                    "buyer": ra.buyer_name_raw,
+                    "winner_name": ra.winner_name,
+                    "amount_ttc": amt,
+                    "devis_count": ra.devis_received_count,
+                    "awarded_at": ra.published_at.strftime("%d/%m/%Y") if ra.published_at else "",
+                })
+                r_entry = rivals_map.setdefault(ra.winner_name, {
+                    "winner_name": ra.winner_name,
+                    "wins_count": 0,
+                    "total_mad": 0.0,
+                })
+                r_entry["wins_count"] += 1
+                r_entry["total_mad"] += amt
+
+        rivals_summary = sorted(
+            rivals_map.values(),
+            key=lambda x: (-x["wins_count"], -x["total_mad"]),
+        )[:6]
+
         return {
             "winner_name": winner_name,
             "found": True,
@@ -240,6 +291,8 @@ class CompetitorRadar:
             "top_client_buyers": list(buyers_set)[:5],
             "nature_breakdown": nature_breakdown,
             "recent_wins": wins,
+            "rival_awards_at_buyers": rival_awards,
+            "rivals_summary": rivals_summary,
         }
 
     async def get_supplier_awards(
@@ -310,5 +363,74 @@ class CompetitorRadar:
                 }
                 for a in awards
             ],
+        }
+
+    async def get_award_detail(self, award_id: str) -> Dict[str, Any]:
+        """
+        Returns full detail for a closed award. If linked to a Tender (either via
+        tender_id or compound_natural_key), returns linked=True + tender_id so the
+        UI can open the full Fiche 60s modal; otherwise returns a Fiche 60s-compatible
+        closed-award dossier.
+        """
+        import uuid as _uuid
+        try:
+            parsed_id = _uuid.UUID(str(award_id))
+        except ValueError:
+            return {"found": False}
+
+        stmt = select(Award).where(Award.id == parsed_id)
+        a = (await self.session.execute(stmt)).scalar_one_or_none()
+        if not a:
+            return {"found": False}
+
+        linked_tender_id = a.tender_id
+        if not linked_tender_id and a.compound_ref_key:
+            t_stmt = select(Tender.portal_id).where(Tender.compound_natural_key == a.compound_ref_key)
+            linked_tender_id = (await self.session.execute(t_stmt)).scalar_one_or_none()
+
+        if linked_tender_id:
+            return {
+                "found": True,
+                "linked": True,
+                "tender_id": linked_tender_id,
+                "award_id": str(a.id),
+            }
+
+        amt = float(a.amount_ttc or 0.0)
+        nature = classify_award_nature(a.title_raw)
+        devis_txt = f"{a.devis_received_count} devis reçus" if a.devis_received_count else "nb. devis non précisé"
+        rationale = (
+            f"Avis clôturé ({a.status}) · Attributaire : {a.winner_name} "
+            f"pour {amt:,.0f} DH TTC ({devis_txt}).".replace(",", " ")
+        )
+
+        return {
+            "found": True,
+            "linked": False,
+            "tender_id": None,
+            "award": {
+                "is_closed_award": True,
+                "award_id": str(a.id),
+                "portal_id": None,
+                "reference": a.reference,
+                "title": a.title_raw,
+                "buyer_name": a.buyer_name_raw,
+                "winner_name": a.winner_name,
+                "amount_ttc": amt,
+                "devis_count": a.devis_received_count,
+                "execution_location": "Maroc (Archive TGR)",
+                "main_category": nature,
+                "prestation_type": a.status,
+                "published_at": a.published_at.isoformat() if a.published_at else None,
+                "deadline_at": a.published_at.isoformat() if a.published_at else None,
+                "status": "cloture",
+                "award_status": a.status,
+                "decision_verdict": "CLÔTURÉ",
+                "match_score": 0.0,
+                "decision_rationale": rationale,
+                "line_items": [],
+                "attachment_available": False,
+                "portal_url": "https://www.marchespublics.gov.ma/bdc/entreprise/consultation/resultat",
+            },
         }
 

@@ -66,7 +66,7 @@ class AIAvisDiagnostician:
             "weight": 1.0,
             "patterns": [
                 r"\blogiciel\b", r"\bdéveloppement\b", r"\bdeveloppement\b", r"\bprogiciel\b",
-                r"\bapplication(?:\s+métier|\s+mobile)?\b", r"\bsur\s+mesure\b", r"\bgénie\s+logiciel\b",
+                r"\bapplication\s+(?:métier|mobile|web|informatique|de\s+gestion)\b", r"\bsur\s+mesure\b", r"\bgénie\s+logiciel\b",
                 r"\bcode\s+source\b", r"\bbackend\b", r"\bback-end\b", r"\bmicroservices?\b",
                 r"\bpython\b", r"\bjava\b", r"\bspring\s+boot\b", r"\bc#\b", r"\b\.net\b",
                 r"\bgolang\b", r"\bflutter\b", r"\breact\s+native\b", r"\bios\b", r"\bandroid\b",
@@ -78,7 +78,8 @@ class AIAvisDiagnostician:
                 "python": "Python", "java": "Java", "spring": "Spring Boot", "c#": "C# / .NET",
                 "flutter": "Flutter", "android": "Android", "ios": "iOS Mobile", "microservice": "Microservices",
                 "tma": "TMA / Tierce Maintenance", "ged": "GED / Dématérialisation",
-                "progiciel": "Progiciel Métier", "application": "Application Sur Mesure"
+                "progiciel": "Progiciel Métier", "application métier": "Application Sur Mesure",
+                "application mobile": "Application Mobile"
             }
         },
         "data_engineering_bi": {
@@ -87,14 +88,15 @@ class AIAvisDiagnostician:
             "patterns": [
                 r"\bbusiness\s+intelligence\b", r"\bbi\b", r"\bdécisionnel\b", r"\bdecisionnel\b",
                 r"\btableau\s+de\s+bord\b", r"\bdashboard\b", r"\bentrepôt\s+de\s+données\b",
-                r"\bdata\s+warehouse\b", r"\bdatamart\b", r"\betl\b", r"\belt\b", r"\bpipeline\b",
+                r"\bdata\s+warehouse\b", r"\bdatamart\b", r"\betl\b", r"\belt\b",
+                r"\bpipeline\s+(?:de\s+données|data|etl)\b",
                 r"\bsql\b", r"\bpostgresql\b", r"\bmysql\b", r"\boracle\b", r"\bpower\s*bi\b",
-                r"\btableau(?:\s+software)?\b", r"\bsuperset\b", r"\bmetabase\b", r"\breporting\b",
+                r"\btableau\s+software\b", r"\bsuperset\b", r"\bmetabase\b", r"\breporting\b",
                 r"\banalytics?\b", r"\bmigration\s+de\s+données\b", r"\bgouvernance\s+des\s+données\b",
                 r"\bqualité\s+des\s+données\b", r"\btraitement\s+de\s+données\b", r"\bbig\s+data\b"
             ],
             "display_terms": {
-                "power bi": "Power BI", "powerbi": "Power BI", "tableau": "Tableau BI",
+                "power bi": "Power BI", "powerbi": "Power BI", "tableau software": "Tableau BI",
                 "superset": "Apache Superset", "etl": "ETL / Pipeline Data", "postgresql": "PostgreSQL",
                 "oracle": "Oracle DB", "sql": "SQL Database", "tableau de bord": "Dashboard BI",
                 "décisionnel": "Business Intelligence", "data warehouse": "Data Warehouse"
@@ -137,7 +139,10 @@ class AIAvisDiagnostician:
     HARDWARE_PATTERNS = [
         (r"\bimprimante\b", "Imprimantes"),
         (r"\bphotocopieur\b", "Photocopieurs"),
+        (r"\bduplicopieur\b", "Duplicopieurs"),
+        (r"\bscanner\b", "Scanners"),
         (r"\btoner\b|\bcartouche\b", "Consommables d'impression"),
+        (r"\bmatériel\s+de\s+bureau\b|\bmobilier\s+de\s+bureau\b", "Matériel & mobilier de bureau"),
         (r"\bserveur\s+(?:rack|en\s+baie|physique)\b", "Serveurs physiques en rack"),
         (r"\bcâblage\s+(?:informatique|réseau|rj45|cuivre)\b", "Câblage physique / Courants faibles"),
         (r"\barmoire\s+de\s+brassage\b", "Armoire de brassage physique"),
@@ -147,11 +152,14 @@ class AIAvisDiagnostician:
         (r"\bswitch\b|\brouteur\b|\bpare-feu\s+physique\b", "Équipements réseau physiques")
     ]
 
-    # Non-IT strictly incompatible indicators (Stage 1 drop)
+    # Non-IT strictly incompatible indicators (Stage 1 drop, checked on intent/title/designations)
     NON_IT_VETO_PATTERNS = [
         (r"\b(?:camion|engin|tracteur|benne|voiture|ambulance|véhicule|vehicule|vidange|pneus?|gasoil|carburant)\b", "Véhicules, transport ou carburants"),
         (r"\b(?:génie\s+civil|travaux\s+de\s+construction|maçonnerie|peinture|plomberie|étanchéité|bâtiment)\b", "Travaux de BTP & Construction civile"),
-        (r"\b(?:gardiennage|nettoyage\s+des\s+locaux|sécurité\s+gardiennage|restauration|traiteur|pause\s+café)\b", "Services généraux, gardiennage ou traiteur")
+        (r"\b(?:gardiennage|nettoyage\s+des\s+locaux|sécurité\s+gardiennage|restauration|traiteur|pause\s+café)\b", "Services généraux, gardiennage ou traiteur"),
+        (r"\b(?:médicaments?|réactifs?\s+de\s+laboratoire|dispositifs?\s+médicaux|chirurgie|dentaire|radiologie)\b", "Médical, laboratoire ou pharmacie"),
+        (r"\b(?:dératisation|désinsectisation|désinfection|espaces?\s+verts?|jardinage|engrais|semences|aliments?\s+de\s+bétail)\b", "Hygiène, espaces verts ou agriculture"),
+        (r"\b(?:habillement|tenues?\s+de\s+travail|chaussures\s+de\s+sécurité|mobilier\s+scolaire|billetterie\s+aérienne|hébergement\s+hôtelier)\b", "Habillement, mobilier scolaire ou voyages"),
     ]
 
     @classmethod
@@ -204,10 +212,13 @@ class AIAvisDiagnostician:
             items_text_list.append(f"{desig} {specs}")
 
         full_corpus = " ".join(combined_text_parts).lower()
+        intent_corpus = " ".join([title, prestation, category] + [
+            (item.get("designation") or "") for item in line_items
+        ]).lower()
 
-        # Check non-IT veto
+        # Check non-IT veto against intent_corpus (title, prestation, designations)
         for pattern, reason in cls.NON_IT_VETO_PATTERNS:
-            if re.search(pattern, full_corpus, re.IGNORECASE):
+            if re.search(pattern, intent_corpus, re.IGNORECASE):
                 return AIMatchingDiagnosis(
                     matching_rate=0.0,
                     rating_label="MISMATCH",
@@ -223,20 +234,81 @@ class AIAvisDiagnostician:
                     diagnostic_summary=f"Disqualifié d'emblée : la consultation concerne des prestations de {reason.lower()} sans composante de programmation."
                 )
 
-        # 2. Evaluate Pillar Scores & Extract Detected Technologies
+        # 2. Analyze Line Items FIRST: Software vs Hardware Breakdown
+        # Checking hardware designation before specs prevents printer compatibility lists
+        # (e.g. "compatible Android, iOS, Cloud") from being misclassified as software items.
+        software_items_count = 0
+        hardware_items_count = 0
+        unmatched_items = []
+
+        detected_hardware_types = []
+        for pat, hw_label in cls.HARDWARE_PATTERNS:
+            if re.search(pat, full_corpus, re.IGNORECASE):
+                detected_hardware_types.append(hw_label)
+
+        total_items = max(len(line_items), 1)
+        for item in line_items:
+            desig = (item.get("designation") or "").lower()
+            specs = (item.get("technical_specs") or "").lower()
+            item_text = f"{desig} {specs}"
+
+            is_hw_desig = any(
+                re.search(pat, desig, re.IGNORECASE)
+                for pat, _ in cls.HARDWARE_PATTERNS
+            )
+            is_sw_desig = any(
+                re.search(pat, desig, re.IGNORECASE)
+                for conf in cls.PILLARS.values()
+                for pat in conf["patterns"]
+            )
+            is_sw_full = any(
+                re.search(pat, item_text, re.IGNORECASE)
+                for conf in cls.PILLARS.values()
+                for pat in conf["patterns"]
+            )
+            is_hw_full = any(
+                re.search(pat, item_text, re.IGNORECASE)
+                for pat, _ in cls.HARDWARE_PATTERNS
+            )
+
+            if is_hw_desig and not is_sw_desig:
+                hardware_items_count += 1
+            elif is_sw_full and not is_hw_desig:
+                software_items_count += 1
+            elif is_hw_full:
+                hardware_items_count += 1
+            else:
+                unmatched_items.append(item.get("designation", "Article non qualifié"))
+
+        # 3. Assess Hardware Dependency
+        if not detected_hardware_types and hardware_items_count == 0:
+            hardware_dep = "NONE"
+        elif software_items_count > hardware_items_count:
+            hardware_dep = "LOW"
+        elif software_items_count == hardware_items_count and software_items_count > 0:
+            hardware_dep = "MEDIUM"
+        else:
+            hardware_dep = "HIGH"
+
+        # 4. Evaluate Pillar Scores & Extract Detected Technologies
+        # If the tender is predominantly physical hardware, score pillars against
+        # intent_corpus (title, prestation, designations) so OS/Cloud compatibility
+        # clauses inside hardware datasheets do not trigger software pillars.
+        scoring_corpus = intent_corpus if (hardware_dep == "HIGH" and software_items_count == 0) else full_corpus
+
         pillar_results: Dict[str, PillarScore] = {}
         all_detected_techs = set()
 
         for pillar_id, conf in cls.PILLARS.items():
             matches = []
             for pat in conf["patterns"]:
-                found = re.findall(pat, full_corpus, re.IGNORECASE)
+                found = re.findall(pat, scoring_corpus, re.IGNORECASE)
                 if found:
                     matches.extend(found)
 
-            # Map to display terms
+            # Map to display terms using strict word boundaries
             for term_key, display_label in conf["display_terms"].items():
-                if term_key in full_corpus:
+                if re.search(rf"\b{re.escape(term_key)}\b", scoring_corpus, re.IGNORECASE):
                     all_detected_techs.add(display_label)
 
             # Compute normalized score for this pillar (0-100)
@@ -255,47 +327,6 @@ class AIAvisDiagnostician:
                 p_score = 0.0
 
             pillar_results[pillar_id] = PillarScore(score=p_score, matched_keywords=matches)
-
-        # 3. Analyze Line Items: Software vs Hardware Breakdown
-        software_items_count = 0
-        hardware_items_count = 0
-        unmatched_items = []
-
-        detected_hardware_types = []
-        for pat, hw_label in cls.HARDWARE_PATTERNS:
-            if re.search(pat, full_corpus, re.IGNORECASE):
-                detected_hardware_types.append(hw_label)
-
-        total_items = max(len(line_items), 1)
-        for item in line_items:
-            item_text = f"{item.get('designation', '')} {item.get('technical_specs', '')}".lower()
-            
-            is_sw = any(
-                re.search(pat, item_text, re.IGNORECASE)
-                for conf in cls.PILLARS.values()
-                for pat in conf["patterns"]
-            )
-            is_hw = any(
-                re.search(pat, item_text, re.IGNORECASE)
-                for pat, _ in cls.HARDWARE_PATTERNS
-            )
-
-            if is_sw:
-                software_items_count += 1
-            elif is_hw:
-                hardware_items_count += 1
-            else:
-                unmatched_items.append(item.get("designation", "Article non qualifié"))
-
-        # 4. Assess Hardware Dependency
-        if not detected_hardware_types and hardware_items_count == 0:
-            hardware_dep = "NONE"
-        elif software_items_count > hardware_items_count:
-            hardware_dep = "LOW"
-        elif software_items_count == hardware_items_count and software_items_count > 0:
-            hardware_dep = "MEDIUM"
-        else:
-            hardware_dep = "HIGH"
 
         # 5. Determine Primary Domain
         best_pillar = max(pillar_results.keys(), key=lambda k: pillar_results[k].score)

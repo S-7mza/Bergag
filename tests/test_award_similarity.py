@@ -124,3 +124,39 @@ def test_analyze_candidates_handles_empty_gracefully():
     assert result["price_estimation"]["confidence"] == "Aucune"
     assert result["top_competitors"] == []
     assert result["similar_awards"] == []
+
+
+def test_institution_name_does_not_match_unrelated_catering_or_ac():
+    """
+    Regression for BDC #411863: 'Achat de matériel de bureau pour la Faculté d'Economie et de Gestion de Safi'
+    must NOT match 'Restauration ... Faculté d'Economie et de Gestion de Kenitra' just because of institution words.
+    """
+    candidates = [
+        _make_award(
+            reference="CATER/2026",
+            title="Restauration dans le cadre des concours de master à la Faculté d'Economie et de Gestion de Kenitra",
+            buyer="FACULTE D'ECONOMIE ET DE GESTION KENITRA",
+            winner="Chraibi Amina",
+            amount_ttc=3575.0,
+        ),
+        _make_award(
+            reference="OFFICE/2026",
+            title="Achat de fourniture de bureau au profit de la Faculté d'Economie et de Gestion D'EL KELAA DES SRAGHNA",
+            buyer="FACULTE D'ECONOMIE ET DE GESTION D'EL KELAA DES SRAGHNA",
+            winner="TAJ NOVA SARL",
+            amount_ttc=32843.0,
+        ),
+    ]
+
+    result = AwardSimilarityEngine.analyze_candidates(
+        tender_title="Achat de matériel de bureau pour la Faculté d'Economie et de Gestion de Safi",
+        buyer_name="FACULTE D'ECONOMIE ET DE GESTION DE SAFI",
+        line_item_titles=["Imprimante Multifonction Laser Monochrome A3", "Duplicopieur A4/A3", "Scanner A3"],
+        candidates=candidates,
+        min_similarity=20.0,
+        limit=10,
+    )
+
+    matched_refs = [a["reference"] for a in result["similar_awards"]]
+    assert "CATER/2026" not in matched_refs
+    assert "OFFICE/2026" in matched_refs

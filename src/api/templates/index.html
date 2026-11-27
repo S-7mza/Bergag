@@ -2994,7 +2994,7 @@
                                         <th class="py-2.5 px-2 text-center">Victoires</th>
                                         <th class="py-2.5 px-2 text-right">Ticket moy.</th>
                                         <th class="py-2.5 px-2 text-right">Total adjugé</th>
-                                        <th class="py-2.5 px-2 text-center">Devis</th>
+                                        <th class="py-2.5 px-2 text-center" title="Total des devis reçus par les acheteurs sur les BDC remportés">Devis reçus</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-800/60">
@@ -3054,7 +3054,9 @@
                             <div x-show="!competitorHover.loading && competitorHover.data?.found"
                                  class="max-h-72 overflow-y-auto divide-y divide-slate-800/70">
                                 <template x-for="(w, idx) in (competitorHover.data?.recent_wins || [])" :key="w.reference + '-' + idx">
-                                    <div class="px-4 py-2.5 hover:bg-slate-800/40 transition-colors space-y-1">
+                                    <div @click="openAwardDetail(w)"
+                                         title="Cliquer pour voir le détail de cet avis"
+                                         class="px-4 py-2.5 hover:bg-slate-800/50 transition-colors space-y-1 cursor-pointer">
                                         <div class="flex items-center justify-between gap-2">
                                             <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border"
                                                   :class="getNatureBadgeClass(w.nature)"
@@ -3200,22 +3202,83 @@
                                         </div>
                                     </div>
 
-                                    <div class="space-y-1.5">
-                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Derniers marchés remportés</span>
+                                    <!-- Dossier Tabs: Won Bids vs Rival Awards at Same Buyers -->
+                                    <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+                                        <button type="button"
+                                                @click="competitorDossierTab = 'wins'"
+                                                :class="competitorDossierTab === 'wins' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35 font-semibold' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'"
+                                                class="px-3 py-1.5 rounded-lg border text-xs transition-colors">
+                                            Ses marchés remportés (<span x-text="competitorDossier.recent_wins?.length || 0"></span>)
+                                        </button>
+                                        <button type="button"
+                                                @click="competitorDossierTab = 'rivals'"
+                                                :class="competitorDossierTab === 'rivals' ? 'bg-amber-500/15 text-amber-300 border-amber-500/35 font-semibold' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'"
+                                                class="px-3 py-1.5 rounded-lg border text-xs transition-colors">
+                                            Concurrents chez ses acheteurs (<span x-text="competitorDossier.rival_awards_at_buyers?.length || 0"></span>)
+                                        </button>
+                                    </div>
+
+                                    <!-- Tab 1: Won Contracts -->
+                                    <div x-show="competitorDossierTab === 'wins'" class="space-y-1.5">
                                         <div class="divide-y divide-slate-800/70 bg-slate-950/70 border border-slate-800 rounded-xl overflow-hidden">
-                                            <template x-for="w in competitorDossier.recent_wins" :key="w.reference + w.awarded_at">
-                                                <div class="px-3 py-2.5 flex items-center justify-between gap-3 text-xs">
+                                            <template x-for="(w, idx) in (competitorDossier.recent_wins || [])" :key="w.reference + '-' + w.awarded_at + '-' + idx">
+                                                <div @click="openAwardDetail(w)"
+                                                     title="Cliquer pour ouvrir le détail de cet avis"
+                                                     class="px-3 py-2.5 flex items-center justify-between gap-3 text-xs hover:bg-slate-800/55 transition-colors cursor-pointer group">
                                                     <div class="min-w-0">
-                                                        <div class="font-medium text-slate-100 truncate" :title="w.title" x-text="w.title"></div>
+                                                        <div class="font-medium text-slate-100 group-hover:text-emerald-300 truncate transition-colors" :title="w.title" x-text="w.title"></div>
                                                         <div class="text-[11px] text-slate-400 truncate mt-0.5">
                                                             <span class="font-mono text-slate-300" x-text="w.reference"></span>
                                                             <span> · </span>
                                                             <span x-text="w.buyer"></span>
                                                             <span> · </span>
                                                             <span x-text="w.awarded_at"></span>
+                                                            <span x-show="w.devis_count" class="text-slate-500" x-text="' · ' + w.devis_count + ' devis reçus'"></span>
                                                         </div>
                                                     </div>
                                                     <div class="font-mono font-bold text-emerald-400 tabular-nums shrink-0" x-text="Math.round(w.amount_ttc || 0).toLocaleString('fr-FR') + ' DH'"></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tab 2: Rival Awards at Same Buyers -->
+                                    <div x-show="competitorDossierTab === 'rivals'" class="space-y-3">
+                                        <p class="text-[11px] text-slate-400">
+                                            Note : le portail TGR ne publie pas la liste des soumissionnaires non retenus. Voici les marchés remportés par d'autres prestataires chez les mêmes acheteurs publics.
+                                        </p>
+
+                                        <div x-show="competitorDossier.rivals_summary?.length > 0" class="flex flex-wrap gap-1.5">
+                                            <template x-for="rv in competitorDossier.rivals_summary" :key="rv.winner_name">
+                                                <button type="button"
+                                                        @click="openCompetitorDossier(rv.winner_name)"
+                                                        class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-amber-500/10 text-slate-300 hover:text-amber-200 border border-slate-800 hover:border-amber-500/30 text-[11px] transition-colors">
+                                                    <span class="font-semibold" x-text="rv.winner_name"></span>
+                                                    <span class="font-mono text-slate-400 ml-1" x-text="'(' + rv.wins_count + '× · ' + Math.round(rv.total_mad).toLocaleString('fr-FR') + ' DH)'"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+
+                                        <div x-show="!competitorDossier.rival_awards_at_buyers || competitorDossier.rival_awards_at_buyers.length === 0"
+                                             class="py-6 text-center text-xs text-slate-400 bg-slate-950/60 rounded-xl border border-slate-800">
+                                            Aucun autre marché attribué enregistré chez ces acheteurs.
+                                        </div>
+
+                                        <div x-show="competitorDossier.rival_awards_at_buyers?.length > 0"
+                                             class="divide-y divide-slate-800/70 bg-slate-950/70 border border-slate-800 rounded-xl overflow-hidden">
+                                            <template x-for="(ra, idx) in competitorDossier.rival_awards_at_buyers" :key="ra.reference + '-' + idx">
+                                                <div class="px-3 py-2.5 flex items-center justify-between gap-3 text-xs">
+                                                    <div class="min-w-0">
+                                                        <div class="font-medium text-slate-100 truncate" :title="ra.title" x-text="ra.title"></div>
+                                                        <div class="text-[11px] text-slate-400 truncate mt-0.5">
+                                                            <span class="text-amber-300 font-semibold" x-text="ra.winner_name"></span>
+                                                            <span> · </span>
+                                                            <span x-text="ra.buyer"></span>
+                                                            <span> · </span>
+                                                            <span x-text="ra.awarded_at"></span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="font-mono font-bold text-slate-200 tabular-nums shrink-0" x-text="Math.round(ra.amount_ttc || 0).toLocaleString('fr-FR') + ' DH'"></div>
                                                 </div>
                                             </template>
                                         </div>
@@ -6604,6 +6667,20 @@
                         <div class="mt-2.5">
                             <span class="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20 inline-block mb-1.5">Objet de la Consultation</span>
                             <h3 class="text-lg sm:text-xl font-bold text-white leading-snug max-w-3xl" x-text="activeTender?.title"></h3>
+                            <div x-show="activeTender?.is_closed_award" class="mt-3 p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex flex-wrap items-center gap-4 text-xs">
+                                <div>
+                                    <span class="text-[10px] font-mono uppercase text-slate-400 block">Attributaire</span>
+                                    <span class="font-bold text-white" x-text="activeTender?.winner_name"></span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] font-mono uppercase text-slate-400 block">Montant Adjugé</span>
+                                    <span class="font-mono font-bold text-emerald-400" x-text="Math.round(activeTender?.amount_ttc || 0).toLocaleString('fr-FR') + ' DH TTC'"></span>
+                                </div>
+                                <div x-show="activeTender?.devis_count">
+                                    <span class="text-[10px] font-mono uppercase text-slate-400 block">Concurrence</span>
+                                    <span class="font-mono font-semibold text-indigo-300" x-text="activeTender?.devis_count + ' devis reçus'"></span>
+                                </div>
+                            </div>
                         </div>
 
                     </div>
@@ -8077,6 +8154,7 @@
                 competitorDossier: null,
                 competitorDossierOpen: false,
                 competitorDossierLoading: false,
+                competitorDossierTab: 'wins',
                 competitorHover: {
                     visible: false,
                     loading: false,
@@ -10288,6 +10366,38 @@
 
                 cancelCompetitorHoverLeave() {
                     clearTimeout(this.competitorHover._leaveTimer);
+                },
+
+                async openAwardDetail(w) {
+                    if (!w) return;
+                    this.competitorHover.visible = false;
+                    if (w.tender_id) {
+                        await this.openModal(w.tender_id);
+                        return;
+                    }
+                    if (!w.award_id) {
+                        this.showToast('Identifiant de marché manquant pour cet avis.', 'error');
+                        return;
+                    }
+                    try {
+                        const res = await fetch('/api/analytics/awards/' + encodeURIComponent(w.award_id));
+                        if (!res.ok) throw new Error('Avis introuvable');
+                        const data = await res.json();
+                        if (data.linked && data.tender_id) {
+                            await this.openModal(data.tender_id);
+                            return;
+                        }
+                        if (data.award) {
+                            this.activeTender = data.award;
+                            this.pricingData = null;
+                            this.attachmentFilesData = null;
+                            this.similarAwardsData = null;
+                            this.similarAwardsLoading = false;
+                            this.modalOpen = true;
+                        }
+                    } catch (e) {
+                        this.showToast('Impossible de charger le détail de cet avis clôturé.', 'error');
+                    }
                 },
 
                 async openCompetitorDossier(winnerName) {

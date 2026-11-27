@@ -8,6 +8,7 @@ from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.tender import Award, Tender
+from src.engine.competitor_radar import classify_award_nature
 
 _FRENCH_PROCUREMENT_STOPWORDS: Set[str] = {
     "achat", "fourniture", "fournitures", "acquisition", "mise", "place",
@@ -21,7 +22,17 @@ _FRENCH_PROCUREMENT_STOPWORDS: Set[str] = {
     "qui", "que", "dont", "maroc", "marche", "bdc", "bon", "commande",
     "consultation", "avis", "objet", "etc", "suite", "titre", "annuel",
     "annuelle", "besoins", "realisation", "execution", "equipement",
-    "equipements", "materiel", "materiels",
+    "equipements", "materiel", "materiels", "compte",
+    "pose", "installation", "entretien", "reparation", "renovation",
+    "amenagement", "dotation", "livraison", "confection", "edition",
+    # Institutional / geographic words that belong to buyer identity, not prestation subject
+    "faculte", "universite", "institut", "ecole", "superieure", "nationale",
+    "hopital", "hospitalier", "chu", "office", "agence", "conseil",
+    "economie", "gestion", "sciences", "techniques", "lettres", "droit",
+    "generale", "general", "national", "regional", "provincial", "local",
+    "rabat", "casablanca", "marrakech", "fes", "tanger", "agadir", "meknes",
+    "oujda", "kenitra", "tetouan", "safi", "mohammedia", "settat", "el",
+    "kelaa", "sraghna", "nador", "laayoune", "dakhla", "errachidia", "taza",
 }
 
 
@@ -90,6 +101,7 @@ class AwardSimilarityEngine:
         award_buyer: str,
         published_at: Optional[datetime],
         now: Optional[datetime] = None,
+        tender_nature: Optional[str] = None,
     ) -> Tuple[float, bool, List[str]]:
         """
         Compute similarity percentage (0..100), same-buyer flag, and matched terms.
@@ -100,12 +112,20 @@ class AwardSimilarityEngine:
           - Recency (<= 24 months): up to 6 pts
         """
         award_tokens = extract_meaningful_tokens(award_title)
-        if not tender_tokens or not award_tokens:
+        # Strip buyer-name tokens from both sides so matching institution names in titles
+        # (e.g. "Faculté d'Economie et de Gestion") never inflate subject similarity.
+        tender_buyer_norm = tender_buyer_norm or ""
+        award_buyer_norm = normalize_text(award_buyer)
+        buyer_noise = set(tender_buyer_norm.split()) | set(award_buyer_norm.split())
+        tender_subject_tokens = [t for t in tender_tokens if t not in buyer_noise] or tender_tokens
+        award_subject_tokens = [t for t in award_tokens if t not in buyer_noise] or award_tokens
+
+        if not tender_subject_tokens or not award_subject_tokens:
             return 0.0, False, []
 
-        tender_set = set(tender_tokens)
-        award_set = set(award_tokens)
-        matched = [t for t in tender_tokens if t in award_set]
+        tender_set = set(tender_subject_tokens)
+        award_set = set(award_subject_tokens)
+        matched = [t for t in tender_subject_tokens if t in award_set]
         if not matched:
             return 0.0, False, []
 
@@ -120,17 +140,17 @@ class AwardSimilarityEngine:
         lexical_pts = min(68.0, dice_score * 78.0)
 
         # Bigram phrase bonus
-        award_bigrams = extract_bigrams(award_tokens)
+        tender_subject_bigrams = extract_bigrams(tender_subject_tokens)
+        award_bigrams = extract_bigrams(award_subject_tokens)
         bigram_pts = 0.0
-        if tender_bigrams and award_bigrams:
-            shared_bigrams = tender_bigrams & award_bigrams
+        if tender_subject_bigrams and award_bigrams:
+            shared_bigrams = tender_subject_bigrams & award_bigrams
             if shared_bigrams:
                 bigram_pts = min(16.0, len(shared_bigrams) * 8.0)
 
-        # Same public buyer bonus
+        # Same public buyer bonus (only when subject already matched)
         same_buyer = False
         buyer_pts = 0.0
-        award_buyer_norm = normalize_text(award_buyer)
         if tender_buyer_norm and award_buyer_norm:
             if tender_buyer_norm == award_buyer_norm or (
                 len(tender_buyer_norm) >= 8
@@ -139,9 +159,11 @@ class AwardSimilarityEngine:
                 same_buyer = True
                 buyer_pts = 10.0
             else:
-                b_toks_a = {t for t in tender_buyer_norm.split() if len(t) >= 4}
-                b_toks_b = {t for t in award_buyer_norm.split() if len(t) >= 4}
-                if len(b_toks_a & b_toks_b) >= 2:
+                # Require at least 3 shared non-stopword buyer tokens so "Faculté Economie Gestion Safi"
+                # does not match "Faculté Economie Gestion Kenitra" as the same buyer.
+                b_toks_a = {t for t in tender_buyer_norm.split() if len(t) >= 4 and t not in _FRENCH_PROCUREMENT_STOPWORDS}
+                b_toks_b = {t for t in award_buyer_norm.split() if len(t) >= 4 and t not in _FRENCH_PROCUREMENT_STOPWORDS}
+                if b_toks_a and b_toks_b and len(b_toks_a & b_toks_b) >= 2:
                     same_buyer = True
                     buyer_pts = 7.0
 
@@ -160,7 +182,13 @@ class AwardSimilarityEngine:
             else:
                 recency_pts = 1.5
 
-        total_score = round(min(100.0, lexical_pts + bigram_pts + buyer_pts + recency_pts), 1)
+        raw_score = lexical_pts + bigram_pts + buyer_pts + recency_pts
+        # Cross-nature penalty: prevent e.g. 'Travaux (climatiseurs)' from scoring high against 'Achat Produits (bureau)'
+        if tender_nature and tender_nature != "Autre / Divers":
+            award_nature = classify_award_nature(award_title)
+            if award_nature != "Autre / Divers" and award_nature != tender_nature:
+                raw_score *= 0.55
+        total_score = round(min(100.0, raw_score), 1)
         return total_score, same_buyer, matched[:6]
 
     @classmethod
@@ -177,6 +205,7 @@ class AwardSimilarityEngine:
         tender_tokens = extract_meaningful_tokens(tender_title, extra_texts=line_item_titles[:8])
         tender_bigrams = extract_bigrams(extract_meaningful_tokens(tender_title))
         tender_buyer_norm = normalize_text(buyer_name)
+        tender_nature = classify_award_nature(tender_title)
         now = datetime.now(timezone.utc)
 
         scored: List[Dict[str, Any]] = []
@@ -189,6 +218,7 @@ class AwardSimilarityEngine:
                 award_buyer=award.buyer_name_raw or "",
                 published_at=award.published_at,
                 now=now,
+                tender_nature=tender_nature,
             )
             if sim_pct < min_similarity:
                 continue

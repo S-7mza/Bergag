@@ -84,6 +84,21 @@ async def get_competitor_profile(
         raise HTTPException(status_code=404, detail=f"No award records found for '{winner_name}'")
     return result
 
+@router.get("/awards/{award_id}")
+async def get_closed_award_detail(
+    award_id: str,
+    session: AsyncSession = Depends(get_db_session)
+) -> Dict[str, Any]:
+    """
+    Retrieves full detail for a closed award (resolving to linked Tender portal_id
+    when available, or returning a Fiche 60s-compatible closed-award dossier).
+    """
+    radar = CompetitorRadar(session)
+    result = await radar.get_award_detail(award_id)
+    if not result.get("found"):
+        raise HTTPException(status_code=404, detail=f"Award '{award_id}' not found")
+    return result
+
 @router.get("/buyers")
 async def get_buyer_spending_velocity(
     year: Optional[int] = Query(None, description="Fiscal year (defaults to current year)"),

@@ -248,3 +248,61 @@ async def test_competitor_profile_nature_classification_and_sorting():
     assert natures == sorted(natures)
     assert len(profile["nature_breakdown"]) == 3
 
+
+@pytest.mark.asyncio
+async def test_competitor_get_award_detail_linked_and_unlinked():
+    import uuid
+    from datetime import datetime, timezone
+    from src.models.tender import Award
+
+    award_uuid = uuid.uuid4()
+
+    # 1. Linked award -> returns linked=True + tender_id
+    mock_session_linked = AsyncMock()
+    a_linked = MagicMock(
+        spec=Award,
+        id=award_uuid,
+        tender_id=409807,
+        compound_ref_key="dgr:08-2026-dgr:2026",
+    )
+    res_linked = MagicMock()
+    res_linked.scalar_one_or_none.return_value = a_linked
+    mock_session_linked.execute.return_value = res_linked
+
+    radar = CompetitorRadar(mock_session_linked)
+    detail_linked = await radar.get_award_detail(str(award_uuid))
+    assert detail_linked["found"] is True
+    assert detail_linked["linked"] is True
+    assert detail_linked["tender_id"] == 409807
+
+    # 2. Unlinked award -> returns Fiche 60s-compatible closed award dossier
+    mock_session_unlinked = AsyncMock()
+    a_unlinked = MagicMock(
+        spec=Award,
+        id=award_uuid,
+        tender_id=None,
+        compound_ref_key="dgr:08-2026-dgr:2026",
+        reference="08/2026/DGR",
+        title_raw="Achat de matériels informatiques pour la DGR",
+        buyer_name_raw="Direction Générale des Routes",
+        winner_name="TECH DATA SARL",
+        amount_ttc=13740.0,
+        devis_received_count=5,
+        status="Attribué",
+        published_at=datetime(2026, 11, 26, tzinfo=timezone.utc),
+    )
+    res_award = MagicMock()
+    res_award.scalar_one_or_none.return_value = a_unlinked
+    res_tender_lookup = MagicMock()
+    res_tender_lookup.scalar_one_or_none.return_value = None
+    mock_session_unlinked.execute.side_effect = [res_award, res_tender_lookup]
+
+    radar2 = CompetitorRadar(mock_session_unlinked)
+    detail_unlinked = await radar2.get_award_detail(str(award_uuid))
+    assert detail_unlinked["found"] is True
+    assert detail_unlinked["linked"] is False
+    assert detail_unlinked["award"]["is_closed_award"] is True
+    assert detail_unlinked["award"]["winner_name"] == "TECH DATA SARL"
+    assert detail_unlinked["award"]["amount_ttc"] == 13740.0
+    assert detail_unlinked["award"]["decision_verdict"] == "CLÔTURÉ"
+

@@ -171,6 +171,47 @@ def test_diagnose_cancelled_notice():
     assert diag.verdict == "NO-GO"
     assert "Annulée" in diag.primary_domain or "annulé" in diag.strategic_recommendation.lower()
 
+
+def test_diagnose_printer_compatibility_specs_not_software():
+    """
+    Regression for BDC #411863: Printer/Scanner specs mentioning 'compatibilité Android, iOS'
+    and 'services Cloud compatibles' must NOT be classified as Génie Logiciel / Cloud & DevOps.
+    """
+    tender_data = {
+        "portal_id": 411863,
+        "reference": "002/2026",
+        "title": "Achat de matériel de bureau pour la Faculté d'Economie et de Gestion de Safi",
+        "buyer_name": "FACULTE D'ECONOMIE ET DE GESTION DE SAFI",
+        "main_category": "Fournitures",
+        "prestation_type": "Achat de matériel et de mobilier de bureau",
+        "line_items": [
+            {
+                "designation": "Imprimante Multifonction Laser Monochrome A3",
+                "technical_specs": "Systèmes compatibles : Windows 10/11, macOS ; compatibilité Android, iOS/iPadOS. Numérisation vers services Cloud compatibles. Fonctions usuelles et interface tactile."
+            },
+            {
+                "designation": "Duplicopieur A4/A3",
+                "technical_specs": "Capacité d'impression 100.000 pages/mois, USB 2.0, Ethernet."
+            },
+            {
+                "designation": "Scanner A3",
+                "technical_specs": "Scanner de bureau A3 avec chargeur 300 feuilles, USB 3.1."
+            },
+        ],
+    }
+
+    diag = AIAvisDiagnostician.diagnose_tender(tender_data)
+    assert diag.hardware_dependency == "HIGH"
+    assert diag.verdict == "NO-GO"
+    assert diag.rating_label == "MISMATCH"
+    assert diag.matching_rate < 20.0
+    assert diag.sub_scores.get("software_programming", 0.0) == 0.0
+    assert diag.sub_scores.get("cloud_devops", 0.0) == 0.0
+    assert "Android" not in diag.detected_technologies
+    assert "iOS Mobile" not in diag.detected_technologies
+    assert "UI/UX" not in diag.detected_technologies
+    assert "Cloud Architecture" not in diag.detected_technologies
+
 def test_agent_diagnose_endpoints_with_mock_db(client):
     now = datetime.now(timezone.utc)
     t_web = Tender(
