@@ -331,7 +331,7 @@ urgency_range_map = URGENCY_RANGE_MAP
 
 # Fast 30-second TTL cache for scored feed pools (key -> (timestamp, scored_items))
 _FEED_SCORED_CACHE: Dict[tuple, Tuple[float, List[Any]]] = {}
-FEED_CACHE_TTL_SECONDS = 30.0
+FEED_CACHE_TTL_SECONDS = 120.0
 
 
 def invalidate_feed_cache():
@@ -537,7 +537,7 @@ async def get_tender_feed(
                 if interval_conditions:
                     stmt = stmt.where(or_(*interval_conditions))
 
-        pool_limit = max(limit, 1500)
+        pool_limit = min(max(limit, 500), 1000)
         stmt = stmt.order_by(Tender.deadline_at.asc()).limit(pool_limit)
 
         res = await session.execute(stmt)

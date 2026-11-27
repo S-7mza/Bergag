@@ -72,7 +72,6 @@
 </head>
 <body class="h-full font-sans antialiased bg-[#0a0c10] text-slate-200"
       x-data="dashboardApp()"
-      x-init="init()"
       @keydown.window="handleGlobalKeydown($event)">
 
 
@@ -8738,7 +8737,7 @@
 
                     try {
 
-                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=800`;
+                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=300`;
 
                         if (this.searchQuery) url += `&search=${encodeURIComponent(this.searchQuery)}`;
 

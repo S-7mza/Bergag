@@ -1199,7 +1199,8 @@ class IngestionBatchManager:
         self,
         force_refresh: bool = False,
         max_pages: int = 4,
-        deep_scan: bool = False
+        deep_scan: bool = False,
+        fetch_live_portal: bool = True
     ) -> Dict[str, Any]:
         """
         Performs an exhaustive audit to guarantee that 100% of currently active consultations
@@ -1217,7 +1218,7 @@ class IngestionBatchManager:
                 cache_time = self._audit_cache_times.get(key_to_check)
                 if cache_time:
                     age_seconds = (now - cache_time).total_seconds()
-                    max_age = 60 if self._audit_cache[key_to_check].get("is_fully_covered") else 15
+                    max_age = 300 if not fetch_live_portal else (60 if self._audit_cache[key_to_check].get("is_fully_covered") else 15)
                     if age_seconds < max_age:
                         cached = dict(self._audit_cache[key_to_check])
                         cached["is_cached"] = True
@@ -1242,51 +1243,52 @@ class IngestionBatchManager:
         db_id_map = {t.portal_id: t for t in db_active_tenders}
         db_active_ids = set(db_id_map.keys())
 
-        # 3. Query Portal for active listings
+        # 3. Query Portal for active listings (only when live crawl is requested)
         portal_total = 0
         portal_cards = []
         is_live = False
 
-        try:
-            client = PortalHttpClient()
-            spider = ListingSpider(client)
+        if fetch_live_portal:
+            try:
+                client = PortalHttpClient()
+                spider = ListingSpider(client)
 
-            if deep_scan or max_pages >= 30:
-                portal_total, portal_cards = await asyncio.wait_for(
-                    spider.fetch_all_active_cards(max_pages=80, concurrency=6),
-                    timeout=90.0
-                )
-                is_live = True
-            else:
-                raw_log, cards, total_count = await asyncio.wait_for(
-                    spider.fetch_active(page=1, page_size=50),
-                    timeout=7.0
-                )
-                portal_total = total_count
-                portal_cards = cards
-                is_live = True
+                if deep_scan or max_pages >= 30:
+                    portal_total, portal_cards = await asyncio.wait_for(
+                        spider.fetch_all_active_cards(max_pages=80, concurrency=6),
+                        timeout=90.0
+                    )
+                    is_live = True
+                else:
+                    raw_log, cards, total_count = await asyncio.wait_for(
+                        spider.fetch_active(page=1, page_size=50),
+                        timeout=7.0
+                    )
+                    portal_total = total_count
+                    portal_cards = cards
+                    is_live = True
 
-                # Parallel fetch for subsequent pages if active total > 50
-                if portal_total > 50 and len(portal_cards) < portal_total:
-                    pages_needed = min(max_pages, (portal_total + 49) // 50)
-                    sub_pages = [p for p in range(2, pages_needed + 1)]
-                    if sub_pages:
-                        async def _fetch_sub(p_num):
-                            try:
-                                _, p_cards, _ = await asyncio.wait_for(
-                                    spider.fetch_active(page=p_num, page_size=50),
-                                    timeout=4.0
-                                )
-                                return p_cards
-                            except Exception:
-                                return []
+                    # Parallel fetch for subsequent pages if active total > 50
+                    if portal_total > 50 and len(portal_cards) < portal_total:
+                        pages_needed = min(max_pages, (portal_total + 49) // 50)
+                        sub_pages = [p for p in range(2, pages_needed + 1)]
+                        if sub_pages:
+                            async def _fetch_sub(p_num):
+                                try:
+                                    _, p_cards, _ = await asyncio.wait_for(
+                                        spider.fetch_active(page=p_num, page_size=50),
+                                        timeout=4.0
+                                    )
+                                    return p_cards
+                                except Exception:
+                                    return []
 
-                        parallel_results = await asyncio.gather(*[_fetch_sub(p) for p in sub_pages])
-                        for res_cards in parallel_results:
-                            portal_cards.extend(res_cards)
-            await client.close()
-        except Exception as e:
-            logger.warning(f"[BatchManager] Portal active crawl error: {e}")
+                            parallel_results = await asyncio.gather(*[_fetch_sub(p) for p in sub_pages])
+                            for res_cards in parallel_results:
+                                portal_cards.extend(res_cards)
+                await client.close()
+            except Exception as e:
+                logger.warning(f"[BatchManager] Portal active crawl error: {e}")
 
         # Baseline fallback if offline/mock environment
         if not portal_cards and db_active_ids:
@@ -1716,7 +1718,7 @@ class IngestionBatchManager:
         # 3B. Real-time Portal Gap Analysis & Missing Rows vs Website
         gap_analysis = await self.probe_portal_gap(force_live_scan=False)
         date_audit = await self.audit_date_exhaustiveness(target_date_str=now.strftime("%d/%m/%Y"), fetch_live_portal=False)
-        active_audit = await self.audit_active_tenders_coverage(force_refresh=False)
+        active_audit = await self.audit_active_tenders_coverage(force_refresh=False, fetch_live_portal=False)
 
         # 4. Diagnostic & "What to bring right now?"
         diagnostic_issues = []
