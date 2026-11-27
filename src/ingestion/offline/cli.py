@@ -23,6 +23,11 @@ async def run_cli():
     export_parser.add_argument("--all", action="store_true", help="Collect ALL active pages available on the portal")
     export_parser.add_argument("--by-month", action="store_true", help="Collect awards in structured month-by-month bulks")
     export_parser.add_argument("--year", type=int, default=None, help="Year for month-by-month collection (e.g. 2026)")
+    export_parser.add_argument("--start-month", type=int, default=1, help="Start month (1-12) for --by-month")
+    export_parser.add_argument("--end-month", type=int, default=12, help="End month (1-12) for --by-month")
+    export_parser.add_argument("--start-page", type=int, default=None, help="Start page for monthly collection")
+    export_parser.add_argument("--skip-to-date", type=str, default=None, help="Binary-search jump to date (DD/MM/YYYY) before crawling")
+    export_parser.add_argument("--stop-on-existing", action="store_true", help="Stop once already-collected awards are reached (incremental top-up)")
     export_parser.add_argument("--months", type=int, default=None, help="Number of rolling past months to collect (e.g. 3, 6, 12)")
     export_parser.add_argument("--order", choices=["asc", "desc"], default="desc", help="Sort order: 'asc' (oldest to newest) or 'desc' (newest to oldest)")
     export_parser.add_argument("--pages", type=int, default=5, help="Number of pages to collect (default: 5)")
@@ -109,12 +114,18 @@ async def run_cli():
                     )
                 else:
                     target_year = args.year or datetime.now().year
-                    print(f"[*] Collecte des attributions par lots mensuels pour l'année {target_year}...")
+                    skip_dt = datetime.strptime(args.skip_to_date, "%d/%m/%Y") if args.skip_to_date else None
+                    print(f"[*] Collecte des attributions par lots mensuels pour l'année {target_year} (mois {args.start_month}..{args.end_month})...")
                     month_results = await exporter.collect_awards_by_months(
                         year=target_year,
+                        start_month=args.start_month,
+                        end_month=args.end_month,
                         max_pages_per_month=None if args.all else args.pages,
                         page_size=args.page_size,
-                        keyword=args.keyword
+                        keyword=args.keyword,
+                        start_page=args.start_page,
+                        auto_skip_to_date=skip_dt,
+                        stop_on_existing=args.stop_on_existing,
                     )
                 print(f"\n[✓] Collecte mensuelle terminée : {len(month_results)} fichiers JSON générés dans data/offline_exports/")
                 total_items = sum(m.get("item_count", 0) for m in month_results)

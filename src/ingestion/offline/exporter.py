@@ -336,6 +336,51 @@ class OfflineExporter:
             "sha256_checksum": checksum
         }
 
+    async def _find_start_page_for_date(
+        self,
+        spider: ResultsSpider,
+        target_dt: datetime,
+        total_pages: int,
+        page_size: int = 50,
+    ) -> int:
+        """
+        Binary-searches the reverse-chronological results archive to locate the
+        first page whose items are <= target_dt (with a 2-page safety overlap).
+        """
+        low, high = 1, max(1, total_pages)
+        best_page = 1
+        while low <= high:
+            mid = (low + high) // 2
+            _, cards, _ = await spider.fetch_results(page=mid, page_size=page_size)
+            if not cards:
+                high = mid - 1
+                continue
+            dates = []
+            for c in cards:
+                pub_str = c.get("published_at")
+                if pub_str:
+                    try:
+                        dates.append(datetime.fromisoformat(pub_str).replace(tzinfo=None))
+                    except Exception:
+                        pass
+            if not dates:
+                high = mid - 1
+                continue
+            newest_on_page = max(dates)
+            oldest_on_page = min(dates)
+            if oldest_on_page > target_dt:
+                # Entire page is newer than target_dt -> go deeper (higher page number)
+                best_page = mid
+                low = mid + 1
+            elif newest_on_page < target_dt:
+                # Entire page is older than target_dt -> go earlier (lower page number)
+                high = mid - 1
+            else:
+                # target_dt falls within this page!
+                best_page = mid
+                break
+        return max(1, best_page - 2)
+
     async def _collect_awards_streaming_buckets(
         self,
         target_months: List[Tuple[int, int]],
@@ -344,13 +389,18 @@ class OfflineExporter:
         keyword: Optional[str] = None,
         category: Optional[str] = None,
         output_dir: Optional[Path] = None,
-        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        merge_existing: bool = True,
+        start_page: Optional[int] = None,
+        auto_skip_to_date: Optional[datetime] = None,
+        stop_on_existing: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Core streaming engine for monthly awards extraction.
         Walks portal results page by page in natural reverse-chronological order
         and distributes award cards directly into monthly JSON bundles on disk.
         Stops early once the crawler reaches past the earliest target date.
+        When merge_existing=True, loads existing monthly files first so no data is lost.
         """
         out_dir = output_dir or OFFLINE_EXPORTS_DIR
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -367,6 +417,27 @@ class OfflineExporter:
             t: [] for t in target_months
         }
         collected_refs: Set[str] = set()
+        if merge_existing:
+            for (y, m) in target_months:
+                m_file = out_dir / f"export_awards_{y}_{m:02d}.json"
+                if m_file.exists():
+                    try:
+                        with open(m_file, "r", encoding="utf-8") as f:
+                            existing_data = json.load(f)
+                        existing_items = existing_data.get("items", [])
+                        if isinstance(existing_items, list) and existing_items:
+                            month_buckets[(y, m)].extend(existing_items)
+                            for it in existing_items:
+                                r = it.get("reference")
+                                if r:
+                                    collected_refs.add(r)
+                            logger.info(
+                                f"[OfflineExporter] Loaded {len(existing_items)} existing awards "
+                                f"from {m_file.name} for non-destructive merge."
+                            )
+                    except Exception as e:
+                        logger.warning(f"[OfflineExporter] Could not load {m_file}: {e}")
+
         max_items_per_month = (max_pages_per_month * page_size) if (max_pages_per_month and max_pages_per_month > 0) else None
 
         should_close = False
@@ -385,8 +456,23 @@ class OfflineExporter:
         )
 
         try:
-            page = 1
+            page = start_page if (start_page and start_page >= 1) else 1
+            if start_page is None and auto_skip_to_date is not None:
+                _, _, probe_total = await spider.fetch_results(
+                    page=1, page_size=page_size, keyword=keyword, category=category
+                )
+                probe_pages = max(1, math.ceil(probe_total / page_size)) if probe_total > 0 else 1
+                page = await self._find_start_page_for_date(
+                    spider, auto_skip_to_date, probe_pages, page_size=page_size
+                )
+                logger.info(
+                    f"[OfflineExporter] Binary search jumped to page {page}/{probe_pages} "
+                    f"for target date {auto_skip_to_date.strftime('%d/%m/%Y')}."
+                )
+
             consecutive_empty = 0
+            consecutive_existing_pages = 0
+            run_refs: Set[str] = set()
             month_pages_seen: Dict[Tuple[int, int], Set[int]] = {t: set() for t in target_months}
 
             while True:
@@ -487,10 +573,22 @@ class OfflineExporter:
                     logger.info(f"[OfflineExporter] Page {page} reached total portal pages ({total_pages}). Stopping.")
                     break
 
-                # 2. No new cards on this page (duplicate cycle / mock loop)
-                if new_cards_added == 0 and len(raw_awards) > 0:
-                    logger.info(f"[OfflineExporter] Page {page} contained no new cards. Stopping.")
+                # 2. Mock loop / duplicate page detection within this run
+                page_refs = [a.get("reference") for a in raw_awards if a.get("reference")]
+                if page_refs and all(r in run_refs for r in page_refs):
+                    logger.info(f"[OfflineExporter] Page {page} is a duplicate of an already-crawled page in this run. Stopping.")
                     break
+                run_refs.update(page_refs)
+
+                # 3. Stop when we hit already-collected data (for incremental top-ups)
+                if new_cards_added == 0 and len(raw_awards) > 0:
+                    if stop_on_existing:
+                        consecutive_existing_pages += 1
+                        if consecutive_existing_pages >= 2:
+                            logger.info(f"[OfflineExporter] Page {page}: reached already-collected awards. Stopping incremental top-up.")
+                            break
+                else:
+                    consecutive_existing_pages = 0
 
                 # 3. All cards on page are older than earliest target date
                 if all_older_than_earliest:
@@ -568,7 +666,11 @@ class OfflineExporter:
         keyword: Optional[str] = None,
         category: Optional[str] = None,
         output_dir: Optional[Path] = None,
-        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        merge_existing: bool = True,
+        start_page: Optional[int] = None,
+        auto_skip_to_date: Optional[datetime] = None,
+        stop_on_existing: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Collects awards archive in structured monthly bulks in a single streaming chronological pass.
@@ -588,7 +690,11 @@ class OfflineExporter:
             keyword=keyword,
             category=category,
             output_dir=output_dir,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            merge_existing=merge_existing,
+            start_page=start_page,
+            auto_skip_to_date=auto_skip_to_date,
+            stop_on_existing=stop_on_existing,
         )
 
     async def collect_awards_recent_months(

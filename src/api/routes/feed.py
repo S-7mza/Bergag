@@ -19,6 +19,7 @@ from src.profiles.loader import load_profile, load_all_profiles, save_profile, d
 from src.profiles.schema import CompanyProfileSchema, CatalogItem, MacroFilters, NegativeConstraints, ScoringWeights
 from src.engine.scoring_cascade import ScoringCascadeEngine, invalidate_tender_cache, CascadeEvaluationResult
 from src.engine.pricing_helper import PricingHelper
+from src.engine.award_similarity import AwardSimilarityEngine
 from src.engine.pipeline_manager import pipeline_manager
 from src.engine.feedback_manager import feedback_manager
 from src.scraper.client import PortalHttpClient
@@ -977,6 +978,35 @@ async def get_tender_pricing_intelligence(
         "is_within_statutory_cap": recommended_bid_ttc <= 500000.0,
         "historical_comparables": comparables
     }
+
+@router.get("/tenders/{portal_id}/similar-awards")
+async def get_tender_similar_awards(
+    portal_id: int,
+    min_similarity: float = Query(20.0, ge=5.0, le=90.0),
+    limit: int = Query(12, ge=1, le=30),
+    session: AsyncSession = Depends(get_db_session)
+) -> Dict[str, Any]:
+    """
+    Measures similarity against historical closed & awarded notices (`awards`)
+    to provide empirical price estimation corridors (P25, Median, Weighted Avg, P75)
+    and recurring winning competitors for this type of consultation.
+    """
+    stmt = (
+        select(Tender)
+        .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
+        .where(Tender.portal_id == portal_id)
+    )
+    res = await session.execute(stmt)
+    t = res.scalar_one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail=f"Tender #{portal_id} not found")
+
+    return await AwardSimilarityEngine.find_similar_awards(
+        session=session,
+        tender=t,
+        min_similarity=min_similarity,
+        limit=limit,
+    )
 
 @router.get("/tenders/{portal_id}/export-bordereau")
 async def export_bordereau_csv(

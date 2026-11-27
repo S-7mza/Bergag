@@ -1,10 +1,12 @@
+import asyncio
 import logging
+import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.database.session import get_db_session
+from src.database.session import get_db_session, async_session_factory
 from src.models.user import User
 from src.api.routes.auth import require_role
 from src.ingestion.awards.auditor import AwardsAuditor
@@ -24,6 +26,28 @@ except ImportError:
         HAS_MULTIPART = False
 
 router = APIRouter(prefix="/api/admin/ingestion/awards", tags=["Awards Ingestion & Archive Sync"])
+
+_OFFLINE_UPLOAD_JOBS: Dict[str, Dict[str, Any]] = {}
+
+async def _run_offline_upload_job(job_id: str, bundle: Dict[str, Any], filename: str) -> None:
+    try:
+        async with async_session_factory() as bg_session:
+            importer = OfflineImporter()
+            res = await importer.import_bundle(bundle, session=bg_session)
+            await bg_session.commit()
+        _OFFLINE_UPLOAD_JOBS[job_id].update({
+            "status": "success",
+            "items_processed": res["items_processed"],
+            "linked_tenders": res["linked_tenders"],
+            "errors_count": res["errors_count"],
+            "message": f"{res['items_processed']} éléments ({res['domain']}) synchronisés avec succès depuis '{filename}'."
+        })
+    except Exception as e:
+        logger.error(f"[OfflineUploadJob:{job_id}] Failed for '{filename}': {e}", exc_info=True)
+        _OFFLINE_UPLOAD_JOBS[job_id].update({
+            "status": "error",
+            "message": f"Erreur lors de l'importation en arrière-plan: {e}"
+        })
 
 class AwardsSyncRequest(BaseModel):
     pages: int = Field(default=5, ge=1, le=50, description="Nombre de pages de résultats à scanner (50 attributions / page)")
@@ -116,7 +140,38 @@ if HAS_MULTIPART:
         try:
             content = await file.read()
             importer = OfflineImporter()
-            res = await importer.import_bundle(content, session=session)
+            bundle = importer.parse_bundle(content)
+            items_total = len(bundle.get("items", []))
+            domain = bundle.get("manifest", {}).get("domain", "awards")
+
+            # Large bundles (> 400 items) run asynchronously to avoid HTTP proxy 504/network timeouts
+            if items_total > 400:
+                job_id = str(uuid.uuid4())
+                _OFFLINE_UPLOAD_JOBS[job_id] = {
+                    "status": "running",
+                    "job_id": job_id,
+                    "filename": file.filename,
+                    "domain": domain,
+                    "items_total": items_total,
+                    "items_processed": 0,
+                    "linked_tenders": 0,
+                    "errors_count": 0,
+                    "message": f"Importation en arrière-plan démarrée ({items_total} éléments)..."
+                }
+                asyncio.create_task(_run_offline_upload_job(job_id, bundle, file.filename))
+                return {
+                    "status": "queued",
+                    "job_id": job_id,
+                    "filename": file.filename,
+                    "domain": domain,
+                    "items_total": items_total,
+                    "items_processed": 0,
+                    "linked_tenders": 0,
+                    "errors_count": 0,
+                    "message": f"Importation de {items_total} éléments lancée en arrière-plan..."
+                }
+
+            res = await importer.import_bundle(bundle, session=session)
             await session.commit()
             return {
                 "status": "success",
@@ -141,6 +196,16 @@ else:
             status_code=503,
             detail="Le support de téléversement de fichiers nécessite 'python-multipart'. Installez-le avec 'pip install python-multipart' ou utilisez l'endpoint JSON '/offline/sync-json'."
         )
+
+@router.get("/offline/upload-status/{job_id}")
+async def get_offline_upload_status(
+    job_id: str,
+    user: User = Depends(require_role(["admin"]))
+):
+    job = _OFFLINE_UPLOAD_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job d'importation introuvable.")
+    return job
 
 @router.post("/offline/sync-json")
 async def sync_offline_bundle_json(

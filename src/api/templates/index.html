@@ -5673,7 +5673,7 @@
 
                         <div class="flex flex-col sm:flex-row items-center gap-3">
 
-                            <input type="file" accept=".json" @change="handleOfflineBundleSelect($event)"
+                            <input type="file" accept=".json" multiple @change="handleOfflineBundleSelect($event)"
 
                                    class="block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer bg-slate-950 border border-slate-800 rounded-xl p-1" />
 
@@ -6588,7 +6588,116 @@
 
                     </div>
 
+                    <!-- Similarity Intelligence: Closed Avis & Historical Awards (Price Estimation & Competitors) -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3.5 shadow-lg">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-slate-100 text-xs">Benchmark Avis Clôturés & Attribués (Similarité)</h4>
+                                    <p class="text-[11px] text-slate-400">Estimation empirique des prix et concurrents récurrents sur des consultations similaires</p>
+                                </div>
+                            </div>
+                            <template x-if="similarAwardsData && similarAwardsData.price_estimation?.sample_size > 0">
+                                <span :class="{
+                                    'bg-emerald-500/15 text-emerald-300 border-emerald-500/30': similarAwardsData.price_estimation.confidence === 'Élevée',
+                                    'bg-amber-500/15 text-amber-300 border-amber-500/30': similarAwardsData.price_estimation.confidence === 'Moyenne',
+                                    'bg-slate-800 text-slate-300 border-slate-700': similarAwardsData.price_estimation.confidence === 'Faible'
+                                }" class="px-2 py-0.5 rounded-md border text-[10px] font-semibold">
+                                    Confiance <span x-text="similarAwardsData.price_estimation.confidence"></span> · <span x-text="similarAwardsData.price_estimation.sample_size"></span> attribués
+                                </span>
+                            </template>
+                        </div>
 
+                        <!-- Loading state -->
+                        <div x-show="similarAwardsLoading" class="flex items-center gap-2 py-3 text-xs text-slate-400">
+                            <svg class="w-4 h-4 animate-spin text-amber-400" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"/></svg>
+                            <span>Analyse de similarité avec les archives d'attribution en cours...</span>
+                        </div>
+
+                        <!-- No match state -->
+                        <div x-show="!similarAwardsLoading && (!similarAwardsData || !similarAwardsData.price_estimation || similarAwardsData.price_estimation.sample_size === 0)"
+                             class="text-xs text-slate-400 bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+                            Aucun marché attribué similaire trouvé dans l'archive pour ces mots-clés.
+                        </div>
+
+                        <!-- Populated similarity intelligence -->
+                        <template x-if="!similarAwardsLoading && similarAwardsData && similarAwardsData.price_estimation?.sample_size > 0">
+                            <div class="space-y-3.5">
+                                <!-- Price Estimation Corridor -->
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono">
+                                    <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                                        <span class="text-[10px] text-slate-500 block uppercase">Médiane Attribuée</span>
+                                        <span class="text-sm font-bold text-amber-300 tabular-nums" x-text="(similarAwardsData.price_estimation.median_mad || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></span>
+                                    </div>
+                                    <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                                        <span class="text-[10px] text-slate-500 block uppercase">Fourchette P25–P75</span>
+                                        <span class="text-xs font-semibold text-slate-200 tabular-nums" x-text="(similarAwardsData.price_estimation.p25_mad || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' – ' + (similarAwardsData.price_estimation.p75_mad || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></span>
+                                    </div>
+                                    <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                                        <span class="text-[10px] text-slate-500 block uppercase">Moy. Pondérée Sim.</span>
+                                        <span class="text-sm font-bold text-emerald-300 tabular-nums" x-text="(similarAwardsData.price_estimation.weighted_avg_mad || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></span>
+                                    </div>
+                                    <div class="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                                        <span class="text-[10px] text-slate-500 block uppercase">Concurrence Moy.</span>
+                                        <span class="text-xs font-semibold text-sky-300 tabular-nums" x-text="(similarAwardsData.price_estimation.avg_devis_count ? similarAwardsData.price_estimation.avg_devis_count + ' devis (' + similarAwardsData.price_estimation.competition_level + ')' : similarAwardsData.price_estimation.competition_level)"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Top Competitors on Similar Avis -->
+                                <div x-show="similarAwardsData.top_competitors && similarAwardsData.top_competitors.length > 0" class="space-y-1.5">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Concurrents identifiés sur avis similaires</div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <template x-for="comp in similarAwardsData.top_competitors.slice(0, 6)" :key="comp.winner_name">
+                                            <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                                                <div class="min-w-0">
+                                                    <div class="text-xs font-semibold text-slate-100 truncate" :title="comp.winner_name" x-text="comp.winner_name"></div>
+                                                    <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                                        <span x-text="comp.wins_count + (comp.wins_count > 1 ? ' marchés gagnés' : ' marché gagné')"></span>
+                                                        <span x-show="comp.same_buyer_wins > 0" class="px-1.5 py-0.2 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">Même acheteur</span>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right font-mono shrink-0">
+                                                    <div class="text-xs font-bold text-emerald-300 tabular-nums" x-text="(comp.avg_amount_mad || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></div>
+                                                    <div class="text-[10px] text-slate-500 tabular-nums" x-text="'Sim. max ' + comp.max_similarity_pct + '%'"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Comparable Awarded Notices List -->
+                                <div x-show="similarAwardsData.similar_awards && similarAwardsData.similar_awards.length > 0" class="space-y-1.5">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Avis attribués les plus similaires</div>
+                                    <div class="divide-y divide-slate-800/70 bg-slate-950/70 border border-slate-800/90 rounded-xl overflow-hidden">
+                                        <template x-for="aw in similarAwardsData.similar_awards.slice(0, 5)" :key="aw.award_id">
+                                            <div class="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="px-1.5 py-0.5 rounded font-mono tabular-nums text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0" x-text="aw.similarity_pct + '%'"></span>
+                                                        <span class="font-medium text-slate-200 truncate" :title="aw.title" x-text="aw.title"></span>
+                                                    </div>
+                                                    <div class="text-[10px] text-slate-400 truncate mt-0.5">
+                                                        <span class="text-slate-300" x-text="aw.winner_name"></span>
+                                                        <span> · </span>
+                                                        <span x-text="aw.buyer_name"></span>
+                                                        <span> · </span>
+                                                        <span x-text="aw.published_at"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right font-mono shrink-0">
+                                                    <div class="font-bold text-slate-100 tabular-nums" x-text="(aw.amount_ttc || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></div>
+                                                    <div class="text-[10px] text-slate-500" x-text="aw.devis_received_count ? aw.devis_received_count + ' devis' : 'Attribué'"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
 
                     <!-- Official Attachment & CPS Documents - Folder Discovery -->
                     <div x-show="activeTender?.attachment_available" class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/50 border border-indigo-500/30 rounded-2xl p-4 space-y-3.5 shadow-xl">
@@ -7594,6 +7703,7 @@
                 _awardsPollTimer: null,
 
                 offlineFileToUpload: null,
+                offlineFilesToUpload: [],
 
                 uploadingOffline: false,
 
@@ -7657,6 +7767,8 @@
                 activeTender: null,
 
                 pricingData: null,
+                similarAwardsData: null,
+                similarAwardsLoading: false,
                 attachmentFilesData: null,
                 docPreviewModalOpen: false,
                 docPreviewLoading: false,
@@ -9190,6 +9302,15 @@
                                 .catch(() => {});
                         }
 
+                        // Fetch historical award similarity (price estimation & competitors)
+                        this.similarAwardsData = null;
+                        this.similarAwardsLoading = true;
+                        fetch(`/api/tenders/${portalId}/similar-awards`)
+                            .then(r => r.ok ? r.json() : null)
+                            .then(d => { this.similarAwardsData = d; })
+                            .catch(() => {})
+                            .finally(() => { this.similarAwardsLoading = false; });
+
 
 
                         this.modalOpen = true;
@@ -9765,7 +9886,8 @@
 
                     if (event.target.files && event.target.files.length > 0) {
 
-                        this.offlineFileToUpload = event.target.files[0];
+                        this.offlineFilesToUpload = Array.from(event.target.files);
+                        this.offlineFileToUpload = this.offlineFilesToUpload[0];
 
                     }
 
@@ -9855,61 +9977,71 @@
 
                 async uploadOfflineBundle() {
 
-                    if (!this.offlineFileToUpload) return;
+                    const files = (this.offlineFilesToUpload && this.offlineFilesToUpload.length > 0)
+                        ? this.offlineFilesToUpload
+                        : (this.offlineFileToUpload ? [this.offlineFileToUpload] : []);
+
+                    if (files.length === 0) return;
 
                     this.uploadingOffline = true;
-
-                    this.offlineUploadResult = null;
-
-                    const formData = new FormData();
-
-                    formData.append('file', this.offlineFileToUpload);
-
-
+                    let totalProcessed = 0;
+                    let totalLinked = 0;
+                    let totalErrors = 0;
 
                     try {
+                        for (let fIdx = 0; fIdx < files.length; fIdx++) {
+                            const file = files[fIdx];
+                            const rawText = await file.text();
+                            const bundle = JSON.parse(rawText);
+                            const allItems = Array.isArray(bundle.items) ? bundle.items : [];
+                            const chunkSize = 250;
 
-                        const res = await fetch('/api/admin/ingestion/awards/offline/upload', {
+                            if (allItems.length === 0) continue;
 
-                            method: 'POST',
+                            for (let offset = 0; offset < allItems.length; offset += chunkSize) {
+                                const slice = allItems.slice(offset, offset + chunkSize);
+                                this.offlineUploadResult = {
+                                    status: 'running',
+                                    message: `Importation [${fIdx + 1}/${files.length}] ${file.name} : ${Math.min(offset + slice.length, allItems.length)} / ${allItems.length} éléments...`,
+                                    items_processed: totalProcessed,
+                                    linked_tenders: totalLinked,
+                                    errors_count: totalErrors
+                                };
 
-                            body: formData
+                                const chunkPayload = {
+                                    manifest: { ...(bundle.manifest || {}), item_count: slice.length },
+                                    items: slice
+                                };
 
-                        });
+                                const res = await fetch('/api/admin/ingestion/awards/offline/sync-json', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(chunkPayload)
+                                });
 
-                        const data = await res.json();
+                                const data = await res.json();
+                                if (!res.ok) {
+                                    throw new Error(data.detail || `Erreur sur ${file.name}`);
+                                }
 
-                        if (res.ok) {
-
-                            this.offlineUploadResult = data;
-
-                            this.showToast(data.message || 'Importation terminée avec succès !', 'success');
-
-                            await this.fetchAwardsStats();
-
-                            await this.fetchAwardsState();
-
-                            await this.fetchMarketRadar();
-
-                        } else {
-
-                            this.offlineUploadResult = {
-
-                                status: 'error',
-
-                                message: data.detail || 'Erreur lors du traitement du fichier d\'export.',
-
-                                items_processed: 0,
-
-                                linked_tenders: 0,
-
-                                errors_count: 1
-
-                            };
-
-                            this.showToast(data.detail || 'Échec de l\'importation.', 'error');
-
+                                totalProcessed += (data.items_processed || 0);
+                                totalLinked += (data.linked_tenders || 0);
+                                totalErrors += (data.errors_count || 0);
+                            }
                         }
+
+                        this.offlineUploadResult = {
+                            status: 'success',
+                            message: `${totalProcessed} éléments synchronisés avec succès depuis ${files.length} fichier(s) !`,
+                            items_processed: totalProcessed,
+                            linked_tenders: totalLinked,
+                            errors_count: totalErrors
+                        };
+
+                        this.showToast(this.offlineUploadResult.message, 'success');
+                        await this.fetchAwardsStats();
+                        await this.fetchAwardsState();
+                        await this.fetchMarketRadar();
 
                     } catch (e) {
 
@@ -9917,17 +10049,17 @@
 
                             status: 'error',
 
-                            message: 'Erreur réseau lors du transfert du fichier vers le serveur.',
+                            message: e.message || 'Erreur réseau lors du transfert du fichier vers le serveur.',
 
-                            items_processed: 0,
+                            items_processed: totalProcessed,
 
-                            linked_tenders: 0,
+                            linked_tenders: totalLinked,
 
-                            errors_count: 1
+                            errors_count: totalErrors + 1
 
                         };
 
-                        this.showToast('Erreur de communication avec le serveur.', 'error');
+                        this.showToast(this.offlineUploadResult.message, 'error');
 
                     } finally {
 
