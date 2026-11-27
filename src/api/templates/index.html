@@ -1532,264 +1532,230 @@
 
                 <!-- TABLE VIEW -->
 
-                <div x-show="!loading && viewMode === 'table'" class="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+                <div x-show="!loading && viewMode === 'table'" class="bg-slate-900/95 rounded-2xl border border-slate-800/90 shadow-xl overflow-hidden">
 
-                    <div class="w-full overflow-hidden">
+                    <div class="w-full overflow-x-auto">
 
-                        <table class="w-full table-fixed text-left border-collapse text-xs">
+                        <table class="w-full min-w-[1060px] table-fixed text-left border-collapse text-xs">
 
                             <thead>
-                                <tr class="bg-slate-950/80 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
-                                    <th class="py-2.5 px-3 w-[16%] select-none">
-                                        <div class="flex flex-col gap-1.5">
-                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Score & Décision</span>
-                                            <div class="flex items-center gap-1.5 flex-wrap">
-                                                <!-- Sort by Rule / Cascade Match Score -->
-                                                <button type="button"
-                                                        @click.stop="toggleSort('score')"
-                                                        :class="isSortActive('score') ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/30 font-black' : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'"
-                                                        class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border transition-all inline-flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95"
-                                                        title="Trier par Score Réglementaire (Décroissant / Croissant)">
-                                                    <span>🎯 Score</span>
-                                                    <span x-show="sortBy === 'score_desc'" class="text-emerald-400 font-black">▼</span>
-                                                    <span x-show="sortBy === 'score_asc'" class="text-emerald-400 font-black">▲</span>
-                                                    <span x-show="!isSortActive('score')" class="text-slate-500 text-[9px] opacity-60">⇅</span>
-                                                </button>
-                                                <!-- Sort by Deep AI Diagnosis Score -->
-                                                <button type="button"
-                                                        @click.stop="toggleSort('ai_score')"
-                                                        :class="isSortActive('ai_score') ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400/60 shadow-sm ring-1 ring-indigo-500/50 font-black' : 'bg-slate-900/90 text-slate-400 hover:text-indigo-300 border-slate-800 hover:border-indigo-500/40'"
-                                                        class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border transition-all inline-flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95"
-                                                        title="Trier par Score IA / Profil Web & Data (Top IA Décroissant / Croissant)">
-                                                    <span>🤖 Top IA</span>
-                                                    <span x-show="sortBy === 'ai_score_desc'" class="text-indigo-300 font-black">▼</span>
-                                                    <span x-show="sortBy === 'ai_score_asc'" class="text-indigo-300 font-black">▲</span>
-                                                    <span x-show="!isSortActive('ai_score')" class="text-slate-500 text-[9px] opacity-60">⇅</span>
-                                                </button>
-                                            </div>
+                                <tr class="bg-slate-950/90 border-b border-slate-800/90 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+                                    <th class="py-3 pl-4 pr-2 w-[13.5%] select-none align-middle">
+                                        <div class="flex items-center gap-1.5">
+                                            <button type="button"
+                                                    @click.stop="toggleSort('score')"
+                                                    :class="isSortActive('score') ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                                                    class="inline-flex items-center gap-1 uppercase tracking-wider transition-colors cursor-pointer"
+                                                    title="Trier par Score Réglementaire">
+                                                <span>Score</span>
+                                                <span x-show="sortBy === 'score_desc'" class="text-emerald-400 text-[10px]">▼</span>
+                                                <span x-show="sortBy === 'score_asc'" class="text-emerald-400 text-[10px]">▲</span>
+                                                <span x-show="!isSortActive('score')" class="text-slate-600 text-[10px]">⇅</span>
+                                            </button>
+                                            <span class="text-slate-700">/</span>
+                                            <button type="button"
+                                                    @click.stop="toggleSort('ai_score')"
+                                                    :class="isSortActive('ai_score') ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-bold' : 'bg-slate-900 text-slate-400 hover:text-indigo-300 border-slate-800 hover:border-indigo-500/30'"
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all inline-flex items-center gap-0.5 cursor-pointer"
+                                                    title="Trier par Score IA / Profil">
+                                                <span>IA</span>
+                                                <span x-show="sortBy === 'ai_score_desc'" class="text-indigo-300 text-[9px]">▼</span>
+                                                <span x-show="sortBy === 'ai_score_asc'" class="text-indigo-300 text-[9px]">▲</span>
+                                                <span x-show="!isSortActive('ai_score')" class="text-slate-600 text-[9px]">⇅</span>
+                                            </button>
                                         </div>
                                     </th>
 
-                                    <th class="py-2.5 px-2 w-[9%] select-none align-top">
+                                    <th class="py-3 px-2 w-[11.5%] select-none align-middle">
                                         <button type="button"
                                                 @click.stop="toggleSort('id')"
-                                                :class="isSortActive('id') ? 'text-emerald-400 font-black' : 'text-slate-400 hover:text-slate-200'"
-                                                class="group inline-flex items-center gap-1 text-[11px] uppercase tracking-wider font-bold transition-colors cursor-pointer pt-0.5"
+                                                :class="isSortActive('id') ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                                                class="group inline-flex items-center gap-1 uppercase tracking-wider transition-colors cursor-pointer"
                                                 title="Trier par identifiant consultation (# ID)">
                                             <span>ID & Réf</span>
-                                            <span x-show="sortBy === 'id_desc'" class="text-emerald-400 font-black">▼</span>
-                                            <span x-show="sortBy === 'id_asc'" class="text-emerald-400 font-black">▲</span>
+                                            <span x-show="sortBy === 'id_desc'" class="text-emerald-400 text-[10px]">▼</span>
+                                            <span x-show="sortBy === 'id_asc'" class="text-emerald-400 text-[10px]">▲</span>
                                             <span x-show="!isSortActive('id')" class="text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
                                         </button>
                                     </th>
 
-                                    <th class="py-2.5 px-3 w-[39%] select-none align-top">
-                                        <div class="flex items-center justify-between gap-2 pt-0.5">
-                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Objet de la Consultation</span>
+                                    <th class="py-3 px-3 w-[32%] select-none align-middle">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span>Objet de la consultation</span>
                                             <button type="button"
                                                     @click.stop="toggleSort('items')"
-                                                    :class="isSortActive('items') ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm font-bold' : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'"
-                                                    class="px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all inline-flex items-center gap-1 cursor-pointer"
+                                                    :class="isSortActive('items') ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 font-bold' : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'"
+                                                    class="px-1.5 py-0.5 rounded text-[10px] font-mono border transition-all inline-flex items-center gap-1 cursor-pointer normal-case tracking-normal"
                                                     title="Trier par nombre d'articles au devis">
-                                                <span>📦 Articles</span>
-                                                <span x-show="sortBy === 'items_desc'" class="text-emerald-400 font-black">▼</span>
-                                                <span x-show="sortBy === 'items_asc'" class="text-emerald-400 font-black">▲</span>
+                                                <span>Articles</span>
+                                                <span x-show="sortBy === 'items_desc'" class="text-emerald-400 text-[9px]">▼</span>
+                                                <span x-show="sortBy === 'items_asc'" class="text-emerald-400 text-[9px]">▲</span>
                                                 <span x-show="!isSortActive('items')" class="text-slate-600 text-[9px]">⇅</span>
                                             </button>
                                         </div>
                                     </th>
 
-                                    <th class="py-2.5 px-3 w-[17%] align-top">
-                                        <div class="pt-0.5">
-                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Acheteur Public & Lieu</span>
-                                        </div>
+                                    <th class="py-3 px-3 w-[20%] align-middle">
+                                        <span>Acheteur public & Lieu</span>
                                     </th>
 
-                                    <th class="py-2.5 px-2 w-[10%] text-center select-none align-top">
-                                        <div class="pt-0.5">
-                                            <button type="button"
-                                                    @click.stop="toggleSort('deadline')"
-                                                    :class="isSortActive('deadline') ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'"
-                                                    class="group inline-flex items-center gap-1 text-[11px] uppercase tracking-wider font-bold transition-colors cursor-pointer"
-                                                    title="Trier par date limite / échéance">
-                                                <span>Échéance</span>
-                                                <span x-show="sortBy === 'deadline_asc'" class="text-amber-400 font-black">▲</span>
-                                                <span x-show="sortBy === 'deadline_desc'" class="text-amber-400 font-black">▼</span>
-                                                <span x-show="!isSortActive('deadline')" class="text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
-                                            </button>
-                                        </div>
+                                    <th class="py-3 px-3 w-[13%] text-right select-none align-middle">
+                                        <button type="button"
+                                                @click.stop="toggleSort('deadline')"
+                                                :class="isSortActive('deadline') ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                                                class="group inline-flex items-center justify-end gap-1 uppercase tracking-wider transition-colors cursor-pointer"
+                                                title="Trier par date limite / échéance">
+                                            <span>Échéance</span>
+                                            <span x-show="sortBy === 'deadline_asc'" class="text-amber-400 text-[10px]">▲</span>
+                                            <span x-show="sortBy === 'deadline_desc'" class="text-amber-400 text-[10px]">▼</span>
+                                            <span x-show="!isSortActive('deadline')" class="text-slate-600 group-hover:text-slate-400 text-[10px]">⇅</span>
+                                        </button>
                                     </th>
 
-                                    <th class="py-2.5 px-3 w-[9%] text-right align-top">
-                                        <div class="pt-0.5">
-                                            <span class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Actions</span>
-                                        </div>
+                                    <th class="py-3 pl-2 pr-4 w-[10%] text-right align-middle">
+                                        <span>Actions</span>
                                     </th>
                                 </tr>
                             </thead>
 
-                            <tbody class="divide-y divide-slate-800/70">
+                            <tbody class="divide-y divide-slate-800/60">
 
                                 <template x-for="(item, idx) in visibleItems" :key="item.portal_id">
 
-                                    <tr class="hover:bg-slate-800/40 transition-colors cursor-pointer group"
-
-                                        :class="{'bg-slate-800/25 border-l-2 border-emerald-500': selectedIndex === idx}"
-
+                                    <tr class="hover:bg-slate-800/35 transition-colors cursor-pointer group"
+                                        :class="{'bg-slate-800/30 border-l-2 border-l-emerald-500': selectedIndex === idx}"
                                         @click="openModal(item.portal_id)">
 
-                                        <td class="py-3.5 px-3 whitespace-nowrap">
-
-                                            <div class="flex flex-col items-start gap-1">
+                                        <!-- Score & Décision -->
+                                        <td class="py-3.5 pl-4 pr-2 align-middle whitespace-nowrap">
+                                            <div class="flex flex-col items-start gap-1.5">
                                                 <span :class="{
-
-                                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/30': item.decision_verdict === 'GO' || (item.match_score >= 80 && item.decision_verdict !== 'CLÔTURÉ' && item.decision_verdict !== 'ANNULÉ'),
-
-                                                    'bg-amber-500/10 text-amber-400 border-amber-500/30': item.decision_verdict === 'CONSIDER' || (item.match_score >= 50 && item.match_score < 80 && item.decision_verdict !== 'CLÔTURÉ'),
-
-                                                    'bg-purple-500/10 text-purple-300 border-purple-500/30': item.decision_verdict === 'CLÔTURÉ',
-
-                                                    'bg-rose-500/10 text-rose-400 border-rose-500/30': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
-
-                                                }" class="px-2 py-0.5 rounded-full font-bold border inline-flex items-center gap-1 text-[11px]">
-
-                                                    <span x-text="item.decision_verdict === 'GO' ? '🎯' : (item.decision_verdict === 'CONSIDER' ? '⚠️' : (item.decision_verdict === 'CLÔTURÉ' ? '⏳' : '❌'))"></span>
-
-                                                    <span x-text="item.match_score.toFixed(0) + '% ' + item.decision_verdict"></span>
-
+                                                    'bg-emerald-500/12 text-emerald-300 border-emerald-500/35': item.decision_verdict === 'GO' || (!item.decision_verdict && item.match_score >= 80),
+                                                    'bg-amber-500/12 text-amber-300 border-amber-500/35': item.decision_verdict === 'CONSIDER' || (!item.decision_verdict && item.match_score >= 50 && item.match_score < 80),
+                                                    'bg-purple-500/12 text-purple-300 border-purple-500/35': item.decision_verdict === 'CLÔTURÉ',
+                                                    'bg-rose-500/12 text-rose-300 border-rose-500/35': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
+                                                }" class="px-2 py-0.5 rounded-md font-semibold border inline-flex items-center gap-1.5 text-[11px] tabular-nums">
+                                                    <span :class="{
+                                                        'bg-emerald-400': item.decision_verdict === 'GO' || (!item.decision_verdict && item.match_score >= 80),
+                                                        'bg-amber-400': item.decision_verdict === 'CONSIDER' || (!item.decision_verdict && item.match_score >= 50 && item.match_score < 80),
+                                                        'bg-purple-400': item.decision_verdict === 'CLÔTURÉ',
+                                                        'bg-rose-400': item.decision_verdict === 'NO-GO' || item.decision_verdict === 'ANNULÉ'
+                                                    }" class="w-1.5 h-1.5 rounded-full shrink-0"></span>
+                                                    <span x-text="item.match_score.toFixed(0) + '% · ' + item.decision_verdict"></span>
                                                 </span>
 
-                                                <!-- Special Field: AI Matching Rate (Web, Dev, Data) -->
-                                                <template x-if="item.ai_matching">
-                                                    <span :class="{
-                                                        'bg-indigo-500/15 text-indigo-300 border-indigo-500/40': item.ai_matching.matching_rate >= 70,
-                                                        'bg-sky-500/10 text-sky-300 border-sky-500/30': item.ai_matching.matching_rate >= 45 && item.ai_matching.matching_rate < 70,
-                                                        'bg-slate-800/80 text-slate-400 border-slate-700': item.ai_matching.matching_rate < 45,
-                                                        'ring-1 ring-indigo-400 shadow-sm font-black': isSortActive('ai_score') && item.ai_matching.matching_rate >= 50
-                                                    }" class="px-2 py-0.5 rounded-full font-mono font-bold border inline-flex items-center gap-1 text-[10px] transition-all" :title="'Diagnostic IA Profil Web/Dev/Data: ' + item.ai_matching.primary_domain">
-                                                        <span>🤖</span>
-                                                        <span x-text="'AI: ' + item.ai_matching.matching_rate.toFixed(0) + '% ' + (item.ai_matching.rating_label === 'EXCELLENT_MATCH' ? 'TOP' : item.ai_matching.rating_label.replace('_MATCH',''))"></span>
-                                                    </span>
-                                                </template>
+                                                <div class="flex items-center gap-1.5">
+                                                    <!-- AI Matching Rate -->
+                                                    <template x-if="item.ai_matching">
+                                                        <span :class="{
+                                                            'bg-indigo-500/15 text-indigo-300 border-indigo-500/35': item.ai_matching.matching_rate >= 70,
+                                                            'bg-sky-500/10 text-sky-300 border-sky-500/30': item.ai_matching.matching_rate >= 45 && item.ai_matching.matching_rate < 70,
+                                                            'bg-slate-800/80 text-slate-400 border-slate-700/80': item.ai_matching.matching_rate < 45,
+                                                            'ring-1 ring-indigo-400/70 font-bold': isSortActive('ai_score') && item.ai_matching.matching_rate >= 50
+                                                        }" class="px-1.5 py-0.5 rounded font-mono tabular-nums font-medium border inline-flex items-center gap-1 text-[10px]" :title="'Diagnostic IA (' + (item.ai_matching.primary_domain || 'Profil') + ') : ' + item.ai_matching.rating_label">
+                                                            <span x-text="'IA ' + item.ai_matching.matching_rate.toFixed(0) + '%'"></span>
+                                                        </span>
+                                                    </template>
 
-                                                <!-- User Alignment Feedback Action Pill -->
-                                                <div @click.stop class="inline-flex items-center">
-                                                    <template x-if="item.alignment_feedback === 'aligned'">
-                                                        <button @click="toggleAlignment(item)"
-                                                                title="Confirmé aligné avec le secteur. Cliquer pour réinitialiser."
-                                                                class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all inline-flex items-center gap-1">
-                                                            <span>✅ Aligné</span>
-                                                            <span class="text-[8px] opacity-70">✕</span>
-                                                        </button>
-                                                    </template>
-                                                    <template x-if="item.alignment_feedback === 'misaligned'">
-                                                        <button @click="toggleAlignment(item)"
-                                                                title="Signalé hors secteur. Cliquer pour réinitialiser."
-                                                                class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 transition-all inline-flex items-center gap-1">
-                                                            <span>❌ Hors secteur</span>
-                                                            <span class="text-[8px] opacity-70">✕</span>
-                                                        </button>
-                                                    </template>
-                                                    <template x-if="!item.alignment_feedback">
-                                                        <div class="inline-flex items-center gap-1 text-[10px]">
-                                                            <button @click="submitAlignment(item, true)"
-                                                                    title="Confirmer que cette consultation correspond au secteur actif (+15% boost & apprentissage IA)"
-                                                                    class="px-1.5 py-0.5 rounded bg-slate-900 hover:bg-emerald-950 text-slate-400 hover:text-emerald-300 border border-slate-800 hover:border-emerald-500/30 transition-colors inline-flex items-center gap-0.5">
-                                                                <span>👍</span>
-                                                                <span>Aligné ?</span>
+                                                    <!-- Compact Alignment Feedback -->
+                                                    <div @click.stop class="inline-flex items-center">
+                                                        <template x-if="item.alignment_feedback === 'aligned'">
+                                                            <button @click="toggleAlignment(item)"
+                                                                    title="Confirmé aligné avec le secteur. Cliquer pour réinitialiser."
+                                                                    class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors inline-flex items-center gap-1">
+                                                                <span>Aligné</span>
+                                                                <span class="text-[9px] opacity-60">✕</span>
                                                             </button>
-                                                            <button @click="submitAlignment(item, false)"
-                                                                    title="Signaler hors secteur / faux positif"
-                                                                    class="p-0.5 px-1 rounded bg-slate-900 hover:bg-rose-950 text-slate-500 hover:text-rose-300 border border-slate-800 hover:border-rose-500/30 transition-colors inline-flex items-center">
-                                                                <span>👎</span>
+                                                        </template>
+                                                        <template x-if="item.alignment_feedback === 'misaligned'">
+                                                            <button @click="toggleAlignment(item)"
+                                                                    title="Signalé hors secteur. Cliquer pour réinitialiser."
+                                                                    class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 transition-colors inline-flex items-center gap-1">
+                                                                <span>Hors profil</span>
+                                                                <span class="text-[9px] opacity-60">✕</span>
                                                             </button>
-                                                        </div>
-                                                    </template>
+                                                        </template>
+                                                        <template x-if="!item.alignment_feedback">
+                                                            <div class="inline-flex items-center gap-0.5 opacity-45 group-hover:opacity-100 transition-opacity">
+                                                                <button @click="submitAlignment(item, true)"
+                                                                        title="Confirmer pertinent pour ce profil (+15% boost)"
+                                                                        class="p-1 rounded bg-slate-900/90 hover:bg-emerald-500/15 text-slate-400 hover:text-emerald-300 border border-slate-800 hover:border-emerald-500/30 transition-colors">
+                                                                    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>
+                                                                </button>
+                                                                <button @click="submitAlignment(item, false)"
+                                                                        title="Signaler hors secteur / faux positif"
+                                                                        class="p-1 rounded bg-slate-900/90 hover:bg-rose-500/15 text-slate-500 hover:text-rose-300 border border-slate-800 hover:border-rose-500/30 transition-colors">
+                                                                    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>
+                                                                </button>
+                                                            </div>
+                                                        </template>
+                                                    </div>
                                                 </div>
                                             </div>
-
                                         </td>
 
-                                        <td class="py-3.5 px-2 font-mono text-slate-400">
-
-                                            <div class="font-bold text-white text-xs group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></div>
-
-                                            <div class="text-[11px] text-slate-400 truncate" :title="item.reference" x-text="item.reference"></div>
-
+                                        <!-- ID & Réf -->
+                                        <td class="py-3.5 px-2 align-middle font-mono">
+                                            <div class="font-semibold text-slate-100 text-xs tabular-nums group-hover:text-emerald-400 transition-colors" x-text="'#' + item.portal_id"></div>
+                                            <div class="text-[11px] text-slate-400 truncate mt-0.5" :title="item.reference" x-text="item.reference"></div>
                                         </td>
 
-                                        <td class="py-3.5 px-3">
-
-                                            <div class="font-bold text-white group-hover:text-emerald-300 line-clamp-2 text-sm leading-snug tracking-tight" :title="item.title" x-text="item.title"></div>
-
-                                            <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
-
-                                                <span class="bg-slate-800 text-slate-200 border border-slate-700/60 px-1.5 py-0.5 rounded font-mono text-[10px] font-semibold" x-text="item.line_item_count + ' articles au devis'"></span>
+                                        <!-- Objet de la Consultation -->
+                                        <td class="py-3.5 px-3 align-middle">
+                                            <div class="font-semibold text-slate-100 group-hover:text-emerald-300 line-clamp-2 text-[13px] leading-snug tracking-tight transition-colors" :title="item.title" x-text="item.title"></div>
+                                            <div class="mt-1.5 flex items-center gap-2 flex-wrap">
+                                                <span class="bg-slate-800/80 text-slate-300 border border-slate-700/60 px-2 py-0.5 rounded-md font-mono tabular-nums text-[10px] font-medium"
+                                                      x-text="item.line_item_count + (item.line_item_count > 1 ? ' articles' : ' article')"></span>
 
                                                 <span :class="{
-                                                    'bg-sky-500/10 text-sky-400 border-sky-500/30': item.main_category === 'Fournitures',
-                                                    'bg-purple-500/10 text-purple-300 border-purple-500/30': item.main_category === 'Services',
-                                                    'bg-amber-500/10 text-amber-400 border-amber-500/30': item.main_category === 'Travaux'
-                                                }" class="px-1.5 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 shrink-0">
-                                                    <span x-text="item.main_category === 'Fournitures' ? '🖥️ Matériel' : (item.main_category === 'Services' ? '🛠️ Services' : '🏗️ ' + item.main_category)"></span>
+                                                    'bg-sky-500/10 text-sky-300 border-sky-500/25': item.main_category === 'Fournitures',
+                                                    'bg-purple-500/10 text-purple-300 border-purple-500/25': item.main_category === 'Services',
+                                                    'bg-amber-500/10 text-amber-300 border-amber-500/25': item.main_category === 'Travaux'
+                                                }" class="px-2 py-0.5 rounded-md text-[10px] font-medium border inline-flex items-center gap-1.5 shrink-0">
+                                                    <span :class="{
+                                                        'bg-sky-400': item.main_category === 'Fournitures',
+                                                        'bg-purple-400': item.main_category === 'Services',
+                                                        'bg-amber-400': item.main_category === 'Travaux'
+                                                    }" class="w-1.5 h-1.5 rounded-full"></span>
+                                                    <span x-text="item.main_category === 'Fournitures' ? 'Matériel' : item.main_category"></span>
                                                 </span>
-
                                             </div>
-
                                         </td>
 
-                                        <td class="py-3.5 px-3">
-
-                                            <div class="font-semibold text-slate-200 text-xs truncate" :title="item.buyer_name" x-text="item.buyer_name"></div>
-
-                                            <div class="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate" :title="item.execution_location">
-
-                                                <span>📍</span> <span class="truncate" x-text="item.execution_location"></span>
-
+                                        <!-- Acheteur Public & Lieu -->
+                                        <td class="py-3.5 px-3 align-middle">
+                                            <div class="font-medium text-slate-200 text-xs truncate" :title="item.buyer_name" x-text="item.buyer_name"></div>
+                                            <div class="text-[11px] text-slate-400 flex items-center gap-1 mt-1 truncate" :title="item.execution_location">
+                                                <svg class="w-3 h-3 text-slate-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                                                <span class="truncate" x-text="item.execution_location || 'Non précisé'"></span>
                                             </div>
-
                                         </td>
 
-                                        <td class="py-3.5 px-2 whitespace-nowrap text-center">
-
-                                            <div class="font-mono text-xs font-bold flex items-center justify-center gap-1"
-
+                                        <!-- Échéance -->
+                                        <td class="py-3.5 px-3 align-middle whitespace-nowrap text-right">
+                                            <div class="font-mono tabular-nums text-xs font-semibold flex items-center justify-end gap-1"
                                                  :class="getCountdownUrgencyClass(item.deadline_at)">
-
                                                 <span x-text="formatCountdown(item.deadline_at)"></span>
-
                                             </div>
-
-                                            <div class="text-[10px] text-slate-500 font-mono mt-0.5 truncate" :title="item.deadline_at" x-text="item.deadline_at"></div>
-
+                                            <div class="text-[11px] text-slate-400 font-mono tabular-nums mt-0.5" :title="item.deadline_at" x-text="item.deadline_at"></div>
                                         </td>
 
-                                        <td class="py-3.5 px-3 whitespace-nowrap text-right" @click.stop>
-
+                                        <!-- Actions -->
+                                        <td class="py-3.5 pl-2 pr-4 align-middle whitespace-nowrap text-right" @click.stop>
                                             <div class="flex items-center justify-end gap-1.5">
-
-                                                <button @click="openModal(item.portal_id)" 
-
+                                                <button @click="openModal(item.portal_id)"
                                                         title="Ouvrir la Fiche 60s interactive : chiffrage, couverture catalogue & arbitrage"
-
-                                                        class="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 inline-flex items-center gap-1 shrink-0">
-
-                                                    <span>⚡</span> <span>Fiche</span>
-
+                                                        class="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-lg text-xs transition-all shadow-sm hover:shadow-emerald-500/20 active:scale-95 inline-flex items-center gap-1.5 shrink-0">
+                                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                                    <span>Fiche</span>
                                                 </button>
 
-                                                <a :href="item.portal_url" target="_blank" rel="noopener noreferrer" 
-
-                                                   title="Consulter l'avis officiel sur marchespublics.gov.ma (Dépôt du devis & pièces officielles)"
-
-                                                   class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium rounded-lg text-xs transition-colors border border-slate-700/60 inline-flex items-center justify-center shrink-0">
-
-                                                    <span class="text-sm">🏛️</span>
-
+                                                <a :href="item.portal_url" target="_blank" rel="noopener noreferrer"
+                                                   title="Consulter l'avis officiel sur marchespublics.gov.ma"
+                                                   class="p-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors border border-slate-700/70 inline-flex items-center justify-center shrink-0">
+                                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                                                 </a>
-
                                             </div>
-
                                         </td>
 
                                     </tr>
