@@ -3236,7 +3236,10 @@
                                                             <span x-show="w.devis_count" class="text-slate-500" x-text="' · ' + w.devis_count + ' devis reçus'"></span>
                                                         </div>
                                                     </div>
-                                                    <div class="font-mono font-bold text-emerald-400 tabular-nums shrink-0" x-text="Math.round(w.amount_ttc || 0).toLocaleString('fr-FR') + ' DH'"></div>
+                                                    <div class="flex items-center gap-2 shrink-0">
+                                                        <span class="font-mono font-bold text-emerald-400 tabular-nums" x-text="Math.round(w.amount_ttc || 0).toLocaleString('fr-FR') + ' DH'"></span>
+                                                        <span class="text-[10px] font-mono text-indigo-300 opacity-70 group-hover:opacity-100">Détail →</span>
+                                                    </div>
                                                 </div>
                                             </template>
                                         </div>
@@ -6624,7 +6627,7 @@
 
         <!-- 60-Second Decision Card Modal with Real Pricing & Bordereau Export -->
 
-        <div x-show="modalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div x-show="modalOpen" x-cloak class="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
 
             <div @click.away="closeModal()" class="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
 
@@ -8090,7 +8093,7 @@
 
                 feedStats: { total: 0, ge80: 0, ge50: 0, aligned: 0 },
 
-                statusFilter: 'all',
+                statusFilter: 'open',
 
                 alignmentFilter: 'all',
 
