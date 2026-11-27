@@ -1253,8 +1253,8 @@ class IngestionBatchManager:
 
             if deep_scan or max_pages >= 30:
                 portal_total, portal_cards = await asyncio.wait_for(
-                    spider.fetch_all_active_cards(max_pages=50, concurrency=4),
-                    timeout=35.0
+                    spider.fetch_all_active_cards(max_pages=80, concurrency=6),
+                    timeout=90.0
                 )
                 is_live = True
             else:
@@ -2294,8 +2294,8 @@ class IngestionBatchManager:
                 record.current_step = "Phase 1 : Balayage exhaustif de toutes les pages d'avis ouverts sur le portail TGR..."
                 try:
                     portal_total, portal_cards = await asyncio.wait_for(
-                        spider.fetch_all_active_cards(max_pages=50, concurrency=4),
-                        timeout=35.0
+                        spider.fetch_all_active_cards(max_pages=80, concurrency=6),
+                        timeout=120.0
                     )
                 except Exception as e_disc:
                     logger.warning(f"[BatchManager] Active discovery error: {e_disc}")
@@ -2390,11 +2390,17 @@ class IngestionBatchManager:
 
                     try:
                         raw_detail, detail_data = await service.detail_spider.fetch_detail(pid)
+                        if not detail_data.get("deadline_at") and card_meta.get("deadline_at"):
+                            detail_data["deadline_at"] = card_meta["deadline_at"]
+                        if not detail_data.get("title") and card_meta.get("title"):
+                            detail_data["title"] = card_meta["title"]
                         tender = await service.ingest_tender_detail(detail_data, raw_log=raw_detail, skip_if_exists=False)
                         await ingest_session.commit()
 
                         imported_count += 1
                         record.tenders_ingested += 1
+                        if imported_count % 15 == 0:
+                            self._save_to_storage()
                         record.line_items_extracted += len(detail_data.get("line_items", []))
                         if record.first_bdc_id is None:
                             record.first_bdc_id = pid
@@ -2456,6 +2462,12 @@ class IngestionBatchManager:
 
             self.pending_backfill_queue = []
             self._save_backfill_queue()
+
+            try:
+                from src.api.routes.feed import invalidate_feed_cache
+                invalidate_feed_cache()
+            except Exception:
+                pass
 
             # Refresh audit cache with deep scan
             await self.audit_active_tenders_coverage(force_refresh=True, deep_scan=True)
