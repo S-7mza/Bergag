@@ -1,14 +1,29 @@
 import calendar
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import select, func, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.tender import Award
 
 logger = logging.getLogger(__name__)
+
+try:
+    _CASABLANCA_TZ = ZoneInfo("Africa/Casablanca")
+except ZoneInfoNotFoundError:
+    _CASABLANCA_TZ = timezone(timedelta(hours=1))
+
+
+def _to_casablanca(dt: Optional[datetime]) -> Optional[datetime]:
+    """Convert a DB timestamp (usually UTC) to Africa/Casablanca local time."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_CASABLANCA_TZ)
 
 MONTH_LABELS_FR = {
     1: "Jan", 2: "Fév", 3: "Mar", 4: "Avr", 5: "Mai", 6: "Juin",
@@ -190,8 +205,8 @@ class AwardsAuditor:
             db_count = int(row.cnt) if row else 0
             total_mad = float(row.sum_mad or 0.0) if row else 0.0
             active_days = int(row.active_days or 0) if row else 0
-            min_dt = row.min_dt if row else None
-            max_dt = row.max_dt if row else None
+            min_dt = _to_casablanca(row.min_dt) if row else None
+            max_dt = _to_casablanca(row.max_dt) if row else None
 
             total_year += db_count
             total_mad_year += total_mad
@@ -211,8 +226,8 @@ class AwardsAuditor:
                 status_label = "Manquant"
                 missing_months.append(m)
             else:
-                min_day = min_dt.day if min_dt else 1
-                max_day = max_dt.day if max_dt else days_in_month
+                min_day = min_dt.day if (min_dt and min_dt.month == m) else 1
+                max_day = max_dt.day if (max_dt and max_dt.month == m) else days_in_month
                 if is_current_month:
                     is_partial = (min_day > 3) or ((now.day - max_day) > 2)
                 else:

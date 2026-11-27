@@ -22,6 +22,7 @@ class BuyerRadar:
         year: Optional[int] = None,
         buyer_keyword: Optional[str] = None,
         title_keyword: Optional[str] = None,
+        winner_keyword: Optional[str] = None,
         alert_filter: str = "all",
         limit: int = 30,
     ) -> List[Dict[str, Any]]:
@@ -30,7 +31,7 @@ class BuyerRadar:
         those approaching the 500,000 MAD statutory limit (Article 91).
         """
         target_year = year or datetime.now().year
-        has_filters = any([buyer_keyword, title_keyword, alert_filter != "all"])
+        has_filters = any([buyer_keyword, title_keyword, winner_keyword, alert_filter != "all"])
 
         stmt = (
             select(
@@ -48,6 +49,9 @@ class BuyerRadar:
 
         if title_keyword and title_keyword.strip():
             stmt = stmt.where(Award.title_raw.ilike(f"%{title_keyword.strip()}%"))
+
+        if winner_keyword and winner_keyword.strip():
+            stmt = stmt.where(Award.winner_name.ilike(f"%{winner_keyword.strip()}%"))
 
         stmt = (
             stmt.group_by(Award.buyer_name_raw)

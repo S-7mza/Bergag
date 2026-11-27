@@ -87,6 +87,7 @@ class CompetitorRadar:
         limit: int = 15,
         title_keyword: Optional[str] = None,
         buyer_keyword: Optional[str] = None,
+        winner_keyword: Optional[str] = None,
         year: Optional[int] = None,
         months: Optional[int] = None,
         sort_by: str = "amount",
@@ -108,13 +109,16 @@ class CompetitorRadar:
             .where(Award.winner_name != "—")
         )
 
-        has_filters = any([title_keyword, buyer_keyword, year, months])
+        has_filters = any([title_keyword, buyer_keyword, winner_keyword, year, months])
 
         if title_keyword and title_keyword.strip():
             stmt = stmt.where(Award.title_raw.ilike(f"%{title_keyword.strip()}%"))
 
         if buyer_keyword and buyer_keyword.strip():
             stmt = stmt.where(Award.buyer_name_raw.ilike(f"%{buyer_keyword.strip()}%"))
+
+        if winner_keyword and winner_keyword.strip():
+            stmt = stmt.where(Award.winner_name.ilike(f"%{winner_keyword.strip()}%"))
 
         if year:
             stmt = stmt.where(extract("year", Award.published_at) == year)
@@ -236,5 +240,75 @@ class CompetitorRadar:
             "top_client_buyers": list(buyers_set)[:5],
             "nature_breakdown": nature_breakdown,
             "recent_wins": wins,
+        }
+
+    async def get_supplier_awards(
+        self,
+        winner_keyword: str,
+        title_keyword: Optional[str] = None,
+        buyer_keyword: Optional[str] = None,
+        year: Optional[int] = None,
+        months: Optional[int] = None,
+        limit: int = 200,
+    ) -> Dict[str, Any]:
+        """
+        Search all awarded avis matching a Prestataire Attributaire (partial or exact name),
+        optionally scoped by object keyword, buyer, and time period.
+        """
+        kw = (winner_keyword or "").strip()
+        if not kw:
+            return {
+                "winner_query": "",
+                "total_awards": 0,
+                "total_amount_mad": 0.0,
+                "avg_amount_mad": 0.0,
+                "unique_buyers_count": 0,
+                "awards": [],
+            }
+
+        stmt = (
+            select(Award)
+            .where(Award.winner_name.ilike(f"%{kw}%"))
+            .where(Award.status == "Attribué")
+        )
+
+        if title_keyword and title_keyword.strip():
+            stmt = stmt.where(Award.title_raw.ilike(f"%{title_keyword.strip()}%"))
+        if buyer_keyword and buyer_keyword.strip():
+            stmt = stmt.where(Award.buyer_name_raw.ilike(f"%{buyer_keyword.strip()}%"))
+        if year:
+            stmt = stmt.where(extract("year", Award.published_at) == year)
+        elif months and months > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
+            stmt = stmt.where(Award.published_at >= cutoff)
+
+        stmt = stmt.order_by(desc(Award.published_at)).limit(limit)
+        res = await self.session.execute(stmt)
+        awards = list(res.scalars().all())
+
+        total_mad = sum(float(a.amount_ttc or 0.0) for a in awards)
+        buyers_set = {a.buyer_name_raw for a in awards if a.buyer_name_raw}
+
+        return {
+            "winner_query": kw,
+            "total_awards": len(awards),
+            "total_amount_mad": round(total_mad, 2),
+            "avg_amount_mad": round(total_mad / len(awards), 2) if awards else 0.0,
+            "unique_buyers_count": len(buyers_set),
+            "awards": [
+                {
+                    "id": str(a.id),
+                    "reference": a.reference,
+                    "title": a.title_raw,
+                    "nature": classify_award_nature(a.title_raw),
+                    "buyer_name": a.buyer_name_raw,
+                    "winner_name": a.winner_name,
+                    "amount_ttc": float(a.amount_ttc or 0.0),
+                    "devis_received_count": a.devis_received_count,
+                    "status": a.status,
+                    "published_at": a.published_at.strftime("%d/%m/%Y") if a.published_at else "—",
+                }
+                for a in awards
+            ],
         }
 
