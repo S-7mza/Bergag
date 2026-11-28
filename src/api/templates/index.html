@@ -1478,6 +1478,19 @@
                             <span>Studio Antigravity</span>
                         </button>
 
+                        <select x-model="studioFilter" @change="fetchFeed()"
+                                :class="studioFilter !== 'all' ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 font-semibold' : 'border-white/[0.08] bg-[#0a0c10] text-slate-300'"
+                                class="px-2.5 py-1.5 rounded-lg border text-xs outline-none transition-colors">
+                            <option value="all">🧠 Studio : Tous</option>
+                            <option value="studied" x-text="'✅ Étudiés Studio (' + (feedStats.studioStudied || 0) + ')'"></option>
+                            <option value="pending">⏳ À étudier (Studio)</option>
+                            <option value="p1">🚀 Studio P1</option>
+                            <option value="p2">🎯 Studio P2</option>
+                            <option value="go" x-text="'💎 Studio GO (' + (feedStats.studioGo || 0) + ')'"></option>
+                            <option value="consider">⚠️ Studio CONSIDER</option>
+                            <option value="nogo">⛔ Écartés Studio (NO-GO)</option>
+                        </select>
+
                         <button x-show="activeFilterChips.length > 0" @click="resetFilters()" class="ml-auto text-[11px] text-slate-400 hover:text-white transition-colors whitespace-nowrap">
                             Réinitialiser tout
                         </button>
@@ -8356,11 +8369,13 @@
 
                 minScore: 0,
 
-                feedStats: { total: 0, ge80: 0, ge50: 0, aligned: 0 },
+                feedStats: { total: 0, ge80: 0, ge50: 0, aligned: 0, studioStudied: 0, studioGo: 0 },
 
                 statusFilter: 'open',
 
                 alignmentFilter: 'all',
+
+                studioFilter: 'all',
 
 
 
@@ -9019,6 +9034,7 @@
                     if (this.selectedUrgency !== 'all') url += `&urgency=${encodeURIComponent(this.selectedUrgency)}`;
                     if (this.statusFilter && this.statusFilter !== 'all') url += `&status_filter=${encodeURIComponent(this.statusFilter)}`;
                     if (this.alignmentFilter && this.alignmentFilter !== 'all') url += `&alignment_filter=${encodeURIComponent(this.alignmentFilter)}`;
+                    if (this.studioFilter && this.studioFilter !== 'all') url += `&studio_filter=${encodeURIComponent(this.studioFilter)}`;
                     return url;
                 },
 
@@ -9306,6 +9322,10 @@
                     let chips = [];
 
                     if (this.searchQuery) chips.push({ key: 'search', label: 'Recherche: ' + this.searchQuery });
+
+                    if (this.studioFilter && this.studioFilter !== 'all') {
+                        chips.push({ key: 'studioFilter', label: '🧠 Studio: ' + this.studioFilter.toUpperCase() });
+                    }
 
                     if (this.minScore > 0) chips.push({ key: 'minScore', label: 'Score ≥ ' + this.minScore + '%' });
 
@@ -9781,6 +9801,8 @@
                         const ge50Header = res.headers.get('x-count-ge-50');
 
                         const alignedHeader = res.headers.get('x-count-aligned');
+                        const studioStudiedHeader = res.headers.get('x-count-studio-studied');
+                        const studioGoHeader = res.headers.get('x-count-studio-go');
 
                         this.items = await res.json();
                         this.sortLocalItems();
@@ -9804,6 +9826,8 @@
                             this.feedStats.ge50 = parseInt(ge50Header || '0', 10);
 
                             this.feedStats.aligned = parseInt(alignedHeader || '0', 10);
+                            this.feedStats.studioStudied = parseInt(studioStudiedHeader || '0', 10);
+                            this.feedStats.studioGo = parseInt(studioGoHeader || '0', 10);
 
                         } else {
 
@@ -10115,6 +10139,8 @@
                     this.selectedUrgency = 'all';
 
                     this.alignmentFilter = 'all';
+
+                    this.studioFilter = 'all';
 
                     this.sortBy = 'score_desc';
 

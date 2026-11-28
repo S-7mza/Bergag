@@ -385,6 +385,7 @@ async def get_tender_feed(
     urgency: Optional[str] = Query(None, description="Urgency / Deadline filter ('1d', '2d', '3d', '4d', '1w', '2w', '1m', 'urgent_24h', 'urgent_48h')"),
     status_filter: Optional[str] = Query("all", description="Status filter: 'all', 'open' (eliminate closed), 'closed'"),
     alignment_filter: Optional[str] = Query("all", description="Filter by expert alignment: 'all', 'aligned' (confirmés alignés), 'misaligned', 'unreviewed')"),
+    studio_filter: Optional[str] = Query("all", description="Filter by Antigravity Studio diagnosis: 'all', 'studied', 'pending', 'p1', 'p2', 'go', 'consider', 'nogo'"),
     exclude_closed: bool = Query(False, description="Whether to eliminate closed/expired offers"),
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, score_asc, ai_score_desc, ai_score_asc, deadline_asc, deadline_desc, items_desc, items_asc, id_desc, id_asc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
@@ -754,12 +755,19 @@ async def get_tender_feed(
     count_ge_80 = sum(1 for item in scored_items if item.match_score >= 80.0)
     count_ge_50 = sum(1 for item in scored_items if item.match_score >= 50.0)
     count_aligned = sum(1 for item in scored_items if item.alignment_feedback == "aligned")
+    count_studio_studied = sum(1 for item in scored_items if item.antigravity_study is not None)
+    count_studio_go = sum(
+        1 for item in scored_items
+        if item.antigravity_study and item.antigravity_study.get("verdict") == "GO"
+    )
 
     # Set response metadata headers for frontend badges
     response.headers["X-Total-Count"] = str(total_candidates)
     response.headers["X-Count-Ge-80"] = str(count_ge_80)
     response.headers["X-Count-Ge-50"] = str(count_ge_50)
     response.headers["X-Count-Aligned"] = str(count_aligned)
+    response.headers["X-Count-Studio-Studied"] = str(count_studio_studied)
+    response.headers["X-Count-Studio-Go"] = str(count_studio_go)
 
     # Filter by expert alignment or minimum score
     if alignment_filter == "aligned":
@@ -771,6 +779,33 @@ async def get_tender_feed(
     else:
         # Default 'all': filter by effective minimum score
         feed_items = [item for item in scored_items if item.match_score >= effective_min_score]
+
+    # Filter by Antigravity Studio diagnosis
+    sf = (studio_filter or "all").lower().strip()
+    if sf == "studied":
+        feed_items = [item for item in feed_items if item.antigravity_study is not None]
+    elif sf == "pending":
+        feed_items = [item for item in feed_items if item.antigravity_study is None]
+    elif sf in ("p1", "p2", "p3", "archive"):
+        feed_items = [
+            item for item in feed_items
+            if item.antigravity_study and (item.antigravity_study.get("priority_tier") or "").lower() == sf
+        ]
+    elif sf == "go":
+        feed_items = [
+            item for item in feed_items
+            if item.antigravity_study and item.antigravity_study.get("verdict") == "GO"
+        ]
+    elif sf == "consider":
+        feed_items = [
+            item for item in feed_items
+            if item.antigravity_study and item.antigravity_study.get("verdict") == "CONSIDER"
+        ]
+    elif sf in ("nogo", "no-go"):
+        feed_items = [
+            item for item in feed_items
+            if item.antigravity_study and item.antigravity_study.get("verdict") == "NO-GO"
+        ]
 
     # Helper extractors for multi-criteria sorting
     def get_ai_score(item) -> float:

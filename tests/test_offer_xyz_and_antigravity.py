@@ -178,8 +178,63 @@ def test_antigravity_api_endpoints(client):
         assert "exportAntigravityBatch" in page.text
         assert "applyAntigravityBatchJson" in page.text
         assert "<tender_cps_data>" in page.text
+        assert "studioFilter" in page.text
     finally:
         antigravity_study_manager._studies = orig_studies
         if Path("data/test_ag_ledger_tmp.json").exists():
             Path("data/test_ag_ledger_tmp.json").unlink()
         antigravity_study_manager.ledger_path = orig_path
+
+
+def test_feed_studio_diagnosis_filter(client):
+    from unittest.mock import AsyncMock, MagicMock
+    from src.database.session import get_db_session
+    from src.models.tender import Buyer, Tender
+
+    now = datetime.now(timezone.utc)
+    buyer = Buyer(slug="b-studio", official_name="Ministère Studio", buyer_type="ministère")
+    t1 = Tender(
+        portal_id=999501, source_type="bdc", reference="S1/2026", compound_natural_key="b:S1:2026",
+        title="Développement Portail Web", main_category="Services",
+        published_at=now, deadline_at=now + timedelta(days=5), status="active",
+    )
+    t1.buyer = buyer
+    t1.line_items = []
+    t2 = Tender(
+        portal_id=999502, source_type="bdc", reference="S2/2026", compound_natural_key="b:S2:2026",
+        title="Achat matériel de bureau", main_category="Fournitures",
+        published_at=now, deadline_at=now + timedelta(days=5), status="active",
+    )
+    t2.buyer = buyer
+    t2.line_items = []
+
+    mock_res = MagicMock()
+    mock_res.scalars.return_value.all.return_value = [t1, t2]
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_res
+    app.dependency_overrides[get_db_session] = lambda: mock_session
+
+    admin_headers = {"Authorization": f"Bearer {create_session_token('admin@bergag.ma', 'admin')}"}
+    orig_studies = dict(antigravity_study_manager._studies)
+
+    try:
+        antigravity_study_manager._studies[999501] = AntigravityStudyRecord(
+            portal_id=999501, verdict="GO", priority_tier="P1", opportunity_score=91.0,
+            technical_fit_x=95.0, commercial_value_y=85.0, win_probability_z=90.0,
+            why_reasons=["X: Portail web"],
+        )
+
+        r_studied = client.get("/api/feed?profile_name=all&studio_filter=studied", headers=admin_headers)
+        assert r_studied.status_code == 200
+        assert [i["portal_id"] for i in r_studied.json()] == [999501]
+        assert r_studied.headers.get("x-count-studio-studied") == "1"
+        assert r_studied.headers.get("x-count-studio-go") == "1"
+
+        r_p1 = client.get("/api/feed?profile_name=all&studio_filter=p1", headers=admin_headers)
+        assert [i["portal_id"] for i in r_p1.json()] == [999501]
+
+        r_pending = client.get("/api/feed?profile_name=all&studio_filter=pending", headers=admin_headers)
+        assert [i["portal_id"] for i in r_pending.json()] == [999502]
+    finally:
+        antigravity_study_manager._studies = orig_studies
+        app.dependency_overrides.pop(get_db_session, None)
