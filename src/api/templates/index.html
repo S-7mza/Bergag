@@ -3038,7 +3038,7 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800/60 bg-slate-950/50">
-                                <template x-for="aw in supplierAwardsData.awards" :key="aw.id">
+                                <template x-for="aw in (supplierAwardsData?.awards || [])" :key="aw.id">
                                     <tr class="hover:bg-slate-800/40 transition-colors">
                                         <td class="py-2.5 px-3 font-mono whitespace-nowrap">
                                             <div class="text-slate-200 font-semibold text-[11px]" x-text="aw.published_at"></div>
@@ -6740,7 +6740,7 @@
 
                         <div class="flex flex-wrap items-center gap-2 mb-2">
 
-                            <span class="text-xs uppercase tracking-wider text-emerald-400 font-mono font-bold" x-text="'BDC #' + activeTender?.portal_id + ' &bull; Réf: ' + activeTender?.reference"></span>
+                            <span class="text-xs uppercase tracking-wider text-emerald-400 font-mono font-bold" x-text="(activeTender?.portal_id ? 'BDC #' + activeTender.portal_id : 'ARCHIVE TGR') + ' • Réf: ' + (activeTender?.reference || 'N/A')"></span>
 
                             <span class="text-xs text-slate-500">&bull;</span>
 
@@ -6789,7 +6789,8 @@
 
                     <div class="flex items-center gap-2 flex-shrink-0">
 
-                        <button @click="copyFicheLink()" 
+                        <button x-show="activeTender?.portal_id && !activeTender?.is_closed_award"
+                                @click="copyFicheLink()" 
 
                                 title="Copier le lien direct vers cette Fiche 60s" 
 
@@ -6811,8 +6812,8 @@
 
                 <div class="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
 
-                    <!-- Sector Alignment & Active Learning Feedback Bar -->
-                    <div class="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                    <!-- Sector Alignment & Active Learning Feedback Bar (active tenders only) -->
+                    <div x-show="activeTender?.portal_id && !activeTender?.is_closed_award" class="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
                         <div class="flex items-center gap-3">
                             <div class="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 shadow-sm border"
                                  :class="{
@@ -7182,9 +7183,9 @@
 
 
 
-                    <!-- Real Backend Pricing Corridor Tool (Analyst & Admin only) -->
+                    <!-- Real Backend Pricing Corridor Tool (Open/Active tenders only — hidden for closed/awarded archives) -->
 
-                    <div x-show="hasPermission('tender:pricing_calculator')" class="bg-gradient-to-br from-slate-950 to-slate-900 p-5 rounded-2xl border border-emerald-500/20 shadow-lg space-y-3">
+                    <div x-show="hasPermission('tender:pricing_calculator') && !activeTender?.is_closed_award && activeTender?.decision_verdict !== 'CLÔTURÉ' && activeTender?.decision_verdict !== 'ANNULÉ'" class="bg-gradient-to-br from-slate-950 to-slate-900 p-5 rounded-2xl border border-emerald-500/20 shadow-lg space-y-3">
 
                         <div class="flex justify-between items-center">
 
@@ -7604,7 +7605,7 @@
 
                 <div class="bg-slate-950 border-t border-slate-800 p-4 flex flex-wrap justify-between items-center gap-3">
 
-                    <div x-show="hasPermission('tender:action')" class="space-x-2">
+                    <div x-show="hasPermission('tender:action') && !activeTender?.is_closed_award && activeTender?.decision_verdict !== 'CLÔTURÉ' && activeTender?.decision_verdict !== 'ANNULÉ'" class="space-x-2">
 
                         <button @click="recordAction('shortlisted')" class="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition-colors">
 
@@ -7626,17 +7627,23 @@
 
                     </div>
 
+                    <div x-show="activeTender?.is_closed_award || activeTender?.decision_verdict === 'CLÔTURÉ' || activeTender?.decision_verdict === 'ANNULÉ'" class="text-xs text-slate-400 font-mono flex items-center gap-2">
+                        <span>📁</span>
+                        <span x-text="activeTender?.is_closed_award ? 'Archive d\'attribution TGR — Consultation clôturée' : 'Consultation clôturée ou annulée (lecture seule)'"></span>
+                    </div>
+
 
 
                     <div class="flex items-center gap-2 ml-auto">
-                        <template x-if="activeTender?.attachment_available">
+                        <template x-if="activeTender?.attachment_available && activeTender?.portal_id">
                             <a :href="'/api/tenders/' + activeTender?.portal_id + '/attachment/download'" download
                                title="Télécharger directement l'archive complète des pièces jointes (.ZIP)"
                                class="px-3.5 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5">
                                 <span>📦</span> <span>Dossier CPS (.ZIP)</span>
                             </a>
                         </template>
-                        <a :href="activeTender?.portal_url" target="_blank" rel="noopener noreferrer" 
+                        <a x-show="activeTender?.portal_url && !activeTender?.is_closed_award"
+                           :href="activeTender?.portal_url" target="_blank" rel="noopener noreferrer" 
 
                            title="Accéder au portail officiel marchespublics.gov.ma pour déposer votre offre ou consulter les pièces signées"
 
@@ -7645,6 +7652,11 @@
                             <span>🏛️</span> <span>Dépôt sur Portail TGR</span> <span class="text-[10px] text-slate-400">↗</span>
 
                         </a>
+                        <button x-show="activeTender?.is_closed_award || !activeTender?.portal_url"
+                                @click="closeModal()"
+                                class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold border border-slate-700 transition-colors">
+                            Fermer
+                        </button>
 
                     </div>
 
