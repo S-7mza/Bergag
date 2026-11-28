@@ -133,7 +133,9 @@ class ScoringCascadeEngine:
                 _STAGE23_CACHE[cache_key] = (passed_lexical, veto_reason, lexical_score, coverage_score, item_evals, unmatched_items)
 
         # If hard negative keyword veto (e.g. gardiennage, traiteur, maçonnerie): instant elimination
-        if not passed_lexical:
+        # unless an explicit Antigravity manual study has overridden it
+        ag_override_early = antigravity_study_manager.get_study(portal_id) if portal_id else None
+        if not passed_lexical and ag_override_early is None:
             return CascadeEvaluationResult(
                 overall_score=0.0,
                 decision_recommendation="NO-GO",

@@ -54,12 +54,20 @@ class LexicalMatcher:
         tokens = tokenize(tender_text)
 
         # 1. Negative Keyword Gate (Instant Veto)
+        # Exempt IT backup/restore context when checking 'restauration'
+        neg_corpus = re.sub(
+            r"\b(?:sauvegarde\s+et\s+restauration|restauration\s+(?:de\s+la\s+base|des\s+donn[eé]es|de\s+donn[eé]es|du\s+site|du\s+syst[eè]me|syst[eè]me)|plan\s+de\s+restauration)\b",
+            " ",
+            norm_tender,
+            flags=re.IGNORECASE,
+        )
         for neg_word in profile.negative_constraints.keywords:
             neg_norm = strip_accents(neg_word).strip()
             if not neg_norm:
                 continue
+            target_text = neg_corpus if neg_norm == "restauration" else norm_tender
             # Match singular, plural (s/x), and feminine forms (e/es) so "photocopieur" matches "photocopieurs"
-            if _get_neg_pattern(neg_norm).search(norm_tender):
+            if _get_neg_pattern(neg_norm).search(target_text):
                 return False, f"Veto par mot-clé négatif exclu : '{neg_word}'", 0.0
 
         # 2. Positive Lexical & Synonym Scoring
