@@ -8,6 +8,9 @@ from src.engine.line_item_matcher import LineItemMatcher
 from src.engine.llm_judge import LLMJudge
 from src.engine.cancellation_tracker import is_cancellation_notice, extract_target_cancelled_reference
 from src.engine.feedback_manager import feedback_manager
+from src.engine.cps_extractor import CPSDeterministicExtractor
+from src.engine.opportunity_xyz import OpportunityXYZEngine, OpportunityXYZResult, AttentionDriver
+from src.engine.antigravity_study import antigravity_study_manager, AntigravityStudyRecord
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,8 @@ class CascadeEvaluationResult:
     primary_domain: Optional[str] = None
     detected_technologies: Optional[List[str]] = None
     hardware_dependency: Optional[str] = None
+    xyz_evaluation: Optional[Dict[str, Any]] = None
+    antigravity_study: Optional[Dict[str, Any]] = None
 
 # In-memory evaluation cache: (portal_id, profile_name) -> (passed_lexical, veto_reason, lexical_score, coverage_score, item_evals, unmatched_items)
 _STAGE23_CACHE: Dict[Tuple[int, str], Tuple[bool, Optional[str], float, float, List[Dict[str, Any]], List[str]]] = {}
@@ -145,11 +150,22 @@ class ScoringCascadeEngine:
         feasibility_score = 40.0 if has_geo_issue else 100.0
 
         # Technical Alignment Score (based on actual products, specifications, and keywords)
-        tech_alignment_score = (
-            (coverage_score * weights.line_item_coverage) +
-            (lexical_score * weights.semantic_similarity) +
-            (feasibility_score * weights.feasibility_proximity)
-        )
+        if line_items:
+            tech_alignment_score = (
+                (coverage_score * weights.line_item_coverage) +
+                (lexical_score * weights.semantic_similarity) +
+                (feasibility_score * weights.feasibility_proximity)
+            )
+        else:
+            # Graceful fallback when BOM line_items are empty (e.g. AO or CPS-only notices)
+            non_bom_w = weights.semantic_similarity + weights.feasibility_proximity
+            if non_bom_w > 0:
+                tech_alignment_score = (
+                    (lexical_score * (weights.semantic_similarity / non_bom_w)) +
+                    (feasibility_score * (weights.feasibility_proximity / non_bom_w))
+                )
+            else:
+                tech_alignment_score = lexical_score
         tech_alignment_score = min(100.0, max(0.0, tech_alignment_score))
 
         # Check if profile enables Unified Hybrid AI mode
@@ -279,6 +295,38 @@ class ScoringCascadeEngine:
                 if matched_terms:
                     reasoning += f" • 🧠 Modèle calibré par retours d'expérience (+{learned_delta}% sur: {', '.join(matched_terms[:3])})"
 
+        # --- Stage 6: CPS Extraction, X/Y/Z Opportunity Drivers & Antigravity Manual Study ---
+        cps_findings = CPSDeterministicExtractor.extract(tender_data)
+        xyz_res = OpportunityXYZEngine.evaluate(
+            tender_data=tender_data,
+            technical_fit_x=overall_score,
+            hardware_dependency=(ai_diag.hardware_dependency if ai_diag else "NONE"),
+            primary_domain=(ai_diag.primary_domain if ai_diag else ""),
+            cps_findings=cps_findings,
+        )
+
+        ag_study: Optional[AntigravityStudyRecord] = (
+            antigravity_study_manager.get_study(portal_id) if portal_id else None
+        )
+        if ag_study is not None and not is_cancelled and not is_expired:
+            overall_score = round(ag_study.opportunity_score, 1)
+            verdict = ag_study.verdict
+            if ag_study.why_reasons:
+                reasoning = f"🧠 Étude Antigravity ({ag_study.priority_tier}) : " + " • ".join(ag_study.why_reasons[:3])
+            xyz_res = OpportunityXYZResult(
+                opportunity_score=ag_study.opportunity_score,
+                technical_fit_x=ag_study.technical_fit_x or overall_score,
+                commercial_value_y=ag_study.commercial_value_y or xyz_res.commercial_value_y,
+                win_probability_z=ag_study.win_probability_z or xyz_res.win_probability_z,
+                priority_tier=ag_study.priority_tier,
+                attention_drivers=[
+                    AttentionDriver(axis="X", impact="ANTIGRAVITY", label="Analyse Experte", detail=r)
+                    for r in ag_study.why_reasons[:5]
+                ] or xyz_res.attention_drivers,
+                cps_findings=cps_findings,
+                source="antigravity",
+            )
+
         return CascadeEvaluationResult(
             overall_score=overall_score,
             decision_recommendation=verdict,
@@ -293,5 +341,7 @@ class ScoringCascadeEngine:
             ai_matching_rate=ai_diag.matching_rate if ai_diag else None,
             primary_domain=ai_diag.primary_domain if ai_diag else None,
             detected_technologies=ai_diag.detected_technologies if ai_diag else None,
-            hardware_dependency=ai_diag.hardware_dependency if ai_diag else None
+            hardware_dependency=ai_diag.hardware_dependency if ai_diag else None,
+            xyz_evaluation=xyz_res.model_dump(),
+            antigravity_study=ag_study.model_dump() if ag_study else None,
         )

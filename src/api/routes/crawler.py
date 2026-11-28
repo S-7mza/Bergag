@@ -4,7 +4,9 @@ from datetime import datetime
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.auth import User, require_role
+from src.database.session import get_db_session
 from src.scheduler.jobs import run_active_crawl_cycle
 from src.engine.batch_manager import batch_manager, IngestionTriggerType
 
@@ -67,4 +69,38 @@ async def trigger_manual_crawl(
         "status": "started",
         "message": f"Collecte déclenchée pour {req.pages} pages par l'administrateur {user.full_name}."
     }
+
+
+@router.post("/sync-ao")
+async def trigger_ao_sync(
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_role(["admin"])),
+):
+    """Crawls active formal Appels d'Offres (AO) via AoSpider and persists them into the unified tenders table."""
+    from src.scraper.client import PortalHttpClient
+    from src.scraper.ao_spider import AoSpider
+    from src.ingestion.bdc.service import BdcIngestionService
+
+    client = PortalHttpClient()
+    try:
+        spider = AoSpider(client)
+        ao_list = await spider.fetch_recent_ao()
+        service = BdcIngestionService(session)
+        ingested = 0
+        for ao in ao_list:
+            if not await service.tender_exists(ao["portal_id"]):
+                await service.ingest_tender_detail(ao, skip_if_exists=True)
+                ingested += 1
+        await session.commit()
+        return {
+            "status": "completed",
+            "fetched": len(ao_list),
+            "ingested": ingested,
+            "message": f"{ingested} nouveaux Appels d'Offres (AO) intégrés sur {len(ao_list)} collectés.",
+        }
+    except Exception as e:
+        logger.error(f"AO sync failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la synchronisation AO : {str(e)}")
+    finally:
+        await client.close()
 

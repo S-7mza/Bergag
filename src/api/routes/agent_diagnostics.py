@@ -1,13 +1,21 @@
 import logging
 from typing import Optional, Dict, Any, List
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.session import get_db_session
 from src.engine.ai_matching_agent import ai_matching_agent
 from src.engine.ai_diagnostician import AIMatchingDiagnosis
+from src.engine.antigravity_study import antigravity_study_manager, AntigravityStudyRecord
+from src.engine.cps_extractor import CPSDeterministicExtractor
+from src.engine.scoring_cascade import invalidate_tender_cache
+from src.models.tender import Tender
 from src.api.schemas import DiagnoseBatchRequest, DiagnoseBatchResponse
-from src.api.auth import User, require_role
+from src.api.auth import User, get_current_user, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -119,3 +127,163 @@ async def sync_avis_diagnoses_to_database(
     except Exception as e:
         logger.error(f"Error syncing diagnoses to database: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database sync error: {str(e)}")
+
+
+class AntigravityStudyInput(BaseModel):
+    verdict: str = Field(..., pattern="^(GO|CONSIDER|NO-GO)$")
+    priority_tier: str = Field(default="P2", pattern="^(P1|P2|P3|ARCHIVE)$")
+    opportunity_score: float = Field(..., ge=0.0, le=100.0)
+    technical_fit_x: float = Field(default=0.0, ge=0.0, le=100.0)
+    commercial_value_y: float = Field(default=0.0, ge=0.0, le=100.0)
+    win_probability_z: float = Field(default=0.0, ge=0.0, le=100.0)
+    why_reasons: List[str] = Field(default_factory=list)
+    cps_findings: Dict[str, Any] = Field(default_factory=dict)
+    bid_strategy: str = Field(default="")
+    custom_prompt_used: Optional[str] = None
+
+
+class AntigravityBatchInput(BaseModel):
+    studies: List[AntigravityStudyRecord]
+
+
+@router.get("/antigravity/pending")
+async def get_pending_antigravity_studies(
+    limit: int = Query(25, ge=1, le=200),
+    include_studied: bool = Query(False, description="Include already studied avis"),
+    fetch_attachments: bool = Query(False, description="Pre-download missing .zip attachments before CPS extraction"),
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(require_role(["admin", "analyst"])),
+):
+    """
+    Exports active avis with line items, extracted CPS text, and Y/Z market context
+    (Art. 91 headroom, historical median price, incumbent concentration) so Antigravity
+    can diagnose them locally one-by-one at zero LLM API cost.
+    """
+    from pathlib import Path
+    from src.engine.opportunity_xyz import fetch_market_context_for_tender
+
+    now = datetime.now(timezone.utc)
+    stmt = (
+        select(Tender)
+        .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
+        .where(Tender.status == "active", Tender.deadline_at > now)
+        .order_by(Tender.deadline_at.asc())
+        .limit(limit * 3)
+    )
+    res = await session.execute(stmt)
+    tenders = res.scalars().all()
+
+    studied_ids = antigravity_study_manager.list_studied_ids()
+    queue = []
+    for t in tenders:
+        if not include_studied and t.portal_id in studied_ids:
+            continue
+
+        if fetch_attachments and t.attachment_available:
+            zip_path = Path("data/attachments") / f"tender_{t.portal_id}.zip"
+            if not zip_path.exists():
+                try:
+                    from src.api.routes.feed import download_tender_attachment
+                    await download_tender_attachment(portal_id=t.portal_id, session=session)
+                except Exception as dl_err:
+                    logger.debug(f"Pre-fetch attachment failed for #{t.portal_id}: {dl_err}")
+
+        tender_dict = {
+            "portal_id": t.portal_id,
+            "reference": t.reference,
+            "source_type": t.source_type,
+            "title": t.title,
+            "buyer_name": t.buyer.official_name if t.buyer else "Acheteur Inconnu",
+            "execution_location": t.execution_location,
+            "main_category": t.main_category,
+            "prestation_type": t.prestation_type,
+            "deadline_at": t.deadline_at.isoformat() if t.deadline_at else "",
+            "line_items": [
+                {
+                    "item_order": i.item_order,
+                    "designation": i.designation,
+                    "technical_specs": i.technical_specs,
+                    "quantity": float(i.quantity) if i.quantity is not None else 1.0,
+                    "unit": i.unit or "U",
+                }
+                for i in t.line_items
+            ],
+        }
+        cps = CPSDeterministicExtractor.extract(tender_dict)
+        market_ctx = await fetch_market_context_for_tender(session, t)
+        spent_ytd = market_ctx.get("buyer_spent_ytd_mad")
+        if spent_ytd is not None:
+            market_ctx["art91_headroom_mad"] = max(0.0, 500000.0 - spent_ytd)
+
+        queue.append({
+            **tender_dict,
+            "cps_findings": cps.model_dump(),
+            "market_context": market_ctx,
+            "existing_study": (
+                antigravity_study_manager.get_study(t.portal_id).model_dump()
+                if t.portal_id in studied_ids else None
+            ),
+        })
+        if len(queue) >= limit:
+            break
+
+    return {
+        "success": True,
+        "count": len(queue),
+        "already_studied_total": len(studied_ids),
+        "queue": queue,
+    }
+
+
+@router.get("/antigravity/study/{portal_id}")
+async def get_antigravity_study(
+    portal_id: int,
+    user: User = Depends(get_current_user),
+):
+    """Returns the saved Antigravity manual AI study for an avis, if any (authenticated)."""
+    study = antigravity_study_manager.get_study(portal_id)
+    if not study:
+        raise HTTPException(status_code=404, detail=f"Aucune étude Antigravity enregistrée pour #{portal_id}.")
+    return study.model_dump()
+
+
+@router.post("/antigravity/study/{portal_id}")
+async def save_antigravity_study(
+    portal_id: int,
+    payload: AntigravityStudyInput,
+    user: User = Depends(require_role(["admin", "analyst"])),
+):
+    """Saves or updates a local Antigravity AI diagnosis for a specific avis."""
+    record = AntigravityStudyRecord(
+        portal_id=portal_id,
+        verdict=payload.verdict,
+        priority_tier=payload.priority_tier,
+        opportunity_score=payload.opportunity_score,
+        technical_fit_x=payload.technical_fit_x,
+        commercial_value_y=payload.commercial_value_y,
+        win_probability_z=payload.win_probability_z,
+        why_reasons=payload.why_reasons,
+        cps_findings=payload.cps_findings,
+        bid_strategy=payload.bid_strategy,
+        custom_prompt_used=payload.custom_prompt_used,
+        studied_by=f"antigravity ({user.username or user.email})",
+    )
+    saved = antigravity_study_manager.save_study(record)
+    invalidate_tender_cache(portal_id)
+    from src.api.routes.feed import _FEED_SCORED_CACHE
+    _FEED_SCORED_CACHE.clear()
+    return {"success": True, "study": saved.model_dump()}
+
+
+@router.post("/antigravity/batch-update")
+async def batch_update_antigravity_studies(
+    payload: AntigravityBatchInput,
+    user: User = Depends(require_role(["admin", "analyst"])),
+):
+    """Bulk-saves multiple local Antigravity AI studies and invalidates feed cache."""
+    count = antigravity_study_manager.save_batch(payload.studies)
+    for rec in payload.studies:
+        invalidate_tender_cache(rec.portal_id)
+    from src.api.routes.feed import _FEED_SCORED_CACHE
+    _FEED_SCORED_CACHE.clear()
+    return {"success": True, "updated_count": count}

@@ -28,6 +28,8 @@ class TenderFeedItem(BaseModel):
     portal_url: str
     alignment_feedback: Optional[str] = None # 'aligned', 'misaligned', or None
     ai_matching: Optional[AIMatchingDiagnosis] = None # Deep AI Matching Diagnosis
+    xyz_evaluation: Optional[Dict[str, Any]] = None
+    antigravity_study: Optional[Dict[str, Any]] = None
 
 class TenderDetailResponse(BaseModel):
     portal_id: int
@@ -52,6 +54,8 @@ class TenderDetailResponse(BaseModel):
     line_item_evaluations: List[Dict[str, Any]] = []
     alignment_feedback: Optional[str] = None # 'aligned', 'misaligned', or None
     ai_matching: Optional[AIMatchingDiagnosis] = None # Deep AI Matching Diagnosis
+    xyz_evaluation: Optional[Dict[str, Any]] = None
+    antigravity_study: Optional[Dict[str, Any]] = None
 
 class AlignmentFeedbackRequest(BaseModel):
     portal_id: int

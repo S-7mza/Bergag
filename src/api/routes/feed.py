@@ -339,6 +339,41 @@ def invalidate_feed_cache():
     _FEED_SCORED_CACHE.clear()
 
 
+_FRENCH_ACCENT_EQUIV = {
+    "developpement": ["developpement", "développement"],
+    "etude": ["etude", "étude", "etudes", "études"],
+    "etudes": ["etudes", "études"],
+    "systeme": ["systeme", "système"],
+    "systemes": ["systemes", "systèmes"],
+    "securite": ["securite", "sécurité"],
+    "reseau": ["reseau", "réseau"],
+    "reseaux": ["reseaux", "réseaux"],
+    "materiel": ["materiel", "matériel"],
+    "numerisation": ["numerisation", "numérisation"],
+    "dematerialisation": ["dematerialisation", "dématérialisation"],
+    "hebergement": ["hebergement", "hébergement"],
+    "ingenierie": ["ingenierie", "ingénierie"],
+    "geographique": ["geographique", "géographique"],
+    "electronique": ["electronique", "électronique"],
+    "decisionnel": ["decisionnel", "décisionnel"],
+    "donnees": ["donnees", "données"],
+    "interoperabilite": ["interoperabilite", "interopérabilité"],
+    "etancheite": ["etancheite", "étanchéité"],
+    "telecommunication": ["telecommunication", "télécommunication"],
+}
+
+
+def _expand_search_word_variants(word: str) -> List[str]:
+    """Expands a search word to both accented and unaccented French variants."""
+    import unicodedata
+    w_low = word.strip().lower()
+    plain = "".join(c for c in unicodedata.normalize("NFKD", w_low) if not unicodedata.combining(c))
+    variants = {w_low, plain}
+    if plain in _FRENCH_ACCENT_EQUIV:
+        variants.update(_FRENCH_ACCENT_EQUIV[plain])
+    return [v for v in variants if v]
+
+
 @router.get("/feed", response_model=List[TenderFeedItem])
 async def get_tender_feed(
     response: Response,
@@ -425,9 +460,10 @@ async def get_tender_feed(
                 if search_words:
                     word_clauses = []
                     for w in search_words:
-                        w_pattern = f"%{w.lower()}%"
-                        word_clauses.append(
-                            or_(
+                        variant_ors = []
+                        for variant in _expand_search_word_variants(w):
+                            w_pattern = f"%{variant}%"
+                            variant_ors.extend([
                                 Tender.title.ilike(w_pattern),
                                 Tender.reference.ilike(w_pattern),
                                 Tender.execution_location.ilike(w_pattern),
@@ -438,20 +474,22 @@ async def get_tender_feed(
                                         LineItem.technical_specs.ilike(w_pattern)
                                     )
                                 )
-                            )
-                        )
+                            ])
+                        word_clauses.append(or_(*variant_ors))
                     stmt = stmt.where(and_(*word_clauses))
         elif not is_all_sectors:
-            # Fast single-table keyword pre-filter (avoids slow correlated line_items subquery)
+            # High-recall pre-filter across title, prestation_type, AND line_items
             candidate_kws = extract_profile_candidate_keywords(profile)
             aligned_ids = list(feedback_manager.get_aligned_portal_ids(profile_name))
 
             if candidate_kws:
-                title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws[:35]]
+                title_conditions = [Tender.title.ilike(f"%{kw}%") for kw in candidate_kws[:40]]
                 prestation_conditions = [Tender.prestation_type.ilike(f"%{kw}%") for kw in candidate_kws[:25]]
+                line_item_conditions = [LineItem.designation.ilike(f"%{kw}%") for kw in candidate_kws[:20]]
                 match_conditions = [
                     *title_conditions,
                     *prestation_conditions,
+                    Tender.line_items.any(or_(*line_item_conditions)),
                 ]
                 if aligned_ids:
                     match_conditions.append(Tender.portal_id.in_(aligned_ids))
@@ -622,6 +660,36 @@ async def get_tender_feed(
                     overall_score = 100.0
 
                 alignment_feedback = user_feedback
+                from src.engine.antigravity_study import antigravity_study_manager
+                from src.engine.cps_extractor import CPSDeterministicExtractor
+                from src.engine.opportunity_xyz import OpportunityXYZEngine, OpportunityXYZResult, AttentionDriver
+
+                ag_rec = antigravity_study_manager.get_study(t.portal_id)
+                ag_study_dict = ag_rec.model_dump() if ag_rec else None
+                if ag_rec and decision_verdict not in ("CLÔTURÉ", "ANNULÉ"):
+                    overall_score = round(ag_rec.opportunity_score, 1)
+                    decision_verdict = ag_rec.verdict
+                    xyz_eval = OpportunityXYZResult(
+                        opportunity_score=ag_rec.opportunity_score,
+                        technical_fit_x=ag_rec.technical_fit_x or overall_score,
+                        commercial_value_y=ag_rec.commercial_value_y or 55.0,
+                        win_probability_z=ag_rec.win_probability_z or 70.0,
+                        priority_tier=ag_rec.priority_tier,
+                        attention_drivers=[
+                            AttentionDriver(axis="X", impact="ANTIGRAVITY", label="Analyse Experte", detail=r)
+                            for r in ag_rec.why_reasons[:5]
+                        ],
+                        cps_findings=CPSDeterministicExtractor.extract(tender_dict),
+                        source="antigravity",
+                    ).model_dump()
+                else:
+                    xyz_eval = OpportunityXYZEngine.evaluate(
+                        tender_data=tender_dict,
+                        technical_fit_x=ai_diag.matching_rate if ai_diag else overall_score,
+                        hardware_dependency=ai_diag.hardware_dependency if ai_diag else "NONE",
+                        primary_domain=ai_diag.primary_domain if ai_diag else "",
+                        cps_findings=CPSDeterministicExtractor.extract(tender_dict),
+                    ).model_dump()
             else:
                 cascade_res = await scoring_engine.evaluate_tender(tender_dict, profile)
 
@@ -632,6 +700,8 @@ async def get_tender_feed(
                 else:
                     overall_score = cascade_res.overall_score
                 alignment_feedback = cascade_res.alignment_feedback
+                xyz_eval = cascade_res.xyz_evaluation
+                ag_study_dict = cascade_res.antigravity_study
 
             scored_items.append(
                 TenderFeedItem(
@@ -649,7 +719,9 @@ async def get_tender_feed(
                     line_item_count=len(t.line_items),
                     portal_url=f"https://www.marchespublics.gov.ma/bdc/entreprise/consultation/show/{t.portal_id}",
                     alignment_feedback=alignment_feedback,
-                    ai_matching=ai_diag
+                    ai_matching=ai_diag,
+                    xyz_evaluation=xyz_eval,
+                    antigravity_study=ag_study_dict,
                 )
             )
 
@@ -868,6 +940,49 @@ async def get_tender_detail(
     if ai_diag is None:
         ai_diag = ai_matching_agent.diagnose_tender_dict(tender_dict)
 
+    # Enrich X/Y/Z with live Buyer Art.91 & AwardSimilarity market context when DB is available
+    from src.engine.antigravity_study import antigravity_study_manager
+    from src.engine.cps_extractor import CPSDeterministicExtractor
+    from src.engine.opportunity_xyz import OpportunityXYZEngine, OpportunityXYZResult, AttentionDriver, fetch_market_context_for_tender
+
+    market_ctx = await fetch_market_context_for_tender(session, t)
+    ag_rec = antigravity_study_manager.get_study(t.portal_id)
+    cps_findings = CPSDeterministicExtractor.extract(tender_dict)
+
+    if ag_rec is not None:
+        ag_study_out = ag_rec.model_dump()
+        xyz_out = OpportunityXYZResult(
+            opportunity_score=ag_rec.opportunity_score,
+            technical_fit_x=ag_rec.technical_fit_x or ag_rec.opportunity_score,
+            commercial_value_y=ag_rec.commercial_value_y or 55.0,
+            win_probability_z=ag_rec.win_probability_z or 70.0,
+            priority_tier=ag_rec.priority_tier,
+            attention_drivers=[
+                AttentionDriver(axis="X", impact="ANTIGRAVITY", label="Analyse Experte", detail=r)
+                for r in ag_rec.why_reasons[:5]
+            ],
+            cps_findings=cps_findings,
+            source="antigravity",
+        ).model_dump()
+    else:
+        ag_study_out = cascade_res.antigravity_study
+        tech_x = (
+            cascade_res.xyz_evaluation.get("technical_fit_x", cascade_res.overall_score)
+            if cascade_res.xyz_evaluation
+            else (ai_diag.matching_rate if ai_diag else cascade_res.overall_score)
+        )
+        xyz_out = OpportunityXYZEngine.evaluate(
+            tender_data=tender_dict,
+            technical_fit_x=tech_x,
+            hardware_dependency=(ai_diag.hardware_dependency if ai_diag else "NONE"),
+            primary_domain=(ai_diag.primary_domain if ai_diag else ""),
+            cps_findings=cps_findings,
+            buyer_spent_ytd_mad=market_ctx.get("buyer_spent_ytd_mad"),
+            similar_awards_median_mad=market_ctx.get("similar_awards_median_mad"),
+            similar_awards_count=market_ctx.get("similar_awards_count", 0),
+            incumbent_share_pct=market_ctx.get("incumbent_share_pct"),
+        ).model_dump()
+
     return TenderDetailResponse(
         portal_id=t.portal_id,
         reference=t.reference,
@@ -889,6 +1004,8 @@ async def get_tender_detail(
         line_item_evaluations=cascade_res.line_item_matches,
         alignment_feedback=cascade_res.alignment_feedback,
         ai_matching=ai_diag,
+        xyz_evaluation=xyz_out,
+        antigravity_study=ag_study_out,
         line_items=[
             LineItemSchema(
                 item_order=i.item_order,
