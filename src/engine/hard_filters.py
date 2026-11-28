@@ -4,7 +4,34 @@ from typing import Tuple, List
 from src.profiles.schema import CompanyProfileSchema
 from src.engine.cancellation_tracker import is_cancellation_notice
 
+from src.engine.lexical_matcher import strip_accents
+
 logger = logging.getLogger(__name__)
+
+# Moroccan city/province -> official region mapping (accent-stripped lowercase)
+_MOROCCO_CITY_TO_REGION = {
+    "casablanca": "casablanca-settat", "mohammedia": "casablanca-settat", "settat": "casablanca-settat",
+    "el jadida": "casablanca-settat", "berrechid": "casablanca-settat", "nouaceur": "casablanca-settat",
+    "benslimane": "casablanca-settat", "mediouna": "casablanca-settat", "sidi bennour": "casablanca-settat",
+    "rabat": "rabat-sale-kenitra", "sale": "rabat-sale-kenitra", "kenitra": "rabat-sale-kenitra",
+    "temara": "rabat-sale-kenitra", "skhirat": "rabat-sale-kenitra", "khemisset": "rabat-sale-kenitra",
+    "sidi kacem": "rabat-sale-kenitra", "sidi slimane": "rabat-sale-kenitra",
+    "tanger": "tanger-tetouan-al hoceima", "assilah": "tanger-tetouan-al hoceima",
+    "tetouan": "tanger-tetouan-al hoceima", "al hoceima": "tanger-tetouan-al hoceima",
+    "hoceima": "tanger-tetouan-al hoceima", "chefchaouen": "tanger-tetouan-al hoceima",
+    "larache": "tanger-tetouan-al hoceima", "ouazzane": "tanger-tetouan-al hoceima",
+    "marrakech": "marrakech-safi", "safi": "marrakech-safi", "essaouira": "marrakech-safi",
+    "al haouz": "marrakech-safi", "haouz": "marrakech-safi", "el kelaa": "marrakech-safi",
+    "youssoufia": "marrakech-safi", "chichaoua": "marrakech-safi", "rehamna": "marrakech-safi",
+    "fes": "fes-meknes", "meknes": "fes-meknes", "taza": "fes-meknes", "ifrane": "fes-meknes",
+    "sefrou": "fes-meknes", "el hajeb": "fes-meknes", "taounate": "fes-meknes", "boulemane": "fes-meknes",
+    "agadir": "souss-massa", "inezgane": "souss-massa", "taroudant": "souss-massa",
+    "tiznit": "souss-massa", "chtouka": "souss-massa", "tata": "souss-massa",
+    "oujda": "oriental", "nador": "oriental", "berkane": "oriental", "driouch": "oriental", "guercif": "oriental",
+    "beni mellal": "beni mellal-khenifra", "khenifra": "beni mellal-khenifra", "khouribga": "beni mellal-khenifra",
+    "laayoune": "laayoune-sakia el hamra", "dakhla": "dakhla-oued ed-dahab", "oued ed dahab": "dakhla-oued ed-dahab",
+    "errachidia": "draa-tafilalet", "ouarzazate": "draa-tafilalet", "tinghir": "draa-tafilalet", "zagora": "draa-tafilalet",
+}
 
 def evaluate_hard_filters(tender_data: dict, profile: CompanyProfileSchema) -> Tuple[bool, List[str]]:
     """
@@ -46,10 +73,18 @@ def evaluate_hard_filters(tender_data: dict, profile: CompanyProfileSchema) -> T
 
     # 3. Geographic Coverage Filter
     geo = profile.macro_filters.geographic_coverage
-    preferred_regions = [r.lower() for r in geo.get("preferred_regions", [])]
-    exec_loc = (tender_data.get("execution_location") or "").lower()
+    preferred_regions = [strip_accents(r) for r in geo.get("preferred_regions", [])]
+    exec_loc_raw = tender_data.get("execution_location") or ""
+    exec_loc = strip_accents(exec_loc_raw)
     if preferred_regions and exec_loc:
-        matched_geo = any(pref in exec_loc for pref in preferred_regions) or "national" in exec_loc
+        matched_geo = (
+            "national" in exec_loc
+            or any(pref in exec_loc for pref in preferred_regions)
+            or any(
+                city in exec_loc and region in preferred_regions
+                for city, region in _MOROCCO_CITY_TO_REGION.items()
+            )
+        )
         if not matched_geo:
             if geo.get("mode") == "regional":
                 reasons.append(

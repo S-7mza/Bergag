@@ -7343,7 +7343,12 @@
                                     <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Avis attribués les plus similaires</div>
                                     <div class="divide-y divide-slate-800/70 bg-slate-950/70 border border-slate-800/90 rounded-xl overflow-hidden">
                                         <template x-for="aw in similarAwardsData.similar_awards.slice(0, 5)" :key="aw.award_id">
-                                            <div class="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                                            <div @click="openAwardDetail(aw)"
+                                                 role="button"
+                                                 tabindex="0"
+                                                 @keydown.enter="openAwardDetail(aw)"
+                                                 title="Cliquer pour ouvrir les détails de cet avis attribué"
+                                                 class="px-3 py-2 flex items-center justify-between gap-3 text-xs cursor-pointer hover:bg-slate-800/60 transition-colors group">
                                                 <div class="min-w-0 flex-1">
                                                     <div class="flex items-center gap-2">
                                                         <span class="px-1.5 py-0.5 rounded font-mono tabular-nums text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0" x-text="aw.similarity_pct + '%'"></span>
@@ -7359,7 +7364,10 @@
                                                 </div>
                                                 <div class="text-right font-mono shrink-0">
                                                     <div class="font-bold text-slate-100 tabular-nums" x-text="(aw.amount_ttc || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0}) + ' DH'"></div>
-                                                    <div class="text-[10px] text-slate-500" x-text="aw.devis_received_count ? aw.devis_received_count + ' devis' : 'Attribué'"></div>
+                                                    <div class="text-[10px] text-slate-500 flex items-center justify-end gap-1">
+                                                        <span x-text="aw.devis_received_count ? aw.devis_received_count + ' devis' : 'Attribué'"></span>
+                                                        <span class="text-slate-600 group-hover:text-emerald-400 transition-colors">→</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </template>
