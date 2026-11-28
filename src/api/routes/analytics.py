@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/analytics", tags=["Market Intelligence Radar"])
 @router.get("/competitors")
 async def get_top_competitors(
     limit: int = Query(15, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     keyword: Optional[str] = Query(None, description="Filter by title keyword"),
     buyer: Optional[str] = Query(None, description="Filter by public buyer or city"),
     winner: Optional[str] = Query(None, description="Filter by winning supplier name"),
@@ -29,6 +30,7 @@ async def get_top_competitors(
     radar = CompetitorRadar(session)
     return await radar.get_top_competitors(
         limit=limit,
+        offset=offset,
         title_keyword=keyword,
         buyer_keyword=buyer,
         winner_keyword=winner,

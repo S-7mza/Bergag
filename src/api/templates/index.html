@@ -3115,6 +3115,30 @@
                             </table>
                         </div>
 
+                        <!-- Pagination Bar: Back / Next -->
+                        <div x-show="marketRadar.competitors.length > 0 || competitorsPage > 1"
+                             class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/70 text-xs">
+                            <span class="text-[11px] font-mono text-slate-400">
+                                Page <strong class="text-white" x-text="competitorsPage"></strong>
+                                <span x-show="marketRadar.competitors.length > 0"
+                                      x-text="' • ' + (((competitorsPage - 1) * (radarFilters.limit || 15)) + 1) + '–' + (((competitorsPage - 1) * (radarFilters.limit || 15)) + marketRadar.competitors.length)"></span>
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <button type="button"
+                                        @click="loadCompetitorsPage(competitorsPage - 1)"
+                                        :disabled="competitorsPage <= 1 || competitorsLoadingPage"
+                                        class="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-slate-800 font-semibold transition-colors">
+                                    ← Back
+                                </button>
+                                <button type="button"
+                                        @click="loadCompetitorsPage(competitorsPage + 1)"
+                                        :disabled="marketRadar.competitors.length < (radarFilters.limit || 15) || competitorsLoadingPage"
+                                        class="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-300 border border-slate-800 font-semibold transition-colors">
+                                    Next →
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Scrollable Hover Popover: Closed Avis Sorted by Nature & Price -->
                         <div x-show="competitorHover.visible" x-cloak
                              @mouseenter="cancelCompetitorHoverLeave()"
@@ -8395,6 +8419,9 @@
 
                 alignmentFilter: 'all',
 
+                competitorsPage: 1,
+                competitorsLoadingPage: false,
+
                 studioFilter: 'all',
 
 
@@ -10773,15 +10800,60 @@
 
 
 
+                buildCompetitorParams(page = 1) {
+                    const pageSize = parseInt(this.radarFilters.limit || 15, 10);
+                    const offset = Math.max(0, (page - 1) * pageSize);
+                    const compParams = new URLSearchParams({
+                        limit: String(pageSize),
+                        offset: String(offset),
+                        sort_by: this.radarFilters.sortBy || 'amount'
+                    });
+                    if (this.radarFilters.keyword && this.radarFilters.keyword.trim()) {
+                        compParams.set('keyword', this.radarFilters.keyword.trim());
+                    }
+                    if (this.radarFilters.buyer && this.radarFilters.buyer.trim()) {
+                        compParams.set('buyer', this.radarFilters.buyer.trim());
+                    }
+                    if (this.radarFilters.winner && this.radarFilters.winner.trim()) {
+                        compParams.set('winner', this.radarFilters.winner.trim());
+                    }
+                    const period = this.radarFilters.period;
+                    if (period === '3m') compParams.set('months', '3');
+                    else if (period === '6m') compParams.set('months', '6');
+                    else if (period === '12m') compParams.set('months', '12');
+                    else if (period === 'year_2026') compParams.set('year', '2026');
+                    return compParams;
+                },
+
+                async loadCompetitorsPage(targetPage) {
+                    if (targetPage < 1 || this.competitorsLoadingPage) return;
+                    this.competitorsLoadingPage = true;
+                    try {
+                        const params = this.buildCompetitorParams(targetPage);
+                        const res = await fetch('/api/analytics/competitors?' + params.toString());
+                        if (res.ok) {
+                            const rows = await res.json();
+                            if (rows.length === 0 && targetPage > 1) {
+                                this.showToast('Fin de la liste des prestataires.', 'info');
+                                return;
+                            }
+                            this.marketRadar.competitors = rows;
+                            this.competitorsPage = targetPage;
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur chargement page : ' + (e.message || e), 'error');
+                    } finally {
+                        this.competitorsLoadingPage = false;
+                    }
+                },
+
                 async fetchMarketRadar() {
 
                     this.loadingRadar = true;
+                    this.competitorsPage = 1;
 
                     try {
-                        const compParams = new URLSearchParams({
-                            limit: String(this.radarFilters.limit || 15),
-                            sort_by: this.radarFilters.sortBy || 'amount'
-                        });
+                        const compParams = this.buildCompetitorParams(1);
                         const buyerParams = new URLSearchParams({
                             alert: this.radarFilters.buyerAlert || 'all',
                             limit: '30'

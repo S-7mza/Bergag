@@ -85,6 +85,7 @@ class CompetitorRadar:
     async def get_top_competitors(
         self,
         limit: int = 15,
+        offset: int = 0,
         title_keyword: Optional[str] = None,
         buyer_keyword: Optional[str] = None,
         winner_keyword: Optional[str] = None,
@@ -137,6 +138,7 @@ class CompetitorRadar:
         stmt = (
             stmt.group_by(Award.winner_name)
             .order_by(order_col, desc("total_wins"))
+            .offset(max(0, offset))
             .limit(limit)
         )
 
