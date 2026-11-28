@@ -100,10 +100,13 @@ def test_feed_sorting_options(client):
         return diag_102
 
     try:
+        from src.api.auth import create_session_token
+        admin_headers = {"Authorization": f"Bearer {create_session_token('admin@bergag.ma', 'admin')}"}
         with patch("src.api.routes.feed.ai_matching_agent.get_cached_diagnosis", side_effect=mock_get_diag):
             # 1. Sort by ai_score_desc -> t1 (92%) must be first!
-            res_ai_desc = client.get("/api/feed?sort_by=ai_score_desc&status_filter=all")
+            res_ai_desc = client.get("/api/feed?sort_by=ai_score_desc&status_filter=all", headers=admin_headers)
             assert res_ai_desc.status_code == 200
+            assert res_ai_desc.headers.get("x-total-count") == "2"
             data_ai_desc = res_ai_desc.json()
             assert len(data_ai_desc) == 2
             assert data_ai_desc[0]["portal_id"] == 101
@@ -111,47 +114,54 @@ def test_feed_sorting_options(client):
             assert data_ai_desc[1]["portal_id"] == 102
             assert data_ai_desc[1]["ai_matching"]["matching_rate"] == 5.0
 
+            # 1b. Pagination with offset=1&limit=1 returns second item while preserving X-Total-Count
+            res_page2 = client.get("/api/feed?sort_by=ai_score_desc&status_filter=all&limit=1&offset=1", headers=admin_headers)
+            assert res_page2.status_code == 200
+            assert res_page2.headers.get("x-total-count") == "2"
+            assert len(res_page2.json()) == 1
+            assert res_page2.json()[0]["portal_id"] == 102
+
             # 2. Sort by ai_score_asc -> t2 (5%) must be first!
-            res_ai_asc = client.get("/api/feed?sort_by=ai_score_asc&status_filter=all")
+            res_ai_asc = client.get("/api/feed?sort_by=ai_score_asc&status_filter=all", headers=admin_headers)
             assert res_ai_asc.status_code == 200
             data_ai_asc = res_ai_asc.json()
             assert data_ai_asc[0]["portal_id"] == 102
             assert data_ai_asc[1]["portal_id"] == 101
 
             # 3. Sort by items_desc -> t2 (3 items) must be first!
-            res_items_desc = client.get("/api/feed?sort_by=items_desc&status_filter=all")
+            res_items_desc = client.get("/api/feed?sort_by=items_desc&status_filter=all", headers=admin_headers)
             assert res_items_desc.status_code == 200
             data_items = res_items_desc.json()
             assert data_items[0]["portal_id"] == 102
             assert data_items[0]["line_item_count"] == 3
 
             # 4. Sort by items_asc -> t1 (1 item) must be first!
-            res_items_asc = client.get("/api/feed?sort_by=items_asc&status_filter=all")
+            res_items_asc = client.get("/api/feed?sort_by=items_asc&status_filter=all", headers=admin_headers)
             assert res_items_asc.status_code == 200
             data_items_asc = res_items_asc.json()
             assert data_items_asc[0]["portal_id"] == 101
             assert data_items_asc[0]["line_item_count"] == 1
 
             # 5. Sort by deadline_asc -> t1 (+10h) must be first!
-            res_deadline = client.get("/api/feed?sort_by=deadline_asc&status_filter=all")
+            res_deadline = client.get("/api/feed?sort_by=deadline_asc&status_filter=all", headers=admin_headers)
             assert res_deadline.status_code == 200
             data_deadline = res_deadline.json()
             assert data_deadline[0]["portal_id"] == 101
 
             # 6. Sort by deadline_desc -> t2 (+48h) must be first!
-            res_deadline_desc = client.get("/api/feed?sort_by=deadline_desc&status_filter=all")
+            res_deadline_desc = client.get("/api/feed?sort_by=deadline_desc&status_filter=all", headers=admin_headers)
             assert res_deadline_desc.status_code == 200
             data_deadline_desc = res_deadline_desc.json()
             assert data_deadline_desc[0]["portal_id"] == 102
 
             # 7. Sort by id_desc -> t2 (102) must be first!
-            res_id_desc = client.get("/api/feed?sort_by=id_desc&status_filter=all")
+            res_id_desc = client.get("/api/feed?sort_by=id_desc&status_filter=all", headers=admin_headers)
             assert res_id_desc.status_code == 200
             data_id_desc = res_id_desc.json()
             assert data_id_desc[0]["portal_id"] == 102
 
             # 8. Sort by id_asc -> t1 (101) must be first!
-            res_id_asc = client.get("/api/feed?sort_by=id_asc&status_filter=all")
+            res_id_asc = client.get("/api/feed?sort_by=id_asc&status_filter=all", headers=admin_headers)
             assert res_id_asc.status_code == 200
             data_id_asc = res_id_asc.json()
             assert data_id_asc[0]["portal_id"] == 101

@@ -354,6 +354,7 @@ async def get_tender_feed(
     sort_by: Optional[str] = Query("score_desc", description="Sort criteria (score_desc, score_asc, ai_score_desc, ai_score_asc, deadline_asc, deadline_desc, items_desc, items_asc, id_desc, id_asc)"),
     role: Optional[str] = Query("admin", description="Current user role for RBAC scoping"),
     limit: int = Query(2500, ge=1, le=5000),
+    offset: int = Query(0, ge=0, description="Pagination offset into the sorted feed"),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ):
@@ -538,7 +539,7 @@ async def get_tender_feed(
                 if interval_conditions:
                     stmt = stmt.where(or_(*interval_conditions))
 
-        pool_limit = min(max(limit, 500), 1000)
+        pool_limit = 5000
         stmt = stmt.order_by(Tender.deadline_at.asc()).limit(pool_limit)
 
         res = await session.execute(stmt)
@@ -737,7 +738,7 @@ async def get_tender_feed(
     else:  # default "score_desc"
         feed_items.sort(key=lambda x: (x.match_score, get_ai_score(x), x.portal_id), reverse=True)
 
-    return feed_items[:limit]
+    return feed_items[offset : offset + limit]
 
 @router.post("/reconcile-cancellations")
 async def trigger_cancellation_reconciliation(

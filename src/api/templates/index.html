@@ -2039,7 +2039,7 @@
 
                         <div class="flex items-center gap-2.5 text-xs text-slate-300">
 
-                            <span x-show="displayLimit < items.length" class="relative flex h-2.5 w-2.5">
+                            <span x-show="displayLimit < (feedStats.total || items.length)" class="relative flex h-2.5 w-2.5">
 
                                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
 
@@ -2047,21 +2047,21 @@
 
                             </span>
 
-                            <span x-show="displayLimit >= items.length" class="text-emerald-400 text-sm">✓</span>
+                            <span x-show="displayLimit >= (feedStats.total || items.length)" class="text-emerald-400 text-sm">✓</span>
 
                             <span>
 
-                                Affichage de <strong class="text-white font-mono" x-text="visibleItems.length"></strong> sur <strong class="text-emerald-400 font-mono" x-text="items.length"></strong> consultations
+                                Affichage de <strong class="text-white font-mono" x-text="visibleItems.length"></strong> sur <strong class="text-emerald-400 font-mono" x-text="feedStats.total || items.length"></strong> consultations
 
                             </span>
 
-                            <span x-show="displayLimit < items.length" class="text-slate-500 hidden sm:inline">(défilement continu vers le bas)</span>
+                            <span x-show="displayLimit < (feedStats.total || items.length)" class="text-slate-500 hidden sm:inline">(défilement continu vers le bas)</span>
 
                         </div>
 
                         <div class="flex items-center gap-2">
 
-                            <button x-show="displayLimit < items.length" 
+                            <button x-show="displayLimit < (feedStats.total || items.length)" 
 
                                     @click="loadMoreItems()" 
 
@@ -2071,13 +2071,13 @@
 
                             </button>
 
-                            <button x-show="displayLimit < items.length" 
+                            <button x-show="displayLimit < (feedStats.total || items.length)" 
 
-                                    @click="displayLimit = items.length" 
+                                    @click="showAllItems()" 
 
                                     class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold rounded-lg transition-colors">
 
-                                Tout afficher (<span x-text="items.length"></span>)
+                                Tout afficher (<span x-text="feedStats.total || items.length"></span>)
 
                             </button>
 
@@ -8805,7 +8805,7 @@
 
                     window.addEventListener('scroll', () => {
 
-                        if (this.activeModule !== 'feed' || this.displayLimit >= this.items.length || this.loadingMore) return;
+                        if (this.activeModule !== 'feed' || this.displayLimit >= (this.feedStats.total || this.items.length) || this.loadingMore) return;
 
                         if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 450)) {
 
@@ -8849,19 +8849,70 @@
 
 
 
-                loadMoreItems() {
+                serverFeedExhausted: false,
 
-                    if (this.displayLimit >= this.items.length || this.loadingMore) return;
+                buildFeedUrl(limitVal = 300, offsetVal = 0) {
+                    let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=${limitVal}&offset=${offsetVal}`;
+                    if (this.searchQuery) url += `&search=${encodeURIComponent(this.searchQuery)}`;
+                    if (this.selectedRegion !== 'all') url += `&region=${encodeURIComponent(this.selectedRegion)}`;
+                    if (this.selectedCategory !== 'all') url += `&category=${encodeURIComponent(this.selectedCategory)}`;
+                    if (this.selectedUrgency !== 'all') url += `&urgency=${encodeURIComponent(this.selectedUrgency)}`;
+                    if (this.statusFilter && this.statusFilter !== 'all') url += `&status_filter=${encodeURIComponent(this.statusFilter)}`;
+                    if (this.alignmentFilter && this.alignmentFilter !== 'all') url += `&alignment_filter=${encodeURIComponent(this.alignmentFilter)}`;
+                    return url;
+                },
 
+                async fetchMoreFromServer(batchSize = 300) {
+                    if (this.loadingMore || this.serverFeedExhausted) return;
                     this.loadingMore = true;
-
-                    requestAnimationFrame(() => {
-
-                        this.displayLimit = Math.min(this.items.length, this.displayLimit + 50);
-
+                    try {
+                        const res = await fetch(this.buildFeedUrl(batchSize, this.items.length));
+                        if (!res.ok) return;
+                        const more = await res.json();
+                        if (!Array.isArray(more) || more.length === 0) {
+                            this.serverFeedExhausted = true;
+                            return;
+                        }
+                        const existingIds = new Set(this.items.map(i => i.portal_id));
+                        const uniqueMore = more.filter(i => !existingIds.has(i.portal_id));
+                        this.items = [...this.items, ...uniqueMore];
+                        if (more.length < batchSize) {
+                            this.serverFeedExhausted = true;
+                        }
+                    } catch (e) {
+                        // Ignore transient error
+                    } finally {
                         this.loadingMore = false;
+                    }
+                },
 
-                    });
+                async showAllItems() {
+                    if (!this.serverFeedExhausted && this.items.length < (this.feedStats.total || 0)) {
+                        await this.fetchMoreFromServer(5000);
+                    }
+                    this.displayLimit = this.items.length;
+                },
+
+                async loadMoreItems() {
+
+                    if (this.loadingMore) return;
+
+                    if (this.displayLimit < this.items.length) {
+                        this.loadingMore = true;
+                        requestAnimationFrame(() => {
+                            this.displayLimit = Math.min(this.items.length, this.displayLimit + 50);
+                            this.loadingMore = false;
+                            if (!this.serverFeedExhausted && (this.items.length - this.displayLimit) <= 50 && this.items.length < (this.feedStats.total || 0)) {
+                                this.fetchMoreFromServer(300);
+                            }
+                        });
+                        return;
+                    }
+
+                    if (!this.serverFeedExhausted && this.items.length < (this.feedStats.total || 0)) {
+                        await this.fetchMoreFromServer(300);
+                        this.displayLimit = Math.min(this.items.length, this.displayLimit + 50);
+                    }
 
                 },
 
@@ -8887,7 +8938,7 @@
 
                         entries.forEach(entry => {
 
-                            if (entry.isIntersecting && this.displayLimit < this.items.length && !this.loadingMore) {
+                            if (entry.isIntersecting && this.displayLimit < (this.feedStats.total || this.items.length) && !this.loadingMore) {
 
                                 this.loadMoreItems();
 
@@ -9556,22 +9607,8 @@
                     this.loading = true;
 
                     try {
-
-                        let url = `/api/feed?profile_name=${this.selectedProfile}&min_score=${this.minScore}&role=${this.currentUser.role}&sort_by=${this.sortBy}&limit=300`;
-
-                        if (this.searchQuery) url += `&search=${encodeURIComponent(this.searchQuery)}`;
-
-                        if (this.selectedRegion !== 'all') url += `&region=${encodeURIComponent(this.selectedRegion)}`;
-
-                        if (this.selectedCategory !== 'all') url += `&category=${encodeURIComponent(this.selectedCategory)}`;
-
-                        if (this.selectedUrgency !== 'all') url += `&urgency=${encodeURIComponent(this.selectedUrgency)}`;
-
-
-
-                        if (this.statusFilter && this.statusFilter !== 'all') url += `&status_filter=${encodeURIComponent(this.statusFilter)}`;
-
-                        if (this.alignmentFilter && this.alignmentFilter !== 'all') url += `&alignment_filter=${encodeURIComponent(this.alignmentFilter)}`;
+                        this.serverFeedExhausted = false;
+                        const url = this.buildFeedUrl(300, 0);
 
                         
 
