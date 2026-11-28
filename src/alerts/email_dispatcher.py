@@ -1,8 +1,12 @@
 import asyncio
+import json
 import logging
 import smtplib
+import uuid
+from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 from src.config.settings import settings
 from src.profiles.schema import CompanyProfileSchema
@@ -202,6 +206,165 @@ ACTIONS RECOMMANDÉES:
 ===================================================================
 """
 
+EMAIL_HISTORY_LEDGER_PATH = Path("data/email_history_ledger.json")
+
+
+class EmailHistoryManager:
+    """Dual-persistence history store for sent emails (JSON ledger + PostgreSQL EmailDispatchLog)."""
+
+    def __init__(self, ledger_path: Optional[Path] = None):
+        self.ledger_path = ledger_path or EMAIL_HISTORY_LEDGER_PATH
+
+    def _load_all(self) -> List[Dict[str, Any]]:
+        if not self.ledger_path.exists():
+            return []
+        try:
+            data = json.loads(self.ledger_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.warning(f"Could not read email history ledger: {e}")
+            return []
+
+    def _save_all(self, entries: List[Dict[str, Any]]) -> None:
+        try:
+            self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.ledger_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(entries[:200], ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.replace(self.ledger_path)
+        except Exception as e:
+            logger.warning(f"Could not persist email history ledger: {e}")
+
+    def record_local(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        entries = self._load_all()
+        entries.insert(0, entry)
+        self._save_all(entries)
+        return entry
+
+    async def record(
+        self,
+        email_type: str,
+        recipient: str,
+        subject: str,
+        status: str,
+        html_content: str,
+        text_content: str,
+        portal_ids: Optional[List[int]] = None,
+        error_message: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        record_id = str(uuid.uuid4())
+        sent_at = datetime.now(timezone.utc).isoformat()
+        pids = [int(p) for p in (portal_ids or []) if p is not None]
+        entry = {
+            "id": record_id,
+            "email_type": email_type,
+            "recipient": recipient,
+            "subject": subject,
+            "status": status,
+            "error_message": error_message,
+            "offers_count": len(pids),
+            "portal_ids": pids,
+            "html_content": html_content,
+            "text_content": text_content,
+            "sent_at": sent_at,
+        }
+        self.record_local(entry)
+
+        try:
+            from src.database.session import async_session_factory
+            from src.models.tender import EmailDispatchLog
+
+            async with async_session_factory() as session:
+                session.add(EmailDispatchLog(
+                    id=uuid.UUID(record_id),
+                    email_type=email_type,
+                    recipient=recipient,
+                    subject=subject[:512],
+                    status=status,
+                    error_message=error_message,
+                    offers_count=len(pids),
+                    portal_ids=pids,
+                    html_content=html_content,
+                    text_content=text_content,
+                ))
+                await session.commit()
+        except Exception as db_err:
+            logger.debug(f"EmailDispatchLog DB persistence deferred: {db_err}")
+
+        return entry
+
+    async def list_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        try:
+            from sqlalchemy import desc, select
+            from src.database.session import async_session_factory
+            from src.models.tender import EmailDispatchLog
+
+            async with async_session_factory() as session:
+                stmt = (
+                    select(EmailDispatchLog)
+                    .order_by(desc(EmailDispatchLog.sent_at))
+                    .limit(limit)
+                )
+                res = await session.execute(stmt)
+                rows = res.scalars().all()
+                if rows:
+                    return [
+                        {
+                            "id": str(r.id),
+                            "email_type": r.email_type,
+                            "recipient": r.recipient,
+                            "subject": r.subject,
+                            "status": r.status,
+                            "error_message": r.error_message,
+                            "offers_count": r.offers_count,
+                            "portal_ids": r.portal_ids or [],
+                            "sent_at": r.sent_at.isoformat() if r.sent_at else "",
+                        }
+                        for r in rows
+                    ]
+        except Exception:
+            pass
+
+        return [
+            {k: v for k, v in e.items() if k not in ("html_content", "text_content")}
+            for e in self._load_all()[:limit]
+        ]
+
+    async def get_detail(self, email_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            from sqlalchemy import select
+            from src.database.session import async_session_factory
+            from src.models.tender import EmailDispatchLog
+
+            async with async_session_factory() as session:
+                stmt = select(EmailDispatchLog).where(EmailDispatchLog.id == uuid.UUID(email_id))
+                res = await session.execute(stmt)
+                r = res.scalar_one_or_none()
+                if r:
+                    return {
+                        "id": str(r.id),
+                        "email_type": r.email_type,
+                        "recipient": r.recipient,
+                        "subject": r.subject,
+                        "status": r.status,
+                        "error_message": r.error_message,
+                        "offers_count": r.offers_count,
+                        "portal_ids": r.portal_ids or [],
+                        "html_content": r.html_content,
+                        "text_content": r.text_content,
+                        "sent_at": r.sent_at.isoformat() if r.sent_at else "",
+                    }
+        except Exception:
+            pass
+
+        for e in self._load_all():
+            if str(e.get("id")) == str(email_id):
+                return e
+        return None
+
+
+email_history_manager = EmailHistoryManager()
+
+
 class EmailDispatcher:
     """
     Sends responsive Decision Cards via Gmail SMTP with STARTTLS.
@@ -213,10 +376,10 @@ class EmailDispatcher:
         self.password = settings.smtp_password.replace(" ", "").strip() if settings.smtp_password else ""
         self.recipient = (settings.alert_recipient_email or self.user).strip()
 
-    def _send_sync(self, subject: str, text_body: str, html_body: str) -> bool:
+    def _send_sync_with_status(self, subject: str, text_body: str, html_body: str) -> tuple[bool, str, Optional[str]]:
         if not self.user or not self.password:
             logger.info(f"[MOCK EMAIL] Gmail SMTP not configured. Would send to {self.recipient}:\nSubject: {subject}")
-            return True
+            return True, "mocked", None
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -234,10 +397,14 @@ class EmailDispatcher:
                 server.login(self.user, self.password)
                 server.send_message(msg)
                 logger.info(f"Decision Card email successfully sent to {self.recipient} via Gmail SMTP")
-                return True
+                return True, "sent", None
         except Exception as e:
             logger.error(f"Failed to send email via Gmail SMTP: {e}")
-            return False
+            return False, "failed", str(e)
+
+    def _send_sync(self, subject: str, text_body: str, html_body: str) -> bool:
+        ok, _, _ = self._send_sync_with_status(subject, text_body, html_body)
+        return ok
 
     async def send_decision_card(
         self, 
@@ -245,15 +412,27 @@ class EmailDispatcher:
         result: CascadeEvaluationResult, 
         profile: CompanyProfileSchema
     ) -> bool:
-        """Asynchronously dispatches decision card email"""
+        """Asynchronously dispatches decision card email and logs full history"""
         ref = tender_data.get("reference", "")
+        portal_id = tender_data.get("portal_id")
         verdict = "RECOMMENDED GO" if result.decision_recommendation == "GO" else result.decision_recommendation
         subject = f"[{result.overall_score:.0f}% {verdict}] {tender_data.get('title', '')[:50]} (Réf: {ref})"
 
         html_body = render_decision_card_html(tender_data, result, profile)
         text_body = render_decision_card_text(tender_data, result, profile)
 
-        return await asyncio.to_thread(self._send_sync, subject, text_body, html_body)
+        ok, status, err = await asyncio.to_thread(self._send_sync_with_status, subject, text_body, html_body)
+        await email_history_manager.record(
+            email_type="decision_card",
+            recipient=self.recipient or "unconfigured",
+            subject=subject,
+            status=status,
+            html_content=html_body,
+            text_content=text_body,
+            portal_ids=[int(portal_id)] if portal_id else [],
+            error_message=err,
+        )
+        return ok
 
     async def send_daily_digest(
         self,
@@ -261,7 +440,7 @@ class EmailDispatcher:
         digest_date: str,
         min_score: float = 70.0,
     ) -> bool:
-        """Dispatches the 08:00 AM consolidated daily digest of new offers >= min_score."""
+        """Dispatches the 08:00 AM consolidated daily digest of new offers >= min_score and logs full history."""
         if not items:
             logger.info(f"[DailyDigest] No new offers >= {min_score:.0f}% for {digest_date}; skipping email.")
             return False
@@ -275,7 +454,18 @@ class EmailDispatcher:
         )
         html_body = render_daily_digest_html(items, digest_date, min_score)
         text_body = render_daily_digest_text(items, digest_date, min_score)
-        return await asyncio.to_thread(self._send_sync, subject, text_body, html_body)
+        ok, status, err = await asyncio.to_thread(self._send_sync_with_status, subject, text_body, html_body)
+        await email_history_manager.record(
+            email_type="daily_digest",
+            recipient=self.recipient or "unconfigured",
+            subject=subject,
+            status=status,
+            html_content=html_body,
+            text_content=text_body,
+            portal_ids=[int(i["portal_id"]) for i in items if i.get("portal_id") is not None],
+            error_message=err,
+        )
+        return ok
 
 
 def render_daily_digest_html(

@@ -287,3 +287,40 @@ async def abort_active_batch(
     """
     return batch_manager.abort_active_batch(user_name=user.full_name)
 
+
+email_router = APIRouter(prefix="/api/admin/emails", tags=["Admin Email History"])
+
+
+@email_router.get("/history")
+async def list_admin_email_history(
+    limit: int = Query(50, ge=1, le=200),
+    user: User = Depends(require_role(["admin"])),
+):
+    """Returns historical list of sent/mocked/failed emails (Admin only)."""
+    from src.alerts.email_dispatcher import email_history_manager
+    items = await email_history_manager.list_history(limit=limit)
+    return {"success": True, "count": len(items), "emails": items}
+
+
+@email_router.get("/history/{email_id}")
+async def get_admin_email_detail(
+    email_id: str,
+    user: User = Depends(require_role(["admin"])),
+):
+    """Returns full HTML and plain-text content of a specific sent email (Admin only)."""
+    from src.alerts.email_dispatcher import email_history_manager
+    detail = await email_history_manager.get_detail(email_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail=f"E-mail '{email_id}' introuvable dans l'historique.")
+    return {"success": True, "email": detail}
+
+
+@email_router.post("/trigger-digest")
+async def trigger_daily_digest_now(
+    user: User = Depends(require_role(["admin"])),
+):
+    """Manually triggers the 08:00 AM daily digest job for new offers >= 70% (Admin only)."""
+    from src.scheduler.jobs import run_daily_digest_job
+    result = await run_daily_digest_job()
+    return {"success": True, **result}
+

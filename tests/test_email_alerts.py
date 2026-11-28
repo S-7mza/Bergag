@@ -169,3 +169,44 @@ async def test_run_daily_digest_job_filters_new_offers_above_70():
     assert added_log.portal_id == 1003
     assert added_log.digest_date == "2026-11-29"
 
+
+@pytest.mark.asyncio
+async def test_email_history_manager_and_admin_endpoints(tmp_path):
+    from unittest.mock import patch, AsyncMock
+    from fastapi.testclient import TestClient
+    from src.alerts.email_dispatcher import EmailHistoryManager
+    from src.api.main import app
+    from src.api.auth import create_session_token
+
+    mgr = EmailHistoryManager(ledger_path=tmp_path / "email_history.json")
+    entry = await mgr.record(
+        email_type="daily_digest",
+        recipient="admin@bergag.ma",
+        subject="Digest Test 08h00",
+        status="sent",
+        html_content="<html><body><h1>Digest</h1></body></html>",
+        text_content="Digest",
+        portal_ids=[415950, 415635],
+    )
+    assert entry["offers_count"] == 2
+
+    history = await mgr.list_history(limit=10)
+    assert len(history) == 1
+    assert "html_content" not in history[0]
+    assert history[0]["subject"] == "Digest Test 08h00"
+
+    detail = await mgr.get_detail(entry["id"])
+    assert detail is not None
+    assert "<h1>Digest</h1>" in detail["html_content"]
+
+    token = create_session_token("admin@bergag.ma", "admin")
+    client = TestClient(app)
+    with patch("src.alerts.email_dispatcher.email_history_manager", mgr):
+        res_list = client.get("/api/admin/emails/history", headers={"Authorization": f"Bearer {token}"})
+        assert res_list.status_code == 200
+        assert res_list.json()["count"] == 1
+
+        res_detail = client.get(f"/api/admin/emails/history/{entry['id']}", headers={"Authorization": f"Bearer {token}"})
+        assert res_detail.status_code == 200
+        assert "<h1>Digest</h1>" in res_detail.json()["email"]["html_content"]
+

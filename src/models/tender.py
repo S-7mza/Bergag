@@ -149,3 +149,29 @@ class DailyAlertLog(Base):
         nullable=False,
     )
 
+
+class EmailDispatchLog(Base):
+    """Stores full history and rendered HTML/text content of every email sent by the system."""
+    __tablename__ = "email_dispatch_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    email_type: Mapped[str] = mapped_column(String(32), default="daily_digest", nullable=False, index=True)
+    recipient: Mapped[str] = mapped_column(String(255), nullable=False)
+    subject: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="sent", nullable=False, index=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    offers_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    portal_ids: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    html_content: Mapped[str] = mapped_column(Text, nullable=False)
+    text_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )
+

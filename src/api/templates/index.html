@@ -399,7 +399,7 @@
                     </div>
 
                     <button x-show="currentUser.role === 'admin'"
-                            @click="activeModule = 'admin'; if (!['ingestion','profiles','crawler','team'].includes(adminSection)) adminSection = 'ingestion'; fetchIngestionDashboard()"
+                            @click="activeModule = 'admin'; if (!['ingestion','profiles','crawler','team','emails'].includes(adminSection)) adminSection = 'ingestion'; if (adminSection === 'emails') { fetchEmailHistory(); } else { fetchIngestionDashboard(); }"
                             :class="activeModule === 'admin' ? 'bg-white/[0.10] text-white border-white/20' : 'bg-white/[0.03] text-slate-300 border-white/[0.08] hover:bg-white/[0.07] hover:text-white'"
                             class="px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors flex items-center gap-2 whitespace-nowrap">
                         <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
@@ -3468,6 +3468,16 @@
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                     </button>
 
+                    <button type="button" @click="activeModule = 'admin'; adminSection = 'emails'; fetchEmailHistory()"
+                            :class="adminSection === 'emails' ? 'bg-white/[0.08] text-white font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'"
+                            class="w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2.5">
+                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+                            Historique E-mails
+                        </span>
+                        <span x-show="emailHistory.length > 0" class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-mono tabular-nums" x-text="emailHistory.length"></span>
+                    </button>
+
                     <div class="pt-2 mt-2 border-t border-white/[0.06]">
                         <button type="button" @click="activeModule = 'feed'"
                                 class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-white/[0.04] text-slate-400 hover:text-white text-xs font-medium transition-colors flex items-center gap-2">
@@ -3478,6 +3488,106 @@
 
                 <!-- Admin Console Main Content Area -->
                 <div class="flex-1 min-w-0 w-full space-y-6">
+
+                <!-- Admin Sub-Section: Email History & Content Viewer -->
+                <div x-show="adminSection === 'emails'" x-cloak class="space-y-6">
+                    <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/[0.06]">
+                        <div>
+                            <h2 class="text-base font-semibold text-white">Historique des E-mails Envoyés</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Consultez chaque digest quotidien (08h00) et alerte unitaire avec son contenu HTML/texte exact.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="fetchEmailHistory()"
+                                    class="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.10] text-slate-200 text-xs font-medium border border-white/10 transition-colors">
+                                ↻ Actualiser
+                            </button>
+                            <button type="button" @click="triggerDailyDigestNow()" :disabled="digestTriggering"
+                                    class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors">
+                                <span x-text="digestTriggering ? 'Envoi en cours...' : '📧 Envoyer Digest (≥ 70%) Maintenant'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                        <!-- Left: History List -->
+                        <div class="lg:col-span-5 bg-[#0f1623] border border-white/[0.06] rounded-xl overflow-hidden">
+                            <div class="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                                <span class="text-xs font-semibold text-slate-200">E-mails récents (<span x-text="emailHistory.length"></span>)</span>
+                                <span x-show="emailHistoryLoading" class="text-[11px] text-slate-400">Chargement...</span>
+                            </div>
+                            <div class="divide-y divide-white/[0.05] max-h-[620px] overflow-y-auto">
+                                <template x-if="!emailHistoryLoading && emailHistory.length === 0">
+                                    <div class="p-6 text-center text-xs text-slate-500">Aucun e-mail enregistré pour le moment.</div>
+                                </template>
+                                <template x-for="em in emailHistory" :key="em.id">
+                                    <button type="button" @click="openEmailDetail(em.id)"
+                                            :class="selectedEmail?.id === em.id ? 'bg-indigo-500/15 border-l-2 border-indigo-400' : 'hover:bg-white/[0.03]'"
+                                            class="w-full text-left p-3.5 transition-colors block">
+                                        <div class="flex items-center justify-between gap-2 mb-1">
+                                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-300"
+                                                  x-text="em.email_type === 'daily_digest' ? 'DIGEST 08H' : 'DECISION CARD'"></span>
+                                            <span :class="{
+                                                    'bg-emerald-500/20 text-emerald-300': em.status === 'sent',
+                                                    'bg-amber-500/20 text-amber-300': em.status === 'mocked',
+                                                    'bg-rose-500/20 text-rose-300': em.status === 'failed'
+                                                  }"
+                                                  class="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase"
+                                                  x-text="em.status"></span>
+                                        </div>
+                                        <div class="text-xs font-medium text-white line-clamp-2" x-text="em.subject"></div>
+                                        <div class="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
+                                            <span x-text="em.recipient"></span>
+                                            <span x-text="em.offers_count + ' offre(s) · ' + (em.sent_at ? em.sent_at.slice(0,16).replace('T',' ') : '')"></span>
+                                        </div>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Right: Full Content Viewer -->
+                        <div class="lg:col-span-7 bg-[#0f1623] border border-white/[0.06] rounded-xl overflow-hidden flex flex-col">
+                            <template x-if="!selectedEmail">
+                                <div class="p-12 text-center text-xs text-slate-500 my-auto">
+                                    Sélectionnez un e-mail dans la liste de gauche pour afficher son contenu complet.
+                                </div>
+                            </template>
+                            <template x-if="selectedEmail">
+                                <div class="flex flex-col h-full">
+                                    <div class="p-4 border-b border-white/[0.06] space-y-2">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <h3 class="text-sm font-semibold text-white" x-text="selectedEmail.subject"></h3>
+                                            <div class="flex items-center gap-1 shrink-0 bg-white/[0.04] p-0.5 rounded-lg border border-white/[0.06]">
+                                                <button type="button" @click="emailViewMode = 'html'"
+                                                        :class="emailViewMode === 'html' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'"
+                                                        class="px-2.5 py-1 rounded text-[11px] font-medium">Aperçu HTML</button>
+                                                <button type="button" @click="emailViewMode = 'text'"
+                                                        :class="emailViewMode === 'text' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'"
+                                                        class="px-2.5 py-1 rounded text-[11px] font-medium">Texte brut</button>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+                                            <span>À : <strong class="text-slate-200" x-text="selectedEmail.recipient"></strong></span>
+                                            <span>Date : <strong class="text-slate-200" x-text="selectedEmail.sent_at"></strong></span>
+                                            <span>Offres incluses : <strong class="text-emerald-300" x-text="(selectedEmail.portal_ids || []).join(', ') || '—'"></strong></span>
+                                        </div>
+                                        <template x-if="selectedEmail.error_message">
+                                            <div class="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded px-2.5 py-1.5" x-text="'Erreur SMTP : ' + selectedEmail.error_message"></div>
+                                        </template>
+                                    </div>
+                                    <div class="p-3 bg-slate-950/60 flex-1">
+                                        <iframe x-show="emailViewMode === 'html'"
+                                                :srcdoc="selectedEmail.html_content || ''"
+                                                sandbox="allow-same-origin"
+                                                class="w-full h-[560px] bg-white rounded-lg border border-white/10"></iframe>
+                                        <pre x-show="emailViewMode === 'text'"
+                                             class="w-full h-[560px] overflow-auto p-4 bg-slate-900 text-slate-200 text-xs font-mono rounded-lg border border-white/10 whitespace-pre-wrap"
+                                             x-text="selectedEmail.text_content || ''"></pre>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Admin Sub-Section 4: Profiles -->
 
@@ -8566,6 +8676,16 @@
 
                 adminSection: 'ingestion',
 
+                emailHistory: [],
+
+                selectedEmail: null,
+
+                emailViewMode: 'html',
+
+                emailHistoryLoading: false,
+
+                digestTriggering: false,
+
                 newUserModalOpen: false,
 
                 newUserForm: {
@@ -10198,6 +10318,58 @@
                 },
 
 
+
+                async fetchEmailHistory() {
+                    this.emailHistoryLoading = true;
+                    try {
+                        const res = await this.authFetch('/api/admin/emails/history?limit=50');
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.emailHistory = data.emails || [];
+                            if (!this.selectedEmail && this.emailHistory.length > 0) {
+                                await this.openEmailDetail(this.emailHistory[0].id);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error fetching email history:', e);
+                    } finally {
+                        this.emailHistoryLoading = false;
+                    }
+                },
+
+                async openEmailDetail(emailId) {
+                    try {
+                        const res = await this.authFetch(`/api/admin/emails/history/${emailId}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.selectedEmail = data.email || null;
+                        }
+                    } catch (e) {
+                        console.error('Error fetching email detail:', e);
+                    }
+                },
+
+                async triggerDailyDigestNow() {
+                    this.digestTriggering = true;
+                    try {
+                        const res = await this.authFetch('/api/admin/emails/trigger-digest', { method: 'POST' });
+                        const data = await res.json();
+                        if (res.ok) {
+                            if (data.sent) {
+                                this.showToast(`Digest envoyé (${data.count} nouvelle(s) offre(s) ≥ 70%)`, 'success');
+                            } else {
+                                this.showToast('Aucune nouvelle offre ≥ 70% à envoyer pour le moment.', 'info');
+                            }
+                            await this.fetchEmailHistory();
+                        } else {
+                            this.showToast(data.detail || 'Erreur lors de l’envoi du digest', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('Erreur réseau lors du déclenchement du digest', 'error');
+                    } finally {
+                        this.digestTriggering = false;
+                    }
+                },
 
                 async fetchCrawlerStatus() {
 

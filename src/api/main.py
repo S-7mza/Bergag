@@ -17,7 +17,7 @@ from src.api.routes.feed import router as feed_router
 from src.api.routes.analytics import router as analytics_router
 from src.api.routes.auth import router as auth_router
 from src.api.routes.crawler import router as crawler_router
-from src.api.routes.batches import router as batches_router
+from src.api.routes.batches import router as batches_router, email_router as email_history_router
 from src.api.routes.awards_ingestion import router as awards_ingestion_router
 from src.api.routes.offline_ingestion import router as offline_ingestion_router
 from src.api.routes.agent_diagnostics import router as agent_diagnostics_router
@@ -67,6 +67,7 @@ app.include_router(crawler_router)
 app.include_router(feed_router)
 app.include_router(analytics_router)
 app.include_router(batches_router)
+app.include_router(email_history_router)
 app.include_router(awards_ingestion_router)
 app.include_router(offline_ingestion_router)
 app.include_router(agent_diagnostics_router)
