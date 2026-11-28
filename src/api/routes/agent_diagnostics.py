@@ -151,34 +151,68 @@ async def get_pending_antigravity_studies(
     limit: int = Query(25, ge=1, le=200),
     include_studied: bool = Query(False, description="Include already studied avis"),
     fetch_attachments: bool = Query(False, description="Pre-download missing .zip attachments before CPS extraction"),
+    sort_by: str = Query("ai_score_desc", description="Order queue by 'ai_score_desc' (default) or 'deadline_asc'"),
+    min_ai_score: float = Query(0.0, ge=0.0, le=100.0, description="Minimum AI matching rate filter"),
     session: AsyncSession = Depends(get_db_session),
     user: User = Depends(require_role(["admin", "analyst"])),
 ):
     """
     Exports active avis with line items, extracted CPS text, and Y/Z market context
-    (Art. 91 headroom, historical median price, incumbent concentration) so Antigravity
-    can diagnose them locally one-by-one at zero LLM API cost.
+    ordered by highest AI score first (by default) so Antigravity studies top opportunities first.
     """
     from pathlib import Path
+    from src.engine.ai_diagnostician import AIAvisDiagnostician
     from src.engine.opportunity_xyz import fetch_market_context_for_tender
 
     now = datetime.now(timezone.utc)
+    pool_cap = 2500 if sort_by == "ai_score_desc" else limit * 3
     stmt = (
         select(Tender)
         .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
         .where(Tender.status == "active", Tender.deadline_at > now)
         .order_by(Tender.deadline_at.asc())
-        .limit(limit * 3)
+        .limit(pool_cap)
     )
     res = await session.execute(stmt)
     tenders = res.scalars().all()
 
     studied_ids = antigravity_study_manager.list_studied_ids()
-    queue = []
+    candidates = []
     for t in tenders:
         if not include_studied and t.portal_id in studied_ids:
             continue
 
+        cached_diag = ai_matching_agent.get_cached_diagnosis(t.portal_id)
+        if cached_diag is not None:
+            ai_rate = float(cached_diag.matching_rate or 0.0)
+            ai_domain = cached_diag.primary_domain
+        else:
+            quick_dict = {
+                "portal_id": t.portal_id,
+                "reference": t.reference,
+                "title": t.title,
+                "buyer_name": t.buyer.official_name if t.buyer else "Acheteur Inconnu",
+                "main_category": t.main_category,
+                "prestation_type": t.prestation_type,
+                "status": t.status,
+                "line_items": [
+                    {"designation": i.designation, "technical_specs": i.technical_specs}
+                    for i in t.line_items
+                ],
+            }
+            diag = AIAvisDiagnostician.diagnose_tender(quick_dict)
+            ai_rate = float(diag.matching_rate or 0.0)
+            ai_domain = diag.primary_domain
+
+        if ai_rate < min_ai_score:
+            continue
+        candidates.append((ai_rate, ai_domain, t))
+
+    if sort_by == "ai_score_desc":
+        candidates.sort(key=lambda x: (x[0], x[2].portal_id), reverse=True)
+
+    queue = []
+    for ai_rate, ai_domain, t in candidates[:limit]:
         if fetch_attachments and t.attachment_available:
             zip_path = Path("data/attachments") / f"tender_{t.portal_id}.zip"
             if not zip_path.exists():
@@ -198,6 +232,8 @@ async def get_pending_antigravity_studies(
             "main_category": t.main_category,
             "prestation_type": t.prestation_type,
             "deadline_at": t.deadline_at.isoformat() if t.deadline_at else "",
+            "ai_matching_rate": ai_rate,
+            "ai_primary_domain": ai_domain,
             "line_items": [
                 {
                     "item_order": i.item_order,
@@ -224,12 +260,11 @@ async def get_pending_antigravity_studies(
                 if t.portal_id in studied_ids else None
             ),
         })
-        if len(queue) >= limit:
-            break
 
     return {
         "success": True,
         "count": len(queue),
+        "sort_by": sort_by,
         "already_studied_total": len(studied_ids),
         "queue": queue,
     }

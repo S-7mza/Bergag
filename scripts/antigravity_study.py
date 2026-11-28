@@ -38,6 +38,8 @@ def cmd_export(args):
             f"{base_url}/api/agent/antigravity/pending",
             params={
                 "limit": args.limit,
+                "sort_by": args.sort_by,
+                "min_ai_score": args.min_ai_score,
                 "include_studied": str(args.include_studied).lower(),
                 "fetch_attachments": str(args.fetch_attachments).lower(),
             },
@@ -85,6 +87,8 @@ def main():
         p.add_argument("--password", default=None, help="Password (prompts if omitted)")
         if name == "export":
             p.add_argument("--limit", type=int, default=20)
+            p.add_argument("--sort-by", default="ai_score_desc", choices=["ai_score_desc", "deadline_asc"])
+            p.add_argument("--min-ai-score", type=float, default=0.0)
             p.add_argument("--include-studied", action="store_true")
             p.add_argument("--fetch-attachments", action="store_true")
             p.add_argument("--out", default="pending_avis.json")
