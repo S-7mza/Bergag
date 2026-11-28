@@ -1825,11 +1825,35 @@ class IngestionBatchManager:
             }
         }
 
+    async def _run_post_ingestion_scoring(self, profile_name: str = "software_data", limit: int = 500) -> None:
+        """
+        Automatically computes and persists AI Matching diagnoses (ProfileMatch)
+        after any ingestion batch so newly ingested tenders are immediately scored.
+        """
+        try:
+            from src.engine.ai_matching_agent import ai_matching_agent
+            async with async_session_factory() as score_session:
+                res = await ai_matching_agent.sync_avis_diagnoses_to_db(
+                    session=score_session,
+                    profile_name=profile_name,
+                    limit=limit,
+                    force_refresh=False,
+                )
+                logger.info(
+                    f"[BatchManager] Post-ingestion AI scoring complete: "
+                    f"scanned={res.get('total_scanned', 0)}, "
+                    f"created={res.get('matches_created', 0)}, "
+                    f"updated={res.get('matches_updated', 0)}"
+                )
+        except Exception as e:
+            logger.warning(f"[BatchManager] Post-ingestion AI scoring skipped/deferred: {e}")
+
     async def execute_batch(
         self, 
         pages: int = 2, 
         trigger_type: str = "manual", 
-        user_name: str = "Admin"
+        user_name: str = "Admin",
+        send_emails: bool = False,
     ) -> IngestionBatchRecord:
         """
         Executes an ingestion batch with real-time live stepper callback:
@@ -2020,7 +2044,7 @@ class IngestionBatchManager:
             import inspect
             crawl_kwargs = {
                 "max_pages": pages,
-                "send_emails": True,
+                "send_emails": send_emails,
                 "progress_callback": on_progress
             }
             try:
@@ -2032,6 +2056,7 @@ class IngestionBatchManager:
                 pass
 
             await run_active_crawl_cycle(**crawl_kwargs)
+            await self._run_post_ingestion_scoring()
             
             duration = (datetime.now() - start_time).total_seconds()
             record.completed_at = datetime.now()
@@ -2296,8 +2321,8 @@ class IngestionBatchManager:
                 record.current_step = "Phase 1 : Balayage exhaustif de toutes les pages d'avis ouverts sur le portail TGR..."
                 try:
                     portal_total, portal_cards = await asyncio.wait_for(
-                        spider.fetch_all_active_cards(max_pages=80, concurrency=6),
-                        timeout=120.0
+                        spider.fetch_all_active_cards(max_pages=80, concurrency=3),
+                        timeout=180.0
                     )
                 except Exception as e_disc:
                     logger.warning(f"[BatchManager] Active discovery error: {e_disc}")
@@ -2436,6 +2461,7 @@ class IngestionBatchManager:
                     record.current_step = f"Phase 3 : Ingestion unitaire {idx + 1}/{total_missing} (BDC #{pid} importé avec succès)..."
 
             await client.close()
+            await self._run_post_ingestion_scoring()
 
             # --- Phase 4: Final Consolidation & 100% Certification ---
             record.current_phase = "completed"

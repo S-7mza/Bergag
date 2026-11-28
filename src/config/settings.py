@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     postgres_password: str = Field(default="rootpassword", alias="POSTGRES_PASSWORD")
 
     # Application Base URL (for deep-linking Fiche 60s from alerts)
-    app_url: str = Field(default="http://localhost:8000", alias="APP_URL")
+    app_url: str = Field(default="https://bergag.nexenflow.com", alias="APP_URL")
 
     # Scraper
     scraper_rate_limit_seconds: float = Field(default=1.0, alias="SCRAPER_RATE_LIMIT_SECONDS")
@@ -32,9 +32,14 @@ class Settings(BaseSettings):
 
     # Enterprise Alerting & Webhooks
     webhook_url: str | None = Field(default=None, alias="WEBHOOK_URL")
-    alert_min_score: float = Field(default=80.0, alias="ALERT_MIN_SCORE")
+    alert_min_score: float = Field(default=70.0, alias="ALERT_MIN_SCORE")
     alert_enable_email: bool = Field(default=True, alias="ALERT_ENABLE_EMAIL")
     alert_enable_webhook: bool = Field(default=True, alias="ALERT_ENABLE_WEBHOOK")
+    daily_digest_hour: int = Field(default=8, alias="DAILY_DIGEST_HOUR")
+    daily_digest_minute: int = Field(default=0, alias="DAILY_DIGEST_MINUTE")
+    daily_sync_hour: int = Field(default=7, alias="DAILY_SYNC_HOUR")
+    daily_sync_minute: int = Field(default=30, alias="DAILY_SYNC_MINUTE")
+    digest_timezone: str = Field(default="Africa/Casablanca", alias="DIGEST_TIMEZONE")
 
     # Security & RBAC
     jwt_secret_key: str = Field(

@@ -129,3 +129,23 @@ class Award(Base):
 
     tender: Mapped[Optional["Tender"]] = relationship("Tender", back_populates="award")
 
+
+class DailyAlertLog(Base):
+    """Tracks tenders already included in a 08:00 AM daily digest email (prevents duplicate alerts)."""
+    __tablename__ = "daily_alert_logs"
+
+    portal_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("tenders.portal_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    ai_score: Mapped[float] = mapped_column(Numeric(5, 2), default=0.0, nullable=False)
+    cascade_score: Mapped[float] = mapped_column(Numeric(5, 2), default=0.0, nullable=False)
+    digest_date: Mapped[str] = mapped_column(String(10), nullable=False, index=True)  # YYYY-MM-DD (Africa/Casablanca)
+    recipient_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+

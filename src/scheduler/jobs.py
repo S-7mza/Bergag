@@ -3,19 +3,22 @@ import logging
 import argparse
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
+from zoneinfo import ZoneInfo
 from src.database.session import async_session_factory
 from src.scraper.client import PortalHttpClient
 from src.scraper.listing_spider import ListingSpider
 from src.scraper.detail_spider import DetailSpider
 from src.scraper.ingestion_service import IngestionService
-from src.profiles.loader import load_all_profiles
+from src.profiles.loader import load_all_profiles, load_profile
 from src.engine.scoring_cascade import ScoringCascadeEngine
 from src.alerts.email_dispatcher import EmailDispatcher
 from src.alerts.webhook_dispatcher import WebhookDispatcher
 from src.config.settings import settings
-from sqlalchemy import select
-from src.models.tender import Tender
+from sqlalchemy import select, text
+from sqlalchemy.orm import selectinload
+from src.models.tender import Tender, DailyAlertLog
 
 logging.basicConfig(
     level=logging.INFO,
@@ -603,49 +606,199 @@ async def run_awards_crawl_cycle(
         triggered_by="Daemon / Scheduler"
     )
 
-async def run_daemon_loop(pages: int = 5, interval_seconds: int = 3600, send_emails: bool = True):
+async def run_daily_digest_job(
+    min_score: Optional[float] = None,
+    digest_date: Optional[str] = None,
+    session_factory=None,
+    email_dispatcher: Optional[EmailDispatcher] = None,
+) -> dict:
     """
-    Runs the autonomous ingestion and alert pipeline continuously as a background daemon.
-    - Every `interval_seconds` (default 1h): executes a tracked scheduled batch via BatchManager.
-    - At least once every 24h: executes a full 100% active market sync (`execute_active_sync_batch`)
-      to guarantee zero missing avis across all portal pages.
+    Collects all active, never-notified tenders with AI score >= min_score (default 70%)
+    OR Cascade score >= min_score, sends a single consolidated HTML digest email,
+    and records sent portal_ids in DailyAlertLog so future digests only include new offers.
+    """
+    threshold = float(min_score if min_score is not None else settings.alert_min_score)
+    tz = ZoneInfo(settings.digest_timezone)
+    today_str = digest_date or datetime.now(tz).strftime("%Y-%m-%d")
+    now_utc = datetime.now(timezone.utc)
+    sf = session_factory or async_session_factory
+    dispatcher = email_dispatcher or EmailDispatcher()
+
+    from src.engine.ai_diagnostician import AIAvisDiagnostician
+    from src.engine.opportunity_xyz import fetch_market_context_for_tender
+
+    try:
+        target_profile = load_profile("software_data")
+    except Exception:
+        profiles = load_all_profiles()
+        target_profile = profiles[0] if profiles else None
+
+    scoring_engine = ScoringCascadeEngine()
+    digest_items = []
+
+    async with sf() as session:
+        # 1. Fetch already-notified portal_ids
+        sent_res = await session.execute(select(DailyAlertLog.portal_id))
+        already_sent_ids = {int(pid) for pid in sent_res.scalars().all() if pid is not None}
+
+        # 2. Fetch active tenders with deadline in the future
+        stmt = (
+            select(Tender)
+            .options(selectinload(Tender.buyer), selectinload(Tender.line_items))
+            .where(Tender.status == "active", Tender.deadline_at > now_utc)
+            .order_by(Tender.deadline_at.asc())
+        )
+        tenders_res = await session.execute(stmt)
+        active_tenders = tenders_res.scalars().all()
+
+        for t in active_tenders:
+            if t.portal_id in already_sent_ids:
+                continue
+
+            tender_dict = {
+                "portal_id": t.portal_id,
+                "reference": t.reference,
+                "title": t.title,
+                "buyer_name": t.buyer.official_name if t.buyer else "Acheteur Inconnu",
+                "execution_location": t.execution_location or "Maroc",
+                "main_category": t.main_category,
+                "prestation_type": t.prestation_type,
+                "status": t.status,
+                "deadline_at": t.deadline_at.isoformat() if t.deadline_at else "",
+                "line_items": [
+                    {
+                        "item_order": li.item_order,
+                        "designation": li.designation,
+                        "technical_specs": li.technical_specs,
+                        "quantity": float(li.quantity) if li.quantity is not None else 1.0,
+                        "unit": li.unit or "U",
+                    }
+                    for li in sorted(t.line_items, key=lambda x: x.item_order)
+                ],
+            }
+
+            diag = AIAvisDiagnostician.diagnose_tender(tender_dict)
+            ai_score = float(diag.matching_rate or 0.0)
+
+            cascade_score = 0.0
+            red_flags = []
+            if target_profile is not None:
+                cascade_res = await scoring_engine.evaluate_tender(tender_dict, target_profile)
+                cascade_score = float(cascade_res.overall_score or 0.0)
+                red_flags = list(cascade_res.red_flags or [])
+
+            if ai_score < threshold and cascade_score < threshold:
+                continue
+
+            try:
+                mkt = await fetch_market_context_for_tender(session, t)
+                spent_ytd = mkt.get("buyer_spent_ytd_mad")
+                headroom = max(0.0, 500000.0 - spent_ytd) if spent_ytd is not None else None
+            except Exception:
+                headroom = None
+
+            digest_items.append({
+                **tender_dict,
+                "ai_score": ai_score,
+                "cascade_score": cascade_score,
+                "ai_domain": diag.primary_domain,
+                "art91_headroom_mad": headroom,
+                "red_flags": red_flags,
+            })
+
+        # Sort highest score first, then earliest deadline
+        digest_items.sort(
+            key=lambda x: (-max(x["ai_score"], x["cascade_score"]), x.get("deadline_at", ""))
+        )
+
+        if not digest_items:
+            logger.info(f"[DailyDigest] 0 new active tenders >= {threshold:.0f}% for {today_str}.")
+            return {"sent": False, "count": 0, "digest_date": today_str}
+
+        sent_ok = await dispatcher.send_daily_digest(digest_items, digest_date=today_str, min_score=threshold)
+        if sent_ok:
+            for item in digest_items:
+                session.add(DailyAlertLog(
+                    portal_id=int(item["portal_id"]),
+                    ai_score=round(float(item["ai_score"]), 2),
+                    cascade_score=round(float(item["cascade_score"]), 2),
+                    digest_date=today_str,
+                    recipient_email=dispatcher.recipient,
+                ))
+            await session.commit()
+            logger.info(f"[DailyDigest] Dispatched {len(digest_items)} new offers >= {threshold:.0f}% for {today_str}.")
+        return {"sent": bool(sent_ok), "count": len(digest_items), "digest_date": today_str}
+
+
+async def run_daemon_loop(pages: int = 5, interval_seconds: int = 3600, send_emails: bool = False):
+    """
+    Runs the autonomous ingestion, AI scoring, and 08:00 AM daily digest loop:
+    - Every `interval_seconds` (default 1h): incremental crawl + post-ingestion AI scoring.
+    - Daily at `settings.daily_sync_hour:daily_sync_minute` (default 07:30 Africa/Casablanca):
+      full 100% active market sync + AI scoring.
+    - Daily at `settings.daily_digest_hour:daily_digest_minute` (default 08:00 Africa/Casablanca):
+      consolidated email digest of all NEW offers with AI/Cascade score >= 70%.
     """
     from src.engine.batch_manager import batch_manager
 
     logger.info(f"Starting Bergag Crawler Daemon loop (interval: {interval_seconds}s, pages: {pages})...")
     await wait_for_database_ready()
 
+    tz = ZoneInfo(settings.digest_timezone)
     cycle_count = 0
-    last_full_sync_at: Optional[datetime] = None
+    last_full_sync_date: Optional[str] = None
+    last_digest_date: Optional[str] = None
+    sleep_step = min(300, interval_seconds)  # Wake every 5 min to hit 07:30 / 08:00 accurately
+    last_incremental_at: Optional[datetime] = None
 
     while True:
-        cycle_count += 1
-        now = datetime.now()
-        logger.info(f"--- Starting Autonomous Crawl Cycle #{cycle_count} ---")
-        try:
-            if batch_manager.active_batch is None:
-                # At least once a day (or on first cycle), run full 100% active sync for all missing avis
-                needs_daily_full_sync = (
-                    last_full_sync_at is None
-                    or (now - last_full_sync_at).total_seconds() >= 86400
-                )
-                if needs_daily_full_sync:
-                    logger.info("[Daemon] Running daily 100% active market sync for all missing avis...")
-                    await batch_manager.execute_active_sync_batch(user_name="Daemon Worker (Sync Quotidien 100%)")
-                    last_full_sync_at = datetime.now()
-                else:
-                    await batch_manager.execute_batch(
-                        pages=pages,
-                        trigger_type="scheduled",
-                        user_name="Daemon Worker"
-                    )
-            else:
-                logger.info("[Daemon] A batch is already in progress, skipping cycle.")
-        except Exception as e:
-            logger.error(f"Error during crawl cycle #{cycle_count}: {e}", exc_info=True)
+        now_local = datetime.now(tz)
+        today_str = now_local.strftime("%Y-%m-%d")
 
-        logger.info(f"Cycle #{cycle_count} completed. Next scheduled cycle in {interval_seconds}s ({interval_seconds // 60}m)...")
-        await asyncio.sleep(interval_seconds)
+        try:
+            # 1. Daily 07:30 (or first run) 100% active market sync + automatic AI scoring
+            sync_due = (
+                last_full_sync_date != today_str
+                and (
+                    last_full_sync_date is None
+                    or (now_local.hour, now_local.minute) >= (settings.daily_sync_hour, settings.daily_sync_minute)
+                )
+            )
+            if sync_due and batch_manager.active_batch is None:
+                logger.info(f"[Daemon] Running daily 100% active market sync + AI scoring ({today_str})...")
+                await batch_manager.execute_active_sync_batch(user_name="Daemon Worker (Sync Quotidien 100%)")
+                last_full_sync_date = today_str
+                last_incremental_at = datetime.now(timezone.utc)
+
+            # 2. Daily 08:00 AM consolidated digest email for NEW offers >= 70%
+            digest_due = (
+                last_digest_date != today_str
+                and (now_local.hour, now_local.minute) >= (settings.daily_digest_hour, settings.daily_digest_minute)
+            )
+            if digest_due and settings.alert_enable_email:
+                logger.info(f"[Daemon] Running 08:00 AM daily digest job (min_score={settings.alert_min_score}%)...")
+                await run_daily_digest_job(min_score=settings.alert_min_score, digest_date=today_str)
+                last_digest_date = today_str
+
+            # 3. Hourly incremental crawl + AI scoring (no per-tender email spam)
+            now_utc = datetime.now(timezone.utc)
+            if (
+                batch_manager.active_batch is None
+                and (last_incremental_at is None or (now_utc - last_incremental_at).total_seconds() >= interval_seconds)
+            ):
+                cycle_count += 1
+                logger.info(f"--- Starting Autonomous Incremental Crawl Cycle #{cycle_count} ---")
+                await batch_manager.execute_batch(
+                    pages=pages,
+                    trigger_type="scheduled",
+                    user_name="Daemon Worker",
+                    send_emails=send_emails,
+                )
+                last_incremental_at = datetime.now(timezone.utc)
+        except Exception as e:
+            logger.error(f"Error during daemon loop: {e}", exc_info=True)
+
+        await asyncio.sleep(sleep_step)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Bergag Procurement Crawler & Ingestion Daemon")
@@ -658,6 +811,7 @@ if __name__ == "__main__":
     parser.add_argument("--date-start", type=str, default=None, help="Start date for awards crawl (DD/MM/YYYY)")
     parser.add_argument("--date-end", type=str, default=None, help="End date for awards crawl (DD/MM/YYYY)")
     parser.add_argument("--daemon", action="store_true", help="Run continuously in background daemon loop")
+    parser.add_argument("--digest", action="store_true", help="Run the 08:00 AM daily digest email job immediately")
     parser.add_argument("--interval", type=int, default=3600, help="Interval between crawl cycles in seconds (default: 3600)")
 
     args = parser.parse_args()
@@ -681,7 +835,9 @@ if __name__ == "__main__":
             ))
     elif args.awards:
         asyncio.run(run_awards_crawl_cycle(max_pages=args.pages, date_start=args.date_start, date_end=args.date_end))
+    elif args.digest:
+        asyncio.run(run_daily_digest_job())
     elif args.daemon:
-        asyncio.run(run_daemon_loop(pages=args.pages, interval_seconds=args.interval, send_emails=not args.no_email))
+        asyncio.run(run_daemon_loop(pages=args.pages, interval_seconds=args.interval, send_emails=False))
     else:
         asyncio.run(run_active_crawl_cycle(max_pages=args.pages, send_emails=not args.no_email))
